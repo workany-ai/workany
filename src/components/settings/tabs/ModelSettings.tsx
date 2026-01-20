@@ -1,15 +1,36 @@
 import { useState } from 'react';
-import { ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
+import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import type { AIProvider, ModelSubTab, SettingsTabProps } from '../types';
 import { Switch } from '../components/Switch';
 import {
+  customProviderModels,
   defaultProviderIds,
   providerApiKeyUrls,
+  providerDefaultModels,
   providerIcons,
 } from '../constants';
+
+// Get suggested models for a provider
+function getSuggestedModels(provider: AIProvider): string[] {
+  // First check by provider ID
+  if (providerDefaultModels[provider.id]) {
+    return providerDefaultModels[provider.id];
+  }
+
+  // Then check custom provider models by name (case-insensitive)
+  const providerNameLower = provider.name.toLowerCase();
+  for (const [key, models] of Object.entries(customProviderModels)) {
+    if (providerNameLower.includes(key.toLowerCase())) {
+      return models;
+    }
+  }
+
+  // Fall back to default
+  return providerDefaultModels.default || [];
+}
 
 // Helper function to open external URLs
 const openExternalUrl = async (url: string) => {
@@ -33,6 +54,8 @@ export function ModelSettings({
     models: '',
   });
   const [showApiKey, setShowApiKey] = useState(false);
+  const [newModelName, setNewModelName] = useState('');
+  const [showAddModel, setShowAddModel] = useState(false);
   const { t } = useLanguage();
 
   // Get all available models from enabled providers
@@ -441,6 +464,137 @@ export function ModelSettings({
                   placeholder={t.settings.apiBaseUrl}
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
+              </div>
+
+              {/* Models */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-foreground block text-sm font-medium">
+                    {t.settings.models || '模型'}
+                  </label>
+                  <button
+                    onClick={() => setShowAddModel(true)}
+                    className="text-primary hover:text-primary/80 inline-flex items-center gap-1 text-xs"
+                  >
+                    <Plus className="size-3" />
+                    {t.settings.addModel || '添加模型'}
+                  </button>
+                </div>
+
+                {/* Model List */}
+                <div className="space-y-2">
+                  {(selectedProvider.models || []).map((model, index) => (
+                    <div
+                      key={index}
+                      className="bg-muted/50 flex items-center gap-2 rounded-lg px-3 py-2"
+                    >
+                      <Check className="text-emerald-500 size-4 flex-shrink-0" />
+                      <span className="text-foreground flex-1 truncate text-sm">
+                        {model}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const newModels = selectedProvider.models.filter(
+                            (_, i) => i !== index
+                          );
+                          handleProviderUpdate(selectedProvider.id, {
+                            models: newModels.length > 0 ? newModels : ['default'],
+                          });
+                        }}
+                        className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1"
+                        title={t.settings.deleteModel || '删除模型'}
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Add Model Input */}
+                  {showAddModel && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newModelName}
+                        onChange={(e) => setNewModelName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newModelName.trim()) {
+                            const currentModels = selectedProvider.models || [];
+                            if (!currentModels.includes(newModelName.trim())) {
+                              handleProviderUpdate(selectedProvider.id, {
+                                models: [...currentModels, newModelName.trim()],
+                              });
+                            }
+                            setNewModelName('');
+                            setShowAddModel(false);
+                          } else if (e.key === 'Escape') {
+                            setNewModelName('');
+                            setShowAddModel(false);
+                          }
+                        }}
+                        placeholder={t.settings.enterModelName || '输入模型名称'}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => {
+                          if (newModelName.trim()) {
+                            const currentModels = selectedProvider.models || [];
+                            if (!currentModels.includes(newModelName.trim())) {
+                              handleProviderUpdate(selectedProvider.id, {
+                                models: [...currentModels, newModelName.trim()],
+                              });
+                            }
+                            setNewModelName('');
+                            setShowAddModel(false);
+                          }
+                        }}
+                        disabled={!newModelName.trim()}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg px-3 text-sm disabled:opacity-50"
+                      >
+                        {t.settings.add || '添加'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setNewModelName('');
+                          setShowAddModel(false);
+                        }}
+                        className="text-muted-foreground hover:text-foreground p-1"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Suggested Models */}
+                  {!showAddModel && (
+                    <div className="space-y-2">
+                      <p className="text-muted-foreground text-xs">
+                        {t.settings.suggestedModels || '推荐模型'}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {getSuggestedModels(selectedProvider)
+                          .filter((model) => !(selectedProvider.models || []).includes(model))
+                          .slice(0, 4)
+                          .map((model) => (
+                            <button
+                              key={model}
+                              onClick={() => {
+                                const currentModels = selectedProvider.models || [];
+                                if (!currentModels.includes(model)) {
+                                  handleProviderUpdate(selectedProvider.id, {
+                                    models: [...currentModels, model],
+                                  });
+                                }
+                              }}
+                              className="bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-full px-3 py-1 text-xs transition-colors"
+                            >
+                              + {model}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

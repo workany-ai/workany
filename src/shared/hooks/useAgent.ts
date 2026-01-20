@@ -8,20 +8,51 @@ import {
   updateTask,
   updateTaskFromMessage,
   type FileType,
-  type Message,
   type Task,
 } from '@/shared/db';
 import { getSettings } from '@/shared/db/settings';
 import { getAppDataDir } from '@/shared/lib/paths';
+import {
+  saveAttachments,
+  loadAttachments,
+  type AttachmentReference,
+} from '@/shared/lib/attachments';
+import { API_BASE_URL, API_PORT } from '@/config';
 
-// Use different ports for development (2026) and production (2620)
-// import.meta.env.PROD is true when built with `vite build`
-const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-const AGENT_SERVER_URL = `http://localhost:${API_PORT}`;
+const AGENT_SERVER_URL = API_BASE_URL;
 
 console.log(
   `[API] Environment: ${import.meta.env.PROD ? 'production' : 'development'}, Port: ${API_PORT}`
 );
+
+// Helper to format fetch errors with more details
+function formatFetchError(error: unknown, endpoint: string): string {
+  const err = error as Error;
+  const message = err.message || String(error);
+
+  // Common error patterns
+  if (message === 'Load failed' || message === 'Failed to fetch' || message.includes('NetworkError')) {
+    return `无法连接到 API 服务 (${AGENT_SERVER_URL}${endpoint})。请检查：\n` +
+      `1. API 服务是否已启动\n` +
+      `2. 端口 ${API_PORT} 是否被占用\n` +
+      `3. 防火墙是否阻止连接`;
+  }
+
+  if (message.includes('CORS') || message.includes('cross-origin')) {
+    return `跨域请求被阻止 (CORS)。API 服务可能配置错误。`;
+  }
+
+  if (message.includes('timeout') || message.includes('Timeout')) {
+    return `请求超时。API 服务响应过慢或网络问题。`;
+  }
+
+  if (message.includes('ECONNREFUSED')) {
+    return `连接被拒绝。API 服务未在端口 ${API_PORT} 上运行。`;
+  }
+
+  // Return original message with context
+  return `API 请求失败: ${message}`;
+}
 
 // Helper to get model configuration from settings
 function getModelConfig():
@@ -195,6 +226,7 @@ export interface UseAgentReturn {
   taskIndex: number;
   sessionFolder: string | null;
   taskFolder: string | null; // Full path to current task folder (sessionFolder/task-XX)
+  filesVersion: number; // Incremented when files are added (e.g., attachments saved)
   pendingPermission: PermissionRequest | null;
   pendingQuestion: PendingQuestion | null;
   // Two-phase planning
@@ -581,6 +613,8 @@ export function useAgent(): UseAgentReturn {
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(1);
+  // Track file changes to trigger refresh in UI
+  const [filesVersion, setFilesVersion] = useState<number>(0);
   const [sessionFolder, setSessionFolder] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null); // Backend session ID for API calls
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -644,46 +678,76 @@ export function useAgent(): UseAgentReturn {
 
     try {
       const dbMessages = await getMessagesByTaskId(id);
-      const agentMessages: AgentMessage[] = dbMessages.map((msg: Message) => {
+      const agentMessages: AgentMessage[] = [];
+
+      for (const msg of dbMessages) {
         if (msg.type === 'user') {
-          // Parse attachments if present
+          // Parse and load attachments if present
           let attachments: MessageAttachment[] | undefined;
           if (msg.attachments) {
             try {
-              attachments = JSON.parse(msg.attachments);
+              const refs = JSON.parse(msg.attachments) as AttachmentReference[];
+              // Check if it's the new format (has path) or old format (has data)
+              if (refs.length > 0 && 'path' in refs[0]) {
+                // New format: load from file system
+                attachments = await loadAttachments(refs);
+              } else {
+                // Old format: use directly (backwards compatibility)
+                attachments = refs as unknown as MessageAttachment[];
+              }
             } catch {
               // Ignore parse errors
             }
           }
-          return {
+          agentMessages.push({
             type: 'user' as const,
             content: msg.content || undefined,
             attachments,
-          };
+          });
         } else if (msg.type === 'text') {
-          return { type: 'text' as const, content: msg.content || undefined };
+          agentMessages.push({ type: 'text' as const, content: msg.content || undefined });
         } else if (msg.type === 'tool_use') {
-          return {
+          agentMessages.push({
             type: 'tool_use' as const,
             name: msg.tool_name || undefined,
             input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-          };
+          });
         } else if (msg.type === 'tool_result') {
-          return {
+          agentMessages.push({
             type: 'tool_result' as const,
             toolUseId: msg.tool_use_id || undefined,
             output: msg.tool_output || undefined,
-          };
+          });
         } else if (msg.type === 'result') {
-          return { type: 'result' as const, subtype: msg.subtype || undefined };
+          agentMessages.push({ type: 'result' as const, subtype: msg.subtype || undefined });
         } else if (msg.type === 'error') {
-          return {
+          agentMessages.push({
             type: 'error' as const,
             message: msg.error_message || undefined,
-          };
+          });
+        } else if (msg.type === 'plan') {
+          // Restore plan message with parsed plan data
+          try {
+            const planData = msg.content ? JSON.parse(msg.content) as TaskPlan : undefined;
+            if (planData) {
+              // Mark all steps as completed since this is a loaded plan
+              const completedPlan: TaskPlan = {
+                ...planData,
+                steps: planData.steps.map((s) => ({ ...s, status: 'completed' as const })),
+              };
+              agentMessages.push({
+                type: 'plan' as const,
+                plan: completedPlan,
+              });
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        } else {
+          agentMessages.push({ type: msg.type as AgentMessage['type'] });
         }
-        return { type: msg.type as AgentMessage['type'] };
-      });
+      }
+
       setMessages(agentMessages);
       setTaskId(id);
     } catch (error) {
@@ -824,6 +888,12 @@ export function useAgent(): UseAgentReturn {
                       data.output
                     );
                     pendingToolUses.delete(data.toolUseId);
+
+                    // Trigger working files refresh for file-writing tools
+                    const fileWritingTools = ['Write', 'Edit', 'Bash', 'NotebookEdit'];
+                    if (fileWritingTools.includes(toolUse.name) || toolUse.name.includes('sandbox')) {
+                      setFilesVersion((v) => v + 1);
+                    }
                   }
 
                   // Update plan step progress
@@ -1012,15 +1082,22 @@ export function useAgent(): UseAgentReturn {
           };
           setMessages([userMessage]);
 
-          // Save user message to database (with attachments if any)
+          // Save user message to database (save attachments to files first)
           try {
+            let attachmentRefs: string | undefined;
+            if (attachments && attachments.length > 0 && computedSessionFolder) {
+              // Save attachments to file system and get references
+              const refs = await saveAttachments(computedSessionFolder, attachments);
+              attachmentRefs = JSON.stringify(refs);
+              console.log('[useAgent] Saved attachments to files:', refs.length);
+              // Trigger working files refresh
+              setFilesVersion((v) => v + 1);
+            }
             await createMessage({
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: attachments && attachments.length > 0
-                ? JSON.stringify(attachments)
-                : undefined,
+              attachments: attachmentRefs,
             });
           } catch (error) {
             console.error('Failed to save user message:', error);
@@ -1154,8 +1231,8 @@ export function useAgent(): UseAgentReturn {
         }
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
+          const errorMessage = formatFetchError(error, '/agent/plan');
+          console.error('[useAgent] Request failed:', error);
           setMessages((prev) => [
             ...prev,
             { type: 'error', message: errorMessage },
@@ -1197,6 +1274,18 @@ export function useAgent(): UseAgentReturn {
     };
     setPlan(updatedPlan);
 
+    // Save the plan as a message to the database for persistence
+    try {
+      await createMessage({
+        task_id: taskId,
+        type: 'plan',
+        content: JSON.stringify(plan),
+      });
+      console.log('[useAgent] Saved plan to database:', plan.id);
+    } catch (error) {
+      console.error('Failed to save plan to database:', error);
+    }
+
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
@@ -1235,8 +1324,8 @@ export function useAgent(): UseAgentReturn {
       await processStream(response, taskId, abortController);
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
+        const errorMessage = formatFetchError(error, '/agent/execute');
+        console.error('[useAgent] Execute failed:', error);
         setMessages((prev) => [
           ...prev,
           { type: 'error', message: errorMessage },
@@ -1280,15 +1369,22 @@ export function useAgent(): UseAgentReturn {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // Save user message to database (with attachments if any)
+      // Save user message to database (save attachments to files first)
       try {
+        let attachmentRefs: string | undefined;
+        if (attachments && attachments.length > 0 && sessionFolder) {
+          // Save attachments to file system and get references
+          const refs = await saveAttachments(sessionFolder, attachments);
+          attachmentRefs = JSON.stringify(refs);
+          console.log('[useAgent] Saved attachments to files:', refs.length);
+          // Trigger working files refresh
+          setFilesVersion((v) => v + 1);
+        }
         await createMessage({
           task_id: taskId,
           type: 'user',
           content: reply,
-          attachments: attachments && attachments.length > 0
-            ? JSON.stringify(attachments)
-            : undefined,
+          attachments: attachmentRefs,
         });
       } catch (error) {
         console.error('Failed to save user message:', error);
@@ -1351,8 +1447,8 @@ export function useAgent(): UseAgentReturn {
         await processStream(response, taskId, abortController);
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
+          const errorMessage = formatFetchError(error, '/agent');
+          console.error('[useAgent] Continue conversation failed:', error);
           setMessages((prev) => [
             ...prev,
             {
@@ -1514,6 +1610,7 @@ export function useAgent(): UseAgentReturn {
     taskIndex: currentTaskIndex,
     sessionFolder,
     taskFolder,
+    filesVersion,
     pendingPermission,
     pendingQuestion,
     phase,

@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import { isSetupCompleted } from '@/shared/db/settings';
+import { API_PORT } from '@/config';
 
 interface SetupGuardProps {
   children: ReactNode;
@@ -29,7 +30,7 @@ export function SetupGuard({ children }: SetupGuardProps) {
           // Also check if this is actually the first run by calling the API
           // This handles the case where localStorage was cleared but deps are installed
           try {
-            const response = await fetch('http://localhost:2026/health/dependencies');
+            const response = await fetch(`http://localhost:${API_PORT}/health/dependencies`);
             const data = await response.json();
 
             if (data.success && data.allRequiredInstalled) {

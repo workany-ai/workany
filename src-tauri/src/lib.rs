@@ -163,6 +163,14 @@ pub fn run() {
             "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add_attachments_to_messages",
+            sql: r#"
+                ALTER TABLE messages ADD COLUMN attachments TEXT;
+            "#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     #[cfg(not(debug_assertions))]

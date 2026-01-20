@@ -54,7 +54,7 @@ export function AboutSettings() {
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
           <span className="text-muted-foreground text-sm">{t.settings.author}</span>
           <button
-            onClick={() => openExternalUrl('https://idoubi.ai')}
+            onClick={() => openExternalUrl('https://idoubi.ai?utm_source=workany_desktop')}
             className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
           >
             idoubi
@@ -63,7 +63,7 @@ export function AboutSettings() {
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
           <span className="text-muted-foreground text-sm">{t.settings.copyright}</span>
-          <span className="text-foreground text-sm font-medium">© 2025 WorkAny</span>
+          <span className="text-foreground text-sm font-medium">© 2026 ThinkAny</span>
         </div>
         <div className="border-border flex items-center justify-between rounded-lg border p-3">
           <span className="text-muted-foreground text-sm">{t.settings.license}</span>
@@ -73,13 +73,6 @@ export function AboutSettings() {
 
       {/* Links */}
       <div className="flex flex-wrap gap-3">
-        <button
-          onClick={() => openExternalUrl('https://github.com/workany-ai/workany')}
-          className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
-        >
-          <ExternalLink className="size-4" />
-          GitHub
-        </button>
         <button
           onClick={() => openExternalUrl('https://workany.ai')}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
@@ -99,7 +92,7 @@ export function AboutSettings() {
       {/* Built with ShipAny */}
       <div className="border-border border-t pt-4">
         <button
-          onClick={() => openExternalUrl('https://shipany.ai')}
+          onClick={() => openExternalUrl('https://shipany.ai?utm_source=workany_desktop')}
           className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm transition-colors"
         >
           {t.settings.builtWith}

@@ -11,7 +11,6 @@ import {
   FileText,
   Globe,
   ListTodo,
-  LogOut,
   PanelLeft,
   PanelLeftOpen,
   Settings,
@@ -245,11 +244,6 @@ export function LeftSidebar({ tasks, currentTaskId }: LeftSidebarProps) {
                       <span>{t.nav.settings}</span>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer">
-                    <LogOut className="size-4" />
-                    <span>{t.nav.logOut}</span>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -369,10 +363,10 @@ export function LeftSidebar({ tasks, currentTaskId }: LeftSidebarProps) {
             <div className="flex-1" />
 
             {/* Bottom - User Avatar with Dropdown */}
-            <div className="flex shrink-0 flex-col items-center gap-1 px-2 pb-3">
+            <div className="flex shrink-0 flex-col items-center gap-1 px-2 pb-6">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="bg-sidebar-accent hover:ring-sidebar-foreground/20 flex size-10 cursor-pointer items-center justify-center overflow-hidden rounded-xl transition-all hover:ring-2">
+                  <button className="bg-sidebar-accent hover:ring-sidebar-foreground/20 flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-lg transition-all hover:ring-2">
                     {profile.avatar ? (
                       <img
                         src={profile.avatar}
@@ -380,7 +374,7 @@ export function LeftSidebar({ tasks, currentTaskId }: LeftSidebarProps) {
                         className="size-full object-cover"
                       />
                     ) : (
-                      <User className="text-sidebar-foreground/70 size-5" />
+                      <User className="text-sidebar-foreground/70 size-4" />
                     )}
                   </button>
                 </DropdownMenuTrigger>
@@ -421,11 +415,6 @@ export function LeftSidebar({ tasks, currentTaskId }: LeftSidebarProps) {
                       <span>{t.nav.settings}</span>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer">
-                    <LogOut className="size-4" />
-                    <span>{t.nav.logOut}</span>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

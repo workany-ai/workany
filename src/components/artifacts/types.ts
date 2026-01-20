@@ -16,7 +16,8 @@ export type ArtifactType =
   | 'pdf'
   | 'audio'
   | 'video'
-  | 'font';
+  | 'font'
+  | 'websearch';
 
 export interface Artifact {
   id: string;

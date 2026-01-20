@@ -5,7 +5,7 @@
  * Supports text input, file attachments, image paste, and keyboard shortcuts.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/shared/lib/utils';
 import {
   ArrowUp,
@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { MessageAttachment } from '@/shared/hooks/useAgent';
+import { useLanguage } from '@/shared/providers/language-provider';
 
 // Attachment type for files and images
 export interface Attachment {
@@ -90,6 +91,7 @@ export function ChatInput({
   className,
   disabled = false,
 }: ChatInputProps) {
+  const { t } = useLanguage();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -231,15 +233,34 @@ export function ChatInput({
     }, 10);
   };
 
-  const canSubmit = (value.trim() || attachments.length > 0) && !disabled;
   const isHome = variant === 'home';
+  const canSubmit = (value.trim() || attachments.length > 0) && !disabled;
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+
+    // Calculate the new height
+    const maxHeight = isHome ? 200 : 120; // Max height in pixels
+    const minHeight = isHome ? 24 : 20; // Min height in pixels
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+
+    textarea.style.height = `${newHeight}px`;
+
+    // Enable/disable overflow based on content height
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [value, isHome]);
 
   return (
     <div
       className={cn(
         'w-full',
         isHome
-          ? 'border-border/50 rounded-2xl border bg-white p-4 shadow-lg'
+          ? 'border-border/50 bg-background rounded-2xl border p-4 shadow-lg'
           : 'border-border/60 bg-background rounded-xl border p-3 shadow-sm',
         className
       )}
@@ -300,8 +321,13 @@ export function ChatInput({
         placeholder={placeholder}
         className={cn(
           'text-foreground placeholder:text-muted-foreground w-full resize-none border-0 bg-transparent focus:outline-none',
-          isHome ? 'min-h-[24px] text-base' : 'max-h-[80px] min-h-[20px] px-1 text-sm'
+          isHome ? 'text-base' : 'px-1 text-sm'
         )}
+        style={{
+          minHeight: isHome ? '24px' : '20px',
+          maxHeight: isHome ? '200px' : '120px',
+          overflowY: 'hidden',
+        }}
         rows={1}
         disabled={isRunning || disabled}
       />
@@ -328,7 +354,7 @@ export function ChatInput({
                 className="cursor-pointer gap-3 py-2.5"
               >
                 <Paperclip className="size-4" />
-                <span>Add files or photos</span>
+                <span>{t.home.addFilesOrPhotos}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -31,6 +32,7 @@ import { ImagePreview } from './ImagePreview';
 import { PdfPreview } from './PdfPreview';
 import { PptxPreview } from './PptxPreview';
 import { VideoPreview } from './VideoPreview';
+import { WebSearchPreview } from './WebSearchPreview';
 import {
   getFileExtension,
   getOpenWithApp,
@@ -107,8 +109,7 @@ export function ArtifactPreview({
     if (artifact.path) {
       try {
         console.log('[ArtifactPreview] Opening file with system app:', artifact.path);
-        const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-        const response = await fetch(`http://localhost:${API_PORT}/files/open`, {
+        const response = await fetch(`${API_BASE_URL}/files/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ path: artifact.path }),
@@ -152,8 +153,7 @@ export function ArtifactPreview({
 
     try {
       console.log('[ArtifactPreview] Opening in editor:', artifact.path);
-      const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-      const response = await fetch(`http://localhost:${API_PORT}/files/open-in-editor`, {
+      const response = await fetch(`${API_BASE_URL}/files/open-in-editor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: artifact.path }),
@@ -239,6 +239,8 @@ export function ArtifactPreview({
         return !!artifact.path;
       case 'document':
         return !!artifact.path;
+      case 'websearch':
+        return !!artifact.content;
       default:
         return false;
     }
@@ -526,8 +528,7 @@ function PreviewContent({
   const handleOpenExternal = async () => {
     if (!artifact.path) return;
     try {
-      const API_PORT = import.meta.env?.PROD ? 2620 : 2026;
-      const response = await fetch(`http://localhost:${API_PORT}/files/open`, {
+      const response = await fetch(`${API_BASE_URL}/files/open`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: artifact.path }),
@@ -729,6 +730,11 @@ function PreviewContent({
   // Font Preview
   if (artifact.type === 'font') {
     return <FontPreview artifact={artifact} />;
+  }
+
+  // WebSearch Preview
+  if (artifact.type === 'websearch') {
+    return <WebSearchPreview artifact={artifact} />;
   }
 
   // Document Preview (fallback)

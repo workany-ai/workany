@@ -1,4 +1,5 @@
 import type { Artifact } from './types';
+import { API_BASE_URL } from '@/config';
 
 // Max file size for preview (50MB)
 export const MAX_PREVIEW_SIZE = 50 * 1024 * 1024;
@@ -227,8 +228,7 @@ export function inlineAssets(html: string, allArtifacts: Artifact[]): string {
 export async function openFileExternal(path: string): Promise<void> {
   if (!path) return;
   try {
-    const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-    await fetch(`http://localhost:${API_PORT}/files/open`, {
+    await fetch(`${API_BASE_URL}/files/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),

@@ -304,6 +304,16 @@ Rules:
 4. Scripts, documents, data files - EVERYTHING goes to ${workDir}/
 5. Create subdirectories under ${workDir}/ if needed (e.g., ${workDir}/output/, ${workDir}/data/)
 
+## CRITICAL: Read Before Write Rule
+**ALWAYS use the Read tool before using the Write tool, even for new files.**
+This is a security requirement. Before writing any file:
+1. First, use the Read tool on the file path (it will show "file not found" for new files - this is expected)
+2. Then, use the Write tool to create/update the file
+
+Example workflow for creating a new file:
+1. Read("${workDir}/script.py")  -> Returns error "file not found" (OK, this is expected)
+2. Write("${workDir}/script.py", content)  -> Now this will succeed
+
 ## CRITICAL: Scripts MUST use OUTPUT_DIR variable for ALL file operations
 When writing scripts (Python, Node.js, etc.), you MUST:
 1. Define the output directory at the top of the script: \`OUTPUT_DIR = "${workDir}"\`
@@ -356,6 +366,56 @@ Examples:
 - Script: "${workDir}/crawler.py" (NOT ~/script.py)
 - Output: "${workDir}/results.json" (NOT /tmp/results.json)
 - Document: "${workDir}/report.docx" (NOT ~/docx-workspace/report.docx)
+
+## ⚠️ CRITICAL: Sensitive File Operations Safety Rules
+
+**IMPORTANT**: When the user requests to modify or delete files/folders OUTSIDE the workspace directory (${workDir}), you MUST follow these safety rules:
+
+### 1. Ask for Explicit User Confirmation FIRST
+Before ANY modification or deletion of files outside workspace, you MUST:
+- Use the AskUserQuestion tool to explicitly ask the user for confirmation
+- Clearly list the exact files/folders that will be affected
+- Explain what operation will be performed (modify/delete/move)
+- Wait for user approval before proceeding
+
+Example question to ask:
+\`\`\`
+您要求修改工作区外的文件，这是一个敏感操作：
+- 目标文件: /Users/xxx/important.txt
+- 操作类型: 修改/删除
+请确认是否继续？
+\`\`\`
+
+### 2. Backup Before Sensitive Operations
+After user confirmation but BEFORE making any changes:
+- Create a backup folder: ${workDir}/_backups/
+- Copy the original file/folder to the backup location
+- Use timestamp in backup name: original_filename_YYYYMMDD_HHMMSS
+- Only proceed with the operation after backup is confirmed
+
+Example backup workflow:
+\`\`\`
+1. mkdir -p ${workDir}/_backups/
+2. cp /original/path/file.txt ${workDir}/_backups/file_20240120_143022.txt
+3. Then perform the actual modification/deletion
+\`\`\`
+
+### 3. Minimize Permission Scope
+- Request the smallest possible scope of permissions
+- Never request broad permissions like "modify all files"
+- Be specific: "modify file X" instead of "modify files in directory Y"
+- Avoid recursive operations on directories outside workspace unless absolutely necessary
+
+### What counts as "outside workspace"?
+- Any path that does NOT start with ${workDir}/
+- System directories: /etc/, /usr/, /var/, /bin/, /sbin/
+- User directories: ~/Documents/, ~/Desktop/, ~/Downloads/, ~/.config/
+- Any absolute path not under ${workDir}
+
+### What does NOT require these safety measures?
+- All operations within ${workDir}/ - proceed normally
+- Reading files (read operations are always safe)
+- Creating new files in ${workDir}/
 
 `;
 

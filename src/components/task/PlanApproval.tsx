@@ -15,18 +15,34 @@ export function PlanApproval({
   onApprove,
   onReject,
 }: PlanApprovalProps) {
+  // Check if all steps are completed
+  const isAllCompleted = plan.steps.every((step) => step.status === 'completed');
+
   return (
-    <div className="border-primary/30 bg-accent/30 space-y-4 rounded-xl border p-4">
+    <div className={cn(
+      "space-y-4 rounded-xl border p-4",
+      isAllCompleted && !isWaitingApproval
+        ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20"
+        : "border-primary/30 bg-accent/30"
+    )}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-          <ListTodo className="text-primary size-4" />
+          {isAllCompleted && !isWaitingApproval ? (
+            <Check className="size-4 text-emerald-500" />
+          ) : (
+            <ListTodo className="text-primary size-4" />
+          )}
           执行计划
-          {isWaitingApproval && (
+          {isWaitingApproval ? (
             <span className="bg-primary/20 text-primary rounded-full px-2 py-0.5 text-xs">
               待确认
             </span>
-          )}
+          ) : isAllCompleted ? (
+            <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-full px-2 py-0.5 text-xs">
+              已完成
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -69,7 +85,7 @@ export function PlanApproval({
                 className={cn(
                   'min-w-0 flex-1 text-sm leading-snug',
                   step.status === 'completed'
-                    ? 'text-muted-foreground line-through'
+                    ? 'text-muted-foreground'
                     : step.status === 'in_progress'
                       ? 'text-foreground font-medium'
                       : step.status === 'failed'

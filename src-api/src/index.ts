@@ -39,7 +39,7 @@ app.route('/mcp', mcpRoutes);
 app.get('/', (c) => {
   return c.json({
     name: 'WorkAny API',
-    version: '0.1.0',
+    version: '0.1.1',
     endpoints: {
       health: '/health',
       agent: '/agent',

@@ -24,11 +24,6 @@ import {
   ChevronDown,
   FileText,
   PanelLeft,
-  Paperclip,
-  Plus,
-  Send,
-  Square,
-  X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -40,12 +35,7 @@ import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
 import { RightSidebar } from '@/components/task/RightSidebar';
 import { ToolExecutionItem } from '@/components/task/ToolExecutionItem';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { ChatInput } from '@/components/shared/ChatInput';
 
 interface LocationState {
   prompt?: string;
@@ -109,9 +99,9 @@ function TaskDetailContent() {
     pendingQuestion,
     respondToQuestion,
     sessionFolder,
+    filesVersion,
   } = useAgent();
   const { toggleLeft, setLeftOpen } = useSidebar();
-  const [replyValue, setReplyValue] = useState('');
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
   const [task, setTask] = useState<Task | null>(null);
@@ -119,30 +109,17 @@ function TaskDetailContent() {
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
-  const isComposingRef = useRef(false); // Track IME composition state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Attachment state
-  interface Attachment {
-    id: string;
-    file: File;
-    type: 'image' | 'file';
-    preview?: string;
-  }
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  // Auto-collapse left sidebar on task detail page
-  useEffect(() => {
-    setLeftOpen(false);
-    return () => {
-      // Optionally restore on unmount if needed
-      // setLeftOpen(true);
-    };
-  }, [setLeftOpen]);
 
   // Panel visibility state - default to collapsed, auto-expand when content is available
   const [isRightSidebarVisible, setIsRightSidebarVisible] = useState(false);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+
+  // Auto-collapse left sidebar only when preview panel opens
+  useEffect(() => {
+    if (isPreviewVisible) {
+      setLeftOpen(false);
+    }
+  }, [isPreviewVisible, setLeftOpen]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Artifact state
@@ -420,6 +397,9 @@ function TaskDetailContent() {
             });
           }
         }
+
+        // WebSearch artifacts temporarily disabled
+        // TODO: Re-enable when WebSearchPreview parsing is fixed
       });
 
       // 1.5. Extract files mentioned in tool_result messages and text messages
@@ -583,127 +563,14 @@ function TaskDetailContent() {
     initialize();
   }, [taskId]);
 
-  const handleReply = async () => {
-    if ((replyValue.trim() || attachments.length > 0) && !isRunning && taskId) {
-      const reply = replyValue.trim();
-
-      // Convert attachments to MessageAttachment format
-      const messageAttachments =
-        attachments.length > 0
-          ? attachments.map((a) => ({
-              id: a.id,
-              type: a.type,
-              name: a.file.name,
-              data: a.preview || '', // Base64 data
-              mimeType: a.file.type,
-            }))
-          : undefined;
-
-      setReplyValue('');
-      setAttachments([]); // Clear attachments after sending
-      await continueConversation(reply, messageAttachments);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Only submit if Enter is pressed without Shift and not during IME composition
-    // Check multiple signals for IME/autocomplete:
-    // 1. nativeEvent.isComposing - standard way to detect composition
-    // 2. isComposingRef - our own tracking via composition events
-    // 3. keyCode 229 - legacy IME processing indicator (still useful for compatibility)
-    const isComposing =
-      e.nativeEvent.isComposing || isComposingRef.current || e.keyCode === 229;
-
-    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-      e.preventDefault();
-      handleReply();
-    }
-  };
-
-  const handleCompositionStart = () => {
-    isComposingRef.current = true;
-  };
-
-  const handleCompositionEnd = () => {
-    // Delay reset to handle edge cases where keydown fires before compositionend
-    setTimeout(() => {
-      isComposingRef.current = false;
-    }, 10);
-  };
-
-  // File attachment helpers
-  const generateId = () =>
-    `attachment_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-  const isImageFile = (file: File) => file.type.startsWith('image/');
-
-  const createImagePreview = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const addFiles = useCallback(async (files: FileList | File[]) => {
-    const fileArray = Array.from(files);
-    const newAttachments: Attachment[] = [];
-
-    for (const file of fileArray) {
-      const isImage = isImageFile(file);
-      const attachment: Attachment = {
-        id: generateId(),
-        file,
-        type: isImage ? 'image' : 'file',
-      };
-
-      if (isImage) {
-        attachment.preview = await createImagePreview(file);
-      }
-
-      newAttachments.push(attachment);
-    }
-
-    setAttachments((prev) => [...prev, ...newAttachments]);
-  }, []);
-
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }, []);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      addFiles(e.target.files);
-      e.target.value = '';
-    }
-  };
-
-  const openFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Handle paste event for image upload
-  const handlePaste = useCallback(
-    async (e: React.ClipboardEvent) => {
-      const items = e.clipboardData.items;
-      const imageFiles: File[] = [];
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            imageFiles.push(file);
-          }
-        }
-      }
-
-      if (imageFiles.length > 0) {
-        e.preventDefault(); // Prevent default paste behavior for images
-        await addFiles(imageFiles);
+  // Handle reply submission from ChatInput
+  const handleReply = useCallback(
+    async (text: string, messageAttachments?: MessageAttachment[]) => {
+      if ((text.trim() || (messageAttachments && messageAttachments.length > 0)) && !isRunning && taskId) {
+        await continueConversation(text.trim(), messageAttachments);
       }
     },
-    [addFiles]
+    [isRunning, taskId, continueConversation]
   );
 
   const displayPrompt = task?.prompt || initialPrompt;
@@ -890,114 +757,13 @@ function TaskDetailContent() {
                   !isPreviewVisible && !isRightSidebarVisible && 'max-w-[800px]'
                 )}
               >
-                <div className="border-border/60 bg-background rounded-xl border p-3 shadow-sm">
-                  {/* Hidden file input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.xlsx,.xls,.pptx,.ppt"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-
-                  {/* Attachment Preview */}
-                  {attachments.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {attachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className="group border-border/50 bg-muted/50 relative flex items-center gap-2 rounded-lg border px-3 py-2"
-                        >
-                          {attachment.type === 'image' && attachment.preview ? (
-                            <img
-                              src={attachment.preview}
-                              alt={attachment.file.name}
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                          ) : (
-                            <div className="bg-muted flex h-10 w-10 items-center justify-center rounded">
-                              <FileText className="text-muted-foreground h-5 w-5" />
-                            </div>
-                          )}
-                          <span className="text-foreground max-w-[120px] truncate text-sm">
-                            {attachment.file.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(attachment.id)}
-                            className="bg-foreground text-background absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <textarea
-                    value={replyValue}
-                    onChange={(e) => setReplyValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onCompositionStart={handleCompositionStart}
-                    onCompositionEnd={handleCompositionEnd}
-                    onPaste={handlePaste}
-                    placeholder={t.home.reply}
-                    className="bg-background text-foreground placeholder:text-muted-foreground max-h-[80px] min-h-[20px] w-full resize-none border-0 px-1 text-sm focus:outline-none"
-                    rows={1}
-                    disabled={isRunning}
-                  />
-
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger
-                          disabled={isRunning}
-                          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none"
-                        >
-                          <Plus className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          sideOffset={8}
-                          className="z-50 w-56"
-                        >
-                          <DropdownMenuItem
-                            onSelect={openFilePicker}
-                            className="cursor-pointer gap-3 py-2.5"
-                          >
-                            <Paperclip className="size-4" />
-                            <span>Add files or photos</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {isRunning ? (
-                        <button
-                          onClick={stopAgent}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90 flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors"
-                        >
-                          <Square className="size-3" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleReply}
-                          disabled={!replyValue.trim() && attachments.length === 0}
-                          className={cn(
-                            'flex size-7 items-center justify-center rounded-full transition-all',
-                            replyValue.trim() || attachments.length > 0
-                              ? 'bg-foreground text-background hover:bg-foreground/90 cursor-pointer'
-                              : 'bg-muted text-muted-foreground cursor-not-allowed'
-                          )}
-                        >
-                          <Send className="size-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <ChatInput
+                  variant="reply"
+                  placeholder={t.home.reply}
+                  isRunning={isRunning}
+                  onSubmit={handleReply}
+                  onStop={stopAgent}
+                />
               </div>
             </div>
           </div>
@@ -1041,6 +807,7 @@ function TaskDetailContent() {
                 selectedArtifact={selectedArtifact}
                 onSelectArtifact={handleSelectArtifact}
                 workingDir={workingDir}
+                filesVersion={filesVersion}
               />
             </div>
           )}
@@ -1382,6 +1149,7 @@ function TaskGroupComponent({
   isRunning: boolean;
   searchQuery?: string;
 }) {
+  const { t } = useLanguage();
   // Default: collapsed when completed, expanded when running or in progress
   const [isExpanded, setIsExpanded] = useState(!isCompleted || isRunning);
 
@@ -1427,7 +1195,7 @@ function TaskGroupComponent({
               )}
             />
             <span className="flex-1 text-left">
-              {isExpanded ? 'Hide steps' : `Show ${tools.length} steps`}
+              {isExpanded ? t.task.hideSteps : t.task.showSteps.replace('{count}', String(tools.length))}
             </span>
           </button>
 
@@ -1521,9 +1289,18 @@ function MessageItem({
               a: ({ children, href }) => (
                 <a
                   href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    if (href) {
+                      try {
+                        const { openUrl } = await import('@tauri-apps/plugin-opener');
+                        await openUrl(href);
+                      } catch {
+                        window.open(href, '_blank');
+                      }
+                    }
+                  }}
+                  className="text-primary cursor-pointer hover:underline"
                 >
                   {children}
                 </a>
@@ -1625,10 +1402,10 @@ function RunningIndicator({ messages }: { messages: AgentMessage[] }) {
   };
 
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-2 py-2">
       {/* Spinning loader - Claude style */}
-      <div className="relative size-6 shrink-0">
-        <svg className="size-6 animate-spin" viewBox="0 0 24 24">
+      <div className="relative size-4 shrink-0">
+        <svg className="size-4 animate-spin" viewBox="0 0 24 24">
           <circle
             className="opacity-20"
             cx="12"

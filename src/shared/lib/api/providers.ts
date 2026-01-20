@@ -4,9 +4,7 @@
  * Client for interacting with the Provider management API endpoints.
  */
 
-// Use different ports for development (2026) and production (2620)
-const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-const API_BASE_URL = `http://localhost:${API_PORT}`;
+import { API_BASE_URL } from '@/config';
 
 // ============================================================================
 // Types

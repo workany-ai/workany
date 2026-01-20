@@ -3,6 +3,7 @@ import { FolderOpen, Loader2 } from 'lucide-react';
 import { getAppDataDir } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { API_PORT } from '@/config';
 import type { DependencyStatus, WorkplaceSettingsProps } from '../types';
 
 export function WorkplaceSettings({
@@ -25,7 +26,7 @@ export function WorkplaceSettings({
       setCheckingDeps(true);
       try {
         const response = await fetch(
-          'http://localhost:2026/health/dependencies'
+          `http://localhost:${API_PORT}/health/dependencies`
         );
         if (response.ok) {
           const data = await response.json();

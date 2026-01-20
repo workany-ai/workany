@@ -11,7 +11,7 @@
     "build:binary:linux": "pnpm bundle && pkg dist/bundle.cjs --targets node20-linux-x64 --output dist/workany-api-x86_64-unknown-linux-gnu --options expose-gc",
     "build:binary:windows": "pnpm bundle && pkg dist/bundle.cjs --targets node20-win-x64 --output dist/workany-api-x86_64-pc-windows-msvc.exe --options expose-gc",
     "build:binary:mac-intel": "pnpm bundle && pkg dist/bundle.cjs --targets node20-macos-x64 --output dist/workany-api-x86_64-apple-darwin --options expose-gc",
-    "build:binary:mac-arm": "pnpm bundle && pkg dist/bundle.cjs --targets node20-macos-arm64 --output dist/workany-api-aarch64-apple-darwin --options expose-gc",
+    "build:binary:mac-arm": "pnpm bundle && pkg dist/bundle.cjs --targets node18-macos-arm64 --output dist/workany-api-aarch64-apple-darwin --options max-old-space-size=4096",
     "build:binary:all": "pnpm run build:binary:linux && pnpm run build:binary:windows && pnpm run build:binary:mac-intel && pnpm run build:binary:mac-arm",
     "lint": "eslint .",
     "format": "prettier --write ."

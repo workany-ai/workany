@@ -35,6 +35,7 @@ import type {
   AgentMessage,
   AgentOptions,
   AgentProvider,
+  ConversationMessage,
   ExecuteOptions,
   ImageAttachment,
   PlanOptions,
@@ -701,6 +702,29 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Format conversation history for inclusion in prompt
+   */
+  private formatConversationHistory(conversation?: ConversationMessage[]): string {
+    if (!conversation || conversation.length === 0) {
+      return '';
+    }
+
+    const formattedMessages = conversation.map((msg) => {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      return `${role}: ${msg.content}`;
+    }).join('\n\n');
+
+    return `## Previous Conversation Context
+The following is the conversation history. Use this context to understand and respond to the current message appropriately.
+
+${formattedMessages}
+
+---
+## Current Request
+`;
+  }
+
+  /**
    * Direct execution mode (without planning)
    */
   async *run(
@@ -717,6 +741,9 @@ export class ClaudeAgent extends BaseAgent {
     );
     console.log(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
     console.log(`[Claude ${session.id}] Direct execution started`);
+    if (options?.conversation && options.conversation.length > 0) {
+      console.log(`[Claude ${session.id}] Conversation history: ${options.conversation.length} messages`);
+    }
     if (options?.sandbox?.enabled) {
       console.log(`[Claude ${session.id}] Sandbox mode enabled`);
     }
@@ -737,15 +764,48 @@ export class ClaudeAgent extends BaseAgent {
     let imageInstruction = '';
     if (options?.images && options.images.length > 0) {
       console.log(`[Claude ${session.id}] Processing ${options.images.length} image(s)`);
+      options.images.forEach((img, i) => {
+        console.log(`[Claude ${session.id}] Image ${i}: mimeType=${img.mimeType}, dataLength=${img.data?.length || 0}`);
+      });
       const imagePaths = await saveImagesToDisk(options.images, sessionCwd);
+      console.log(`[Claude ${session.id}] Saved ${imagePaths.length} images to disk: ${imagePaths.join(', ')}`);
       if (imagePaths.length > 0) {
-        imageInstruction = `\n\n## Attached Images\nThe user has attached the following image(s) for you to analyze:\n${imagePaths.map((p, i) => `- Image ${i + 1}: ${p}`).join('\n')}\n\nPlease use the Read tool to view these images and incorporate them into your response.\n\n`;
+        imageInstruction = `
+## 🖼️ MANDATORY IMAGE ANALYSIS - DO THIS FIRST
+
+**STOP! Before doing anything else, you MUST read the attached image(s).**
+
+The user has attached ${imagePaths.length} image file(s):
+${imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+
+**YOUR FIRST ACTION MUST BE:**
+Use the Read tool to view each image file listed above. The Read tool supports image files (PNG, JPG, etc.) and will show you the visual content.
+
+Example:
+\`\`\`
+Read tool: file_path="${imagePaths[0]}"
+\`\`\`
+
+**CRITICAL RULES:**
+- DO NOT respond to the user's question until you have READ and SEEN the actual image content
+- DO NOT guess or assume what the image contains
+- After reading the image, describe what you actually see in the image
+- Base your response ONLY on the actual visual content you observe
+
+---
+User's request (answer this AFTER reading the images):
+`;
       }
     }
 
+    // Format conversation history to include context from previous messages
+    const conversationContext = this.formatConversationHistory(options?.conversation);
+
     // Add workspace instruction to prompt so skills know where to save files
-    const enhancedPrompt =
-      getWorkspaceInstruction(sessionCwd, sandboxOpts) + imageInstruction + prompt;
+    // If images are attached, put image instruction FIRST (highest priority)
+    const enhancedPrompt = imageInstruction
+      ? imageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
+      : getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + prompt;
 
     // Ensure Claude Code is installed
     const claudeCodePath = await ensureClaudeCode();

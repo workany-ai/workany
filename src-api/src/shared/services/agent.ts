@@ -24,6 +24,9 @@ let globalAgent: IAgent | null = null;
 // Store active sessions for backward compatibility
 const activeSessions = new Map<string, { abortController: AbortController }>();
 
+// Global plan store (shared across all agent instances)
+const globalPlanStore = new Map<string, TaskPlan>();
+
 /**
  * Get or create the global agent instance
  * If modelConfig is provided, creates a new agent with those settings
@@ -93,26 +96,29 @@ export function deleteSession(sessionId: string): boolean {
 }
 
 /**
- * Get a stored plan
+ * Get a stored plan from global store
  */
 export function getPlan(planId: string): TaskPlan | undefined {
-  return getAgent().getPlan(planId);
+  return globalPlanStore.get(planId);
 }
 
 /**
- * Save a plan (for backward compatibility)
+ * Save a plan to global store
  */
-export function savePlan(_plan: TaskPlan): void {
-  // Plans are stored internally by the agent
-  // This is a no-op as the agent manages its own plans
+export function savePlan(plan: TaskPlan): void {
+  globalPlanStore.set(plan.id, plan);
+  console.log(`[AgentService] Plan saved to global store: ${plan.id}`);
 }
 
 /**
- * Delete a plan
+ * Delete a plan from global store
  */
 export function deletePlan(planId: string): boolean {
-  getAgent().deletePlan(planId);
-  return true;
+  const deleted = globalPlanStore.delete(planId);
+  if (deleted) {
+    console.log(`[AgentService] Plan deleted from global store: ${planId}`);
+  }
+  return deleted;
 }
 
 /**
@@ -129,6 +135,10 @@ export async function* runPlanningPhase(
     sessionId: session.id,
     abortController: session.abortController,
   })) {
+    // Intercept plan messages and save to global store
+    if (message.type === 'plan' && message.plan) {
+      savePlan(message.plan);
+    }
     yield message;
   }
 }

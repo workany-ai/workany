@@ -229,57 +229,8 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://openrouter.ai/api',
     enabled: true,
     models: [
-      'anthropic/claude-sonnet-4',
-      'anthropic/claude-haiku-4',
-      'anthropic/claude-opus-4',
-      'openai/gpt-4o',
-      'openai/gpt-4o-mini',
-      'google/gemini-2.0-flash-001',
-      'deepseek/deepseek-chat',
-    ],
-  },
-  {
-    id: 'siliconflow',
-    name: 'SiliconFlow',
-    apiKey: '',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    enabled: false,
-    models: ['deepseek-v3', 'qwen2.5-72b-instruct'],
-  },
-  {
-    id: 'replicate',
-    name: 'Replicate',
-    apiKey: '',
-    baseUrl: 'https://api.replicate.com/v1',
-    enabled: false,
-    models: ['meta/llama-3.1-405b', 'mistral/mixtral-8x7b'],
-  },
-  {
-    id: 'fal',
-    name: 'Fal',
-    apiKey: '',
-    baseUrl: 'https://fal.run',
-    enabled: false,
-    models: ['fal-ai/flux/dev', 'fal-ai/flux/schnell'],
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    apiKey: '',
-    baseUrl: 'https://api.openai.com/v1',
-    enabled: false,
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    apiKey: '',
-    baseUrl: 'https://api.anthropic.com',
-    enabled: false,
-    models: [
-      'claude-sonnet-4-20250514',
-      'claude-haiku-4-20250514',
-      'claude-opus-4-20250514',
+      'anthropic/claude-sonnet-4-5-20250514',
+      'anthropic/claude-opus-4-5-20250514',
     ],
   },
 ];
@@ -606,9 +557,7 @@ export function getDefaultAgentRuntime(): AgentRuntimeSetting | undefined {
 // Backend Sync
 // ============================================================================
 
-// Use different ports for development (2026) and production (2620)
-const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-const API_BASE_URL = `http://localhost:${API_PORT}`;
+import { API_BASE_URL } from '@/config';
 
 /**
  * Sync settings with the backend API

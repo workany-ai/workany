@@ -45,33 +45,77 @@ export const categoryIcons: Record<
 // Provider icons mapping
 export const providerIcons: Record<string, string> = {
   openrouter: '<',
-  siliconflow: 'S',
-  replicate: 'R',
-  fal: 'F',
-  openai: 'O',
-  anthropic: 'A',
 };
 
 // Provider API Key settings URLs
 export const providerApiKeyUrls: Record<string, string> = {
   openrouter: 'https://openrouter.ai/keys',
-  siliconflow: 'https://cloud.siliconflow.cn/account/ak',
-  replicate: 'https://replicate.com/account/api-tokens',
-  fal: 'https://fal.ai/dashboard/keys',
-  openai: 'https://platform.openai.com/api-keys',
-  anthropic: 'https://console.anthropic.com/settings/keys',
 };
 
 // Default provider IDs that cannot be deleted
 export const defaultProviderIds = [
   'openrouter',
-  'siliconflow',
-  'replicate',
-  'fal',
-  'openai',
-  'anthropic',
 ];
 
-// API base URL
-export const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-export const API_BASE_URL = `http://localhost:${API_PORT}`;
+// Popular models for each provider (for suggestions)
+export const providerDefaultModels: Record<string, string[]> = {
+  openrouter: [
+    'anthropic/claude-sonnet-4-5-20250514',
+    'anthropic/claude-opus-4-5-20250514',
+    'anthropic/claude-sonnet-4-20250514',
+    'openai/gpt-4o',
+  ],
+  anthropic: [
+    'claude-sonnet-4-5-20250514',
+    'claude-opus-4-5-20250514',
+    'claude-sonnet-4-20250514',
+  ],
+  openai: [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'o1-preview',
+  ],
+  // Custom providers - provide common model name patterns
+  default: [
+    'claude-sonnet-4-5-20250514',
+    'gpt-4o',
+    'deepseek-chat',
+  ],
+};
+
+// Model suggestions for custom providers (matched by name pattern)
+export const customProviderModels: Record<string, string[]> = {
+  '火山': [
+    'doubao-1-5-pro-256k-250115',
+    'doubao-1-5-lite-32k-250115',
+    'deepseek-v3-250324',
+  ],
+  'volcengine': [
+    'doubao-1-5-pro-256k-250115',
+    'doubao-1-5-lite-32k-250115',
+    'deepseek-v3-250324',
+  ],
+  'deepseek': [
+    'deepseek-chat',
+    'deepseek-coder',
+    'deepseek-reasoner',
+  ],
+  'moonshot': [
+    'moonshot-v1-8k',
+    'moonshot-v1-32k',
+    'moonshot-v1-128k',
+  ],
+  'zhipu': [
+    'glm-4-plus',
+    'glm-4-flash',
+    'glm-4-long',
+  ],
+  'qwen': [
+    'qwen-max',
+    'qwen-plus',
+    'qwen-turbo',
+  ],
+};
+
+// Re-export API config
+export { API_PORT, API_BASE_URL } from '@/config';

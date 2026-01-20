@@ -29,7 +29,8 @@ export type MessageType =
   | 'tool_result'
   | 'result'
   | 'error'
-  | 'user';
+  | 'user'
+  | 'plan';
 
 export interface Message {
   id: number;

@@ -20,12 +20,22 @@ import {
   RefreshCw,
   Terminal,
 } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { useLanguage } from '@/shared/providers/language-provider';
 import { cn } from '@/shared/lib/utils';
 import { saveSettingItem } from '@/shared/db/settings';
 
-const API_BASE_URL = 'http://localhost:2026';
+import { API_BASE_URL } from '@/config';
+
+// Helper function to open external URLs
+const openExternalUrl = async (url: string) => {
+  try {
+    await openUrl(url);
+  } catch {
+    window.open(url, '_blank');
+  }
+};
 
 interface DependencyStatus {
   id: string;
@@ -55,6 +65,8 @@ export function SetupPage() {
   const [installCommands, setInstallCommands] = useState<Record<string, InstallCommands>>({});
   const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
   const [installErrors, setInstallErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Check dependencies on mount
   useEffect(() => {
@@ -63,26 +75,46 @@ export function SetupPage() {
 
   const checkDependencies = async () => {
     setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/dependencies`);
-      const data = await response.json();
+    setApiError(null);
 
-      if (data.success) {
-        setDependencies(data.dependencies);
-        setAllRequiredInstalled(data.allRequiredInstalled);
+    // Retry logic for API not ready
+    const maxRetries = 5;
+    const retryDelay = 1000;
 
-        // Load install commands for not-installed deps
-        for (const dep of data.dependencies) {
-          if (!dep.installed) {
-            loadInstallCommands(dep.id);
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/health/dependencies`);
+        const data = await response.json();
+
+        if (data.success) {
+          setDependencies(data.dependencies);
+          setAllRequiredInstalled(data.allRequiredInstalled);
+          setRetryCount(0);
+
+          // Load install commands for not-installed deps
+          for (const dep of data.dependencies) {
+            if (!dep.installed) {
+              loadInstallCommands(dep.id);
+            }
           }
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error(`[Setup] Attempt ${attempt + 1}/${maxRetries} failed:`, error);
+        if (attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+          setRetryCount(attempt + 1);
+        } else {
+          setApiError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to connect to API service. Please restart the app.'
+          );
         }
       }
-    } catch (error) {
-      console.error('[Setup] Failed to check dependencies:', error);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const loadInstallCommands = async (depId: string) => {
@@ -150,7 +182,11 @@ export function SetupPage() {
       <div className="bg-background flex min-h-svh items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="text-primary size-8 animate-spin" />
-          <p className="text-muted-foreground">{t.setup?.checking || 'Checking dependencies...'}</p>
+          <p className="text-muted-foreground">
+            {retryCount > 0
+              ? `${t.setup?.connecting || 'Connecting to service'}... (${retryCount}/5)`
+              : t.setup?.checking || 'Checking dependencies...'}
+          </p>
         </div>
       </div>
     );
@@ -171,6 +207,39 @@ export function SetupPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="mx-auto max-w-2xl space-y-4">
+          {/* API Error */}
+          {apiError && (
+            <div className="border-border rounded-xl border bg-red-500/5 p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                  <AlertCircle className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-foreground font-medium">
+                    {t.setup?.apiError || 'Unable to check dependencies'}
+                  </h3>
+                  <p className="text-muted-foreground mt-1 text-sm">{apiError}</p>
+                  <button
+                    onClick={checkDependencies}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                  >
+                    <RefreshCw className="size-4" />
+                    {t.setup?.retry || 'Retry'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* No dependencies loaded yet */}
+          {!apiError && dependencies.length === 0 && (
+            <div className="border-border rounded-xl border p-6 text-center">
+              <p className="text-muted-foreground">
+                {t.setup?.noDeps || 'No dependencies to check'}
+              </p>
+            </div>
+          )}
+
           {dependencies.map((dep) => {
             const isExpanded = expandedDep === dep.id;
             const commands = installCommands[dep.id];
@@ -274,10 +343,8 @@ export function SetupPage() {
                       </button>
 
                       {/* Manual Install Link */}
-                      <a
-                        href={dep.installUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openExternalUrl(dep.installUrl)}
                         className={cn(
                           'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
                           'border-border text-foreground hover:bg-accent border'
@@ -285,7 +352,7 @@ export function SetupPage() {
                       >
                         <ExternalLink className="size-4" />
                         {t.setup?.manualInstall || 'Manual Install'}
-                      </a>
+                      </button>
                     </div>
 
                     {/* Install Commands */}
@@ -333,15 +400,13 @@ export function SetupPage() {
                         <AlertCircle className="mt-0.5 size-4 shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm">{error}</p>
-                          <a
-                            href={dep.installUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            onClick={() => openExternalUrl(dep.installUrl)}
                             className="mt-1 inline-flex items-center gap-1 text-xs underline"
                           >
                             {t.setup?.tryManual || 'Try manual installation'}
                             <ExternalLink className="size-3" />
-                          </a>
+                          </button>
                         </div>
                       </div>
                     )}

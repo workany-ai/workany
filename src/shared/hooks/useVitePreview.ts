@@ -7,10 +7,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Use different ports for development (2026) and production (2620)
-// import.meta.env.PROD is true when built with `vite build`
-const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-const AGENT_SERVER_URL = `http://localhost:${API_PORT}`;
+import { API_BASE_URL } from '@/config';
+
+const AGENT_SERVER_URL = API_BASE_URL;
 
 export type PreviewStatus =
   | 'idle'

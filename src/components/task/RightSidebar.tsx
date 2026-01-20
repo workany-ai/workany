@@ -3,10 +3,9 @@ import type { AgentMessage } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import type { Artifact, ArtifactType } from '@/components/artifacts';
+import { API_BASE_URL } from '@/config';
 
-// Use different ports for development (2026) and production (2620)
-const API_PORT = import.meta.env.PROD ? 2620 : 2026;
-const API_URL = `http://localhost:${API_PORT}`;
+const API_URL = API_BASE_URL;
 import {
   ChevronDown,
   ChevronRight,
@@ -65,6 +64,8 @@ interface RightSidebarProps {
   workingDir?: string;
   // Callback when a working file is clicked
   onSelectWorkingFile?: (file: WorkingFile) => void;
+  // Version number to trigger file refresh when attachments are saved
+  filesVersion?: number;
 }
 
 // Get file icon based on type
@@ -94,6 +95,8 @@ function getFileIcon(type: Artifact['type']) {
       return Presentation;
     case 'pdf':
       return FileText;
+    case 'websearch':
+      return Globe;
     default:
       return File;
   }
@@ -490,27 +493,26 @@ function CollapsibleSection({
 
   return (
     <div className="border-border/50 border-b">
-      <div className="hover:bg-accent/30 flex w-full items-center justify-between px-4 py-3 transition-colors">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="hover:bg-accent/30 flex w-full cursor-pointer items-center justify-between px-4 py-3 transition-colors"
+      >
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="cursor-pointer"
-          >
-            <span className="text-foreground text-sm font-medium">{title}</span>
-          </button>
-          {action}
+          <span className="text-foreground text-sm font-medium">{title}</span>
+          {action && (
+            <span onClick={(e) => e.stopPropagation()}>
+              {action}
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-muted-foreground hover:text-foreground p-0.5 transition-colors"
-        >
+        <span className="text-muted-foreground p-0.5">
           {isExpanded ? (
             <ChevronDown className="size-4" />
           ) : (
             <ChevronRight className="size-4" />
           )}
-        </button>
-      </div>
+        </span>
+      </button>
       {isExpanded && <div className="pb-3">{children}</div>}
     </div>
   );
@@ -855,6 +857,7 @@ export function RightSidebar({
   onSelectArtifact,
   workingDir,
   onSelectWorkingFile,
+  filesVersion = 0,
 }: RightSidebarProps) {
   const { t } = useLanguage();
   const [selectedTool, setSelectedTool] = useState<ToolUsage | null>(null);
@@ -903,7 +906,7 @@ export function RightSidebar({
   }
 
   // Load files from working directory via API
-  // Only refresh when workingDir changes or artifacts change (new files created)
+  // Refresh when workingDir changes, artifacts change, or files are added (e.g., attachments)
   useEffect(() => {
     async function loadWorkingFiles() {
       if (!workingDir || !workingDir.startsWith('/')) {
@@ -924,7 +927,7 @@ export function RightSidebar({
     }
 
     loadWorkingFiles();
-  }, [workingDir, externalArtifacts.length]);
+  }, [workingDir, externalArtifacts.length, filesVersion]);
 
   // Get used skill names from messages
   const usedSkillNames = extractUsedSkillNames(messages);
