@@ -37,26 +37,85 @@ async function ensureInitialized() {
 async function getProviderWithFallback(
   preferredProvider?: SandboxProviderType
 ): Promise<{ provider: Awaited<ReturnType<typeof getSandboxProvider>>; usedFallback: boolean }> {
+  console.log(`[Sandbox] getProviderWithFallback called with: ${preferredProvider || 'auto'}`);
+
   if (!preferredProvider) {
+    console.log(`[Sandbox] No preferred provider, using getBestProvider()`);
     return { provider: await getBestProvider(), usedFallback: false };
   }
 
   try {
+    console.log(`[Sandbox] Attempting to get provider: ${preferredProvider}`);
     const provider = await getSandboxProvider(preferredProvider);
+    console.log(`[Sandbox] Got provider instance, checking availability...`);
+
     // Check if provider is available
     const isAvailable = await provider.isAvailable();
+    console.log(`[Sandbox] Provider ${preferredProvider} isAvailable: ${isAvailable}`);
+
     if (isAvailable) {
+      console.log(`[Sandbox] ✅ Using provider: ${preferredProvider}`);
       return { provider, usedFallback: false };
     }
-    console.log(`[Sandbox] Provider ${preferredProvider} not available, falling back to native`);
+    console.log(`[Sandbox] ⚠️ Provider ${preferredProvider} not available, falling back to native`);
   } catch (error) {
-    console.log(`[Sandbox] Failed to get provider ${preferredProvider}:`, error);
+    console.log(`[Sandbox] ❌ Failed to get provider ${preferredProvider}:`, error);
   }
 
   // Fallback to native
+  console.log(`[Sandbox] Using native fallback`);
   const nativeProvider = await getSandboxProvider('native');
   return { provider: nativeProvider, usedFallback: true };
 }
+
+/**
+ * Debug endpoint to check codex paths
+ */
+sandbox.get('/debug/codex-paths', async (c) => {
+  const os = await import('os');
+  const path = await import('path');
+  const fs = await import('fs');
+
+  const platform = os.platform();
+  const arch = process.arch;
+  const execDir = process.execPath ? path.dirname(process.execPath) : '';
+
+  // Target triple
+  let targetTriple = '';
+  if (platform === 'darwin') {
+    targetTriple = arch === 'arm64' ? '-aarch64-apple-darwin' : '-x86_64-apple-darwin';
+  } else if (platform === 'linux') {
+    targetTriple = '-x86_64-unknown-linux-gnu';
+  } else if (platform === 'win32') {
+    targetTriple = '-x86_64-pc-windows-msvc';
+  }
+
+  const pathsToCheck = [
+    path.join(execDir, `codex${targetTriple}`),
+    path.join(execDir, 'codex'),
+    path.join(execDir, '..', 'Resources', 'cli-bundle', 'node'),
+    path.join(execDir, 'cli-bundle', 'node'),
+    // Legacy paths
+    path.join(execDir, '..', 'Resources', 'codex-bundle', 'node'),
+    path.join(execDir, 'codex-bundle', 'node'),
+    '/usr/local/bin/codex',
+  ];
+
+  const results = pathsToCheck.map(p => ({
+    path: p,
+    exists: fs.existsSync(p),
+  }));
+
+  return c.json({
+    platform,
+    arch,
+    execDir,
+    targetTriple,
+    execPath: process.execPath,
+    cwd: process.cwd(),
+    pathsChecked: results,
+  });
+});
 
 /**
  * Check if sandbox is available on this platform

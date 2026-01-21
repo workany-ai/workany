@@ -324,6 +324,8 @@ export async function getSettingsAsync(): Promise<Settings> {
             // Skip invalid JSON values
           }
         }
+        // Debug: Log sandbox settings loaded from database
+        console.log('[Settings] Loaded from database - sandboxEnabled:', settings.sandboxEnabled, 'provider:', settings.defaultSandboxProvider);
         settingsCache = settings;
         return settings;
       }
@@ -337,6 +339,8 @@ export async function getSettingsAsync(): Promise<Settings> {
     const stored = localStorage.getItem('workany_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
+      // Debug: Log sandbox settings loaded from localStorage
+      console.log('[Settings] Loaded from localStorage - sandboxEnabled:', loadedSettings.sandboxEnabled, 'provider:', loadedSettings.defaultSandboxProvider);
       settingsCache = loadedSettings;
       return loadedSettings;
     }
@@ -344,6 +348,8 @@ export async function getSettingsAsync(): Promise<Settings> {
     console.error('[Settings] Failed to load from localStorage:', error);
   }
 
+  // Debug: Using default settings
+  console.log('[Settings] Using defaultSettings - sandboxEnabled:', defaultSettings.sandboxEnabled, 'provider:', defaultSettings.defaultSandboxProvider);
   settingsCache = defaultSettings;
   return defaultSettings;
 }
@@ -436,6 +442,13 @@ export async function initializeSettings(): Promise<Settings> {
   // Default skillsPath to workDir/skills (not system default)
   if (!settings.skillsPath) {
     settings.skillsPath = `${settings.workDir}/skills`;
+  }
+
+  // Migration: If a sandbox provider is selected but sandboxEnabled is not true, enable it
+  // This fixes a bug where selecting a sandbox provider didn't enable sandbox mode
+  if (settings.defaultSandboxProvider && settings.sandboxEnabled !== true) {
+    console.log('[Settings] Migration: Enabling sandbox because provider is selected:', settings.defaultSandboxProvider);
+    settings.sandboxEnabled = true;
   }
 
   settingsCache = settings;

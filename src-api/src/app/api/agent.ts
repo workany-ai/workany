@@ -83,6 +83,15 @@ agent.post('/execute', async (c) => {
     skillsPath?: string;
   }>();
 
+  console.log('[AgentAPI] POST /execute received:', {
+    planId: body.planId,
+    hasPrompt: !!body.prompt,
+    sandboxConfig: body.sandboxConfig ? {
+      enabled: body.sandboxConfig.enabled,
+      provider: body.sandboxConfig.provider,
+    } : null,
+  });
+
   if (!body.planId) {
     return c.json({ error: 'planId is required' }, 400);
   }
@@ -120,6 +129,10 @@ agent.post('/', async (c) => {
       hasApiKey: !!body.modelConfig.apiKey,
       baseUrl: body.modelConfig.baseUrl,
       model: body.modelConfig.model,
+    } : null,
+    sandboxConfig: body.sandboxConfig ? {
+      enabled: body.sandboxConfig.enabled,
+      provider: body.sandboxConfig.provider,
     } : null,
   });
 

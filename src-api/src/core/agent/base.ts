@@ -425,23 +425,37 @@ Example backup workflow:
 ## Sandbox Mode (ENABLED)
 Sandbox mode is enabled. You MUST use sandbox tools for running scripts.
 
+**CRITICAL: PREFER Node.js SCRIPTS**
+The app has a built-in Node.js runtime, but Python requires users to install it separately.
+- **ALWAYS prefer writing Node.js (.js) scripts** over Python scripts
+- Node.js standard library is powerful enough for most tasks (fs, path, http, https, crypto, child_process, etc.)
+- Only use Python if the task specifically requires Python-only libraries (numpy, pandas, etc.)
+
 **CRITICAL RULES**:
-1. ALWAYS use \`sandbox_run_script\` to run scripts (Python, Node.js, TypeScript, etc.)
-2. NEVER use Bash tool to run scripts directly (no \`python script.py\`, no \`node script.js\`)
+1. ALWAYS use \`sandbox_run_script\` to run scripts (Node.js, Python, TypeScript, etc.)
+2. NEVER use Bash tool to run scripts directly (no \`node script.js\`, no \`python script.py\`)
 3. After sandbox_run_script succeeds, the task is COMPLETE - do NOT run the script again with Bash
 4. Scripts MUST use OUTPUT_DIR = "${workDir}" for all file operations
 
 **Workflow**:
-1. Create script file using Write tool
+1. Create script file using Write tool (prefer .js files)
 2. Use \`sandbox_run_script\` to execute it - THIS IS THE ONLY WAY TO RUN SCRIPTS
 3. Script execution is DONE after sandbox_run_script returns
 
-Example:
+Example (Node.js - PREFERRED):
+\`\`\`
+sandbox_run_script:
+  filePath: "${workDir}/script.js"
+  workDir: "${workDir}"
+  packages: ["axios"]  # optional npm packages
+\`\`\`
+
+Example (Python - only if necessary):
 \`\`\`
 sandbox_run_script:
   filePath: "${workDir}/script.py"
   workDir: "${workDir}"
-  packages: ["requests"]  # optional npm/pip packages
+  packages: ["requests"]  # optional pip packages
 \`\`\`
 
 **DO NOT** run the same script twice. Once sandbox_run_script completes successfully, move on to the next step.

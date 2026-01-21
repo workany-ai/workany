@@ -26,11 +26,94 @@ import type {
 } from '@/core/sandbox/types';
 
 /**
+ * Get target triple suffix for the current platform
+ * Tauri adds this suffix to externalBin files
+ */
+function getTargetTriple(): string {
+  const os = platform();
+  const arch = process.arch;
+
+  if (os === 'darwin') {
+    return arch === 'arm64' ? '-aarch64-apple-darwin' : '-x86_64-apple-darwin';
+  } else if (os === 'linux') {
+    return '-x86_64-unknown-linux-gnu';
+  } else if (os === 'win32') {
+    return '-x86_64-pc-windows-msvc';
+  }
+  return '';
+}
+
+/**
+ * Check if Python is available on the system
+ * Returns the python command to use, or undefined if not available
+ */
+function getPythonCommand(): string | undefined {
+  const os = platform();
+  const commands = os === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+
+  for (const cmd of commands) {
+    try {
+      execSync(`${cmd} --version`, { encoding: 'utf-8', stdio: 'pipe' });
+      console.log(`[CodexProvider] Found Python: ${cmd}`);
+      return cmd;
+    } catch {
+      // Command not found, try next
+    }
+  }
+
+  console.log('[CodexProvider] Python not found on system');
+  return undefined;
+}
+
+/**
+ * Get the path to the bundled Node.js (within the app bundle)
+ * This allows running JS scripts without requiring user to install Node.js
+ */
+function getBundledNodePath(): string | undefined {
+  const os = platform();
+  const execDir = process.execPath ? path.dirname(process.execPath) : '';
+
+  if (!execDir) return undefined;
+
+  if (os === 'darwin') {
+    const resourcesDir = path.join(execDir, '..', 'Resources');
+    // Check cli-bundle first (new format)
+    const cliNodePath = path.join(resourcesDir, 'cli-bundle', 'node');
+    if (existsSync(cliNodePath)) {
+      console.log(`[CodexProvider] Found bundled node at: ${cliNodePath}`);
+      return cliNodePath;
+    }
+    // Legacy codex-bundle format
+    const legacyNodePath = path.join(resourcesDir, 'codex-bundle', 'node');
+    if (existsSync(legacyNodePath)) {
+      console.log(`[CodexProvider] Found bundled node at: ${legacyNodePath}`);
+      return legacyNodePath;
+    }
+  } else if (os === 'linux') {
+    // Linux: check relative to execDir
+    const nodePath = path.join(execDir, 'cli-bundle', 'node');
+    if (existsSync(nodePath)) {
+      return nodePath;
+    }
+  } else if (os === 'win32') {
+    // Windows: check for node.exe
+    const nodePath = path.join(execDir, 'cli-bundle', 'node.exe');
+    if (existsSync(nodePath)) {
+      return nodePath;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Get the path to the bundled codex launcher (within the app bundle)
+ * Now uses unified cli-bundle that contains both Claude Code and Codex with shared Node.js
  */
 function getBundledCodexPath(): string | undefined {
   const os = platform();
   const ext = os === 'win32' ? '.cmd' : '';
+  const targetTriple = getTargetTriple();
 
   // In packaged app, codex launcher is in the same directory as the running binary
   // or in Resources directory on macOS
@@ -39,26 +122,61 @@ function getBundledCodexPath(): string | undefined {
   // Get the directory of the current executable
   const execDir = process.execPath ? path.dirname(process.execPath) : '';
 
+  console.log(`[CodexProvider] Searching for bundled codex...`);
+  console.log(`[CodexProvider] execDir: ${execDir}`);
+  console.log(`[CodexProvider] targetTriple: ${targetTriple}`);
+
   if (execDir) {
-    // Same directory as executable (Linux/Windows)
+    // Tauri adds target triple suffix to externalBin files
+    // e.g., codex-aarch64-apple-darwin on Apple Silicon Mac
+    possiblePaths.push(path.join(execDir, `codex${targetTriple}${ext}`));
+
+    // Also try without suffix (for development or manual placement)
     possiblePaths.push(path.join(execDir, `codex${ext}`));
 
-    // macOS app bundle: Contents/MacOS/codex or Contents/Resources/codex-bundle
+    // macOS app bundle: Contents/Resources/cli-bundle (unified bundle)
     if (os === 'darwin') {
-      possiblePaths.push(path.join(execDir, 'codex'));
-      possiblePaths.push(
-        path.join(execDir, '..', 'Resources', 'codex-bundle', 'node')
-      );
+      const resourcesDir = path.join(execDir, '..', 'Resources');
+
+      // Check for unified cli-bundle first (new format)
+      const cliNodePath = path.join(resourcesDir, 'cli-bundle', 'node');
+      if (existsSync(cliNodePath)) {
+        console.log(`[CodexProvider] Found cli-bundle at: ${resourcesDir}/cli-bundle`);
+        // Return the launcher if it exists
+        const launcherPath = path.join(execDir, `codex${targetTriple}`);
+        if (existsSync(launcherPath)) {
+          return launcherPath;
+        }
+        // Try without suffix
+        const launcherPathNoSuffix = path.join(execDir, 'codex');
+        if (existsSync(launcherPathNoSuffix)) {
+          return launcherPathNoSuffix;
+        }
+        // Fallback: return path to node, caller should handle this
+        return cliNodePath;
+      }
+
+      // Legacy: check for old codex-bundle format
+      const legacyNodePath = path.join(resourcesDir, 'codex-bundle', 'node');
+      if (existsSync(legacyNodePath)) {
+        console.log(`[CodexProvider] Found legacy codex-bundle at: ${resourcesDir}/codex-bundle`);
+        const launcherPath = path.join(execDir, `codex${targetTriple}`);
+        if (existsSync(launcherPath)) {
+          return launcherPath;
+        }
+        return legacyNodePath;
+      }
     }
   }
 
-  // Development: check dist directory
-  possiblePaths.push(
-    path.join(__dirname, '..', '..', '..', 'dist', `codex${ext}`)
-  );
-  possiblePaths.push(
-    path.join(__dirname, '..', '..', '..', '..', 'dist', `codex${ext}`)
-  );
+  // Development: check dist directory relative to project root
+  const devPaths = [
+    path.join(process.cwd(), 'src-api', 'dist', `codex${ext}`),
+    path.join(process.cwd(), 'src-api', 'dist', `codex${targetTriple}${ext}`),
+  ];
+  possiblePaths.push(...devPaths);
+
+  console.log(`[CodexProvider] Checking paths: ${possiblePaths.join(', ')}`);
 
   for (const p of possiblePaths) {
     if (existsSync(p)) {
@@ -67,6 +185,7 @@ function getBundledCodexPath(): string | undefined {
     }
   }
 
+  console.log(`[CodexProvider] Bundled codex not found`);
   return undefined;
 }
 
@@ -77,6 +196,9 @@ function getBundledCodexPath(): string | undefined {
 function getCodexPath(): string | undefined {
   const os = platform();
 
+  console.log(`[CodexProvider] getCodexPath() called, platform: ${os}, arch: ${process.arch}`);
+  console.log(`[CodexProvider] process.execPath: ${process.execPath}`);
+
   // Check CODEX_PATH env var first (highest priority - user override)
   if (process.env.CODEX_PATH && existsSync(process.env.CODEX_PATH)) {
     console.log(
@@ -84,6 +206,7 @@ function getCodexPath(): string | undefined {
     );
     return process.env.CODEX_PATH;
   }
+  console.log(`[CodexProvider] CODEX_PATH not set`);
 
   // Try system-installed codex via which/where
   try {
@@ -108,7 +231,7 @@ function getCodexPath(): string | undefined {
       }
     }
   } catch {
-    // Not found via which/where
+    console.log(`[CodexProvider] System codex not found via which/where`);
   }
 
   // Check common install locations
@@ -121,20 +244,24 @@ function getCodexPath(): string | undefined {
           path.join(homedir(), '.npm-global', 'bin', 'codex'),
         ];
 
+  console.log(`[CodexProvider] Checking common paths: ${commonPaths.join(', ')}`);
   for (const p of commonPaths) {
     if (existsSync(p)) {
       console.log(`[CodexProvider] Found codex at common path: ${p}`);
       return p;
     }
   }
+  console.log(`[CodexProvider] Codex not found in common paths`);
 
   // Fallback to bundled codex (lowest priority)
+  console.log(`[CodexProvider] Checking for bundled codex...`);
   const bundledPath = getBundledCodexPath();
   if (bundledPath) {
     console.log(`[CodexProvider] Using bundled codex: ${bundledPath}`);
     return bundledPath;
   }
 
+  console.log(`[CodexProvider] ❌ No codex found anywhere`);
   return undefined;
 }
 
@@ -147,8 +274,11 @@ export class CodexProvider implements ISandboxProvider {
   private volumes: VolumeMount[] = [];
 
   async isAvailable(): Promise<boolean> {
+    console.log('[CodexProvider] Checking availability...');
     this.codexPath = getCodexPath();
-    return this.codexPath !== undefined;
+    const available = this.codexPath !== undefined;
+    console.log(`[CodexProvider] isAvailable: ${available}, path: ${this.codexPath || 'not found'}`);
+    return available;
   }
 
   async init(_config?: Record<string, unknown>): Promise<void> {
@@ -285,17 +415,39 @@ export class CodexProvider implements ISandboxProvider {
     }
 
     // Detect runtime
-    let runtime = 'python';
+    let runtime: string;
     let runtimeArgs: string[] = [filePath];
     let isPython = true;
 
     if (ext === '.js' || ext === '.mjs') {
-      runtime = 'node';
+      // Try to use bundled Node.js first, fallback to system node
+      const bundledNode = getBundledNodePath();
+      runtime = bundledNode || 'node';
+      if (bundledNode) {
+        console.log(`[CodexProvider] Using bundled Node.js: ${bundledNode}`);
+      }
       isPython = false;
     } else if (ext === '.ts' || ext === '.mts') {
       runtime = 'npx';
       runtimeArgs = ['tsx', filePath];
       isPython = false;
+    } else {
+      // Python script - check if Python is available
+      const pythonCmd = getPythonCommand();
+      if (!pythonCmd) {
+        return {
+          stdout: '',
+          stderr: `Python is not installed on this system.
+
+To run Python scripts, please install Python:
+- macOS: brew install python3
+- Windows: Download from https://python.org
+- Or use Node.js scripts instead (.js files) which work out of the box.`,
+          exitCode: 1,
+          duration: Date.now() - startTime,
+        };
+      }
+      runtime = pythonCmd;
     }
 
     // Add script args
@@ -315,8 +467,9 @@ export class CodexProvider implements ISandboxProvider {
       );
       try {
         if (isPython) {
-          // Use pip to install Python packages
-          const pipCmd = `pip install ${options.packages.join(' ')}`;
+          // Use pip3 on macOS/Linux since 'pip' may not exist
+          const pipBin = os === 'win32' ? 'pip' : 'pip3';
+          const pipCmd = `${pipBin} install ${options.packages.join(' ')}`;
           console.log(`[CodexProvider] Running: ${pipCmd}`);
           execSync(pipCmd, {
             cwd: workDir,

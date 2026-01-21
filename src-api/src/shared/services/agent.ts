@@ -5,6 +5,10 @@
  * It uses the agents abstraction layer to support multiple providers.
  */
 
+import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+
 import {
   createAgent,
   createAgentFromEnv,
@@ -17,6 +21,52 @@ import {
   type SandboxConfig,
   type TaskPlan,
 } from '@/core/agent';
+
+// ============================================================================
+// File-based logging for debugging in distributed apps
+// ============================================================================
+const LOG_DIR = join(homedir(), '.workany', 'logs');
+const LOG_FILE = join(LOG_DIR, 'agent-service.log');
+
+function ensureLogDir() {
+  try {
+    if (!existsSync(LOG_DIR)) {
+      mkdirSync(LOG_DIR, { recursive: true });
+    }
+  } catch {
+    // Ignore errors
+  }
+}
+
+function logToFile(level: string, message: string, data?: unknown) {
+  try {
+    ensureLogDir();
+    const timestamp = new Date().toISOString();
+    let logLine = `[${timestamp}] [${level}] ${message}`;
+    if (data !== undefined) {
+      logLine += ` ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
+    }
+    logLine += '\n';
+    appendFileSync(LOG_FILE, logLine);
+  } catch {
+    // Ignore logging errors
+  }
+}
+
+const serviceLogger = {
+  info: (message: string, data?: unknown) => {
+    console.log(message, data ?? '');
+    logToFile('INFO', message, data);
+  },
+  error: (message: string, data?: unknown) => {
+    console.error(message, data ?? '');
+    logToFile('ERROR', message, data);
+  },
+  warn: (message: string, data?: unknown) => {
+    console.warn(message, data ?? '');
+    logToFile('WARN', message, data);
+  },
+};
 
 // Global agent instance (lazy initialized)
 let globalAgent: IAgent | null = null;
@@ -180,7 +230,14 @@ export async function* runExecutionPhase(
     return;
   }
 
-  console.log(`[AgentService] Executing plan: ${planId} (${plan.goal})`);
+  serviceLogger.info(`[AgentService] Executing plan: ${planId} (${plan.goal})`);
+  // Log sandbox config for debugging - write to file for packaged app visibility
+  serviceLogger.info('[AgentService] runExecutionPhase sandbox config:', {
+    hasSandboxConfig: !!sandboxConfig,
+    sandboxEnabled: sandboxConfig?.enabled,
+    sandboxProvider: sandboxConfig?.provider,
+    apiEndpoint: sandboxConfig?.apiEndpoint,
+  });
 
   for await (const message of agent.execute({
     planId,
@@ -212,6 +269,14 @@ export async function* runAgent(
   skillsPath?: string
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
+
+  // Log sandbox config for debugging - write to file for packaged app visibility
+  serviceLogger.info('[AgentService] runAgent called with sandbox config:', {
+    hasSandboxConfig: !!sandboxConfig,
+    sandboxEnabled: sandboxConfig?.enabled,
+    sandboxProvider: sandboxConfig?.provider,
+    apiEndpoint: sandboxConfig?.apiEndpoint,
+  });
 
   for await (const message of agent.run(prompt, {
     sessionId: session.id,

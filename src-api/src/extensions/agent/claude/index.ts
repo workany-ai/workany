@@ -1002,13 +1002,22 @@ ${formattedMessages}
       prompt,
       options?.taskId
     );
-    console.log(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
-    console.log(`[Claude ${session.id}] Direct execution started`);
+    logger.info(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
+    logger.info(`[Claude ${session.id}] Direct execution started`);
     if (options?.conversation && options.conversation.length > 0) {
-      console.log(`[Claude ${session.id}] Conversation history: ${options.conversation.length} messages`);
+      logger.info(`[Claude ${session.id}] Conversation history: ${options.conversation.length} messages`);
     }
+    // Log sandbox config for debugging
+    logger.info(`[Claude ${session.id}] Sandbox config received:`, {
+      hasOptions: !!options,
+      hasSandbox: !!options?.sandbox,
+      sandboxEnabled: options?.sandbox?.enabled,
+      sandboxProvider: options?.sandbox?.provider,
+    });
     if (options?.sandbox?.enabled) {
-      console.log(`[Claude ${session.id}] Sandbox mode enabled`);
+      logger.info(`[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`);
+    } else {
+      logger.warn(`[Claude ${session.id}] Sandbox mode NOT enabled - scripts will run locally`);
     }
 
     const sentTextHashes = new Set<string>();
@@ -1125,6 +1134,8 @@ User's request (answer this AFTER reading the images):
     if (Object.keys(mcpServers).length > 0) {
       queryOptions.mcpServers = mcpServers;
       logger.info(`[Claude ${session.id}] MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`);
+    } else {
+      logger.warn(`[Claude ${session.id}] No MCP servers configured (sandbox disabled or no user MCP servers)`);
     }
 
     // Log query start for debugging
@@ -1356,9 +1367,17 @@ If you need to create any files during planning, use this directory.
       options.originalPrompt,
       options.taskId
     );
-    console.log(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
+    logger.info(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
+    // Log sandbox config for debugging
+    logger.info(`[Claude ${session.id}] Execute sandbox config:`, {
+      hasSandbox: !!options.sandbox,
+      sandboxEnabled: options.sandbox?.enabled,
+      sandboxProvider: options.sandbox?.provider,
+    });
     if (options.sandbox?.enabled) {
-      console.log(`[Claude ${session.id}] Sandbox mode enabled`);
+      logger.info(`[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`);
+    } else {
+      logger.warn(`[Claude ${session.id}] Sandbox NOT enabled for execution`);
     }
 
     // Build sandbox options for workspace instruction
@@ -1375,7 +1394,7 @@ If you need to create any files during planning, use this directory.
       formatPlanForExecution(plan, sessionCwd, sandboxOpts) +
       '\n\nOriginal request: ' +
       options.originalPrompt;
-    console.log(
+    logger.info(
       `[Claude ${session.id}] Execution phase started for plan: ${options.planId}`
     );
 
@@ -1435,7 +1454,9 @@ If you need to create any files during planning, use this directory.
     // Only add mcpServers to options if there are any configured
     if (Object.keys(mcpServers).length > 0) {
       queryOptions.mcpServers = mcpServers;
-      console.log(`[Claude ${session.id}] MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`);
+      logger.info(`[Claude ${session.id}] Execute MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`);
+    } else {
+      logger.warn(`[Claude ${session.id}] Execute: No MCP servers configured`);
     }
 
     try {

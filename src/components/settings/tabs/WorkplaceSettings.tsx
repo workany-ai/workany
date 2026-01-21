@@ -54,6 +54,7 @@ export function WorkplaceSettings({
                 onClick={() =>
                   onSettingsChange({
                     ...settings,
+                    sandboxEnabled: true, // Always enable sandbox when selecting a provider
                     defaultSandboxProvider: option.id,
                   })
                 }

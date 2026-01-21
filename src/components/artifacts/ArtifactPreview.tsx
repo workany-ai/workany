@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -37,7 +39,6 @@ import {
   getFileExtension,
   getOpenWithApp,
   inlineAssets,
-  markdownToHtml,
   parseCSV,
 } from './utils';
 
@@ -576,13 +577,13 @@ function PreviewContent({
 
   // Markdown Preview
   if (artifact.type === 'markdown' && artifact.content) {
-    const htmlContent = markdownToHtml(artifact.content);
     return (
       <div className="bg-background h-full overflow-auto">
-        <div
-          className="prose prose-sm dark:prose-invert max-w-none p-6"
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+        <div className="prose prose-sm dark:prose-invert max-w-none p-6">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {artifact.content}
+          </ReactMarkdown>
+        </div>
       </div>
     );
   }

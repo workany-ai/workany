@@ -33,7 +33,10 @@ export interface ModelConfig {
  */
 export interface SandboxConfig {
   enabled: boolean; // Whether sandbox mode is enabled
+  provider?: string; // Sandbox provider to use (e.g., 'codex', 'native', 'docker')
   image?: string; // Container image to use (e.g., node:18-alpine)
+  apiEndpoint?: string; // API endpoint for sandbox service
+  providerConfig?: Record<string, unknown>; // Provider-specific configuration
 }
 
 /**
