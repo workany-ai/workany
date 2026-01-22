@@ -1,5 +1,11 @@
 // Settings types and storage for AI provider configuration
 
+// ============================================================================
+// Backend Sync
+// ============================================================================
+
+import { API_BASE_URL } from '@/config';
+
 import { getAppDataDir, getMcpConfigPath } from '../lib/paths';
 
 export interface AIProvider {
@@ -237,9 +243,7 @@ export const defaultProviders: AIProvider[] = [
     apiKey: '',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
     enabled: true,
-    models: [
-      'ark-code-latest',
-    ],
+    models: ['ark-code-latest'],
   },
 ];
 
@@ -336,12 +340,17 @@ export async function getSettingsAsync(): Promise<Settings> {
         }
         // Migration: Add missing default providers
         for (const defaultProvider of defaultProviders) {
-          if (!settings.providers.find(p => p.id === defaultProvider.id)) {
+          if (!settings.providers.find((p) => p.id === defaultProvider.id)) {
             settings.providers.push(defaultProvider);
           }
         }
         // Debug: Log sandbox settings loaded from database
-        console.log('[Settings] Loaded from database - sandboxEnabled:', settings.sandboxEnabled, 'provider:', settings.defaultSandboxProvider);
+        console.log(
+          '[Settings] Loaded from database - sandboxEnabled:',
+          settings.sandboxEnabled,
+          'provider:',
+          settings.defaultSandboxProvider
+        );
         settingsCache = settings;
         return settings;
       }
@@ -357,12 +366,21 @@ export async function getSettingsAsync(): Promise<Settings> {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
       for (const defaultProvider of defaultProviders) {
-        if (!loadedSettings.providers.find((p: AIProvider) => p.id === defaultProvider.id)) {
+        if (
+          !loadedSettings.providers.find(
+            (p: AIProvider) => p.id === defaultProvider.id
+          )
+        ) {
           loadedSettings.providers.push(defaultProvider);
         }
       }
       // Debug: Log sandbox settings loaded from localStorage
-      console.log('[Settings] Loaded from localStorage - sandboxEnabled:', loadedSettings.sandboxEnabled, 'provider:', loadedSettings.defaultSandboxProvider);
+      console.log(
+        '[Settings] Loaded from localStorage - sandboxEnabled:',
+        loadedSettings.sandboxEnabled,
+        'provider:',
+        loadedSettings.defaultSandboxProvider
+      );
       settingsCache = loadedSettings;
       return loadedSettings;
     }
@@ -371,7 +389,12 @@ export async function getSettingsAsync(): Promise<Settings> {
   }
 
   // Debug: Using default settings
-  console.log('[Settings] Using defaultSettings - sandboxEnabled:', defaultSettings.sandboxEnabled, 'provider:', defaultSettings.defaultSandboxProvider);
+  console.log(
+    '[Settings] Using defaultSettings - sandboxEnabled:',
+    defaultSettings.sandboxEnabled,
+    'provider:',
+    defaultSettings.defaultSandboxProvider
+  );
   settingsCache = defaultSettings;
   return defaultSettings;
 }
@@ -389,7 +412,11 @@ export function getSettings(): Settings {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       // Migration: Add missing default providers
       for (const defaultProvider of defaultProviders) {
-        if (!loadedSettings.providers.find((p: AIProvider) => p.id === defaultProvider.id)) {
+        if (
+          !loadedSettings.providers.find(
+            (p: AIProvider) => p.id === defaultProvider.id
+          )
+        ) {
           loadedSettings.providers.push(defaultProvider);
         }
       }
@@ -475,7 +502,10 @@ export async function initializeSettings(): Promise<Settings> {
   // Migration: If a sandbox provider is selected but sandboxEnabled is not true, enable it
   // This fixes a bug where selecting a sandbox provider didn't enable sandbox mode
   if (settings.defaultSandboxProvider && settings.sandboxEnabled !== true) {
-    console.log('[Settings] Migration: Enabling sandbox because provider is selected:', settings.defaultSandboxProvider);
+    console.log(
+      '[Settings] Migration: Enabling sandbox because provider is selected:',
+      settings.defaultSandboxProvider
+    );
     settings.sandboxEnabled = true;
   }
 
@@ -591,12 +621,6 @@ export function getDefaultAgentRuntime(): AgentRuntimeSetting | undefined {
     (r) => r.id === settings.defaultAgentRuntime
   );
 }
-
-// ============================================================================
-// Backend Sync
-// ============================================================================
-
-import { API_BASE_URL } from '@/config';
 
 /**
  * Get the current default AI provider (for model configuration)
@@ -749,7 +773,10 @@ export async function clearAllSettings(): Promise<void> {
     try {
       await database.execute('DELETE FROM settings');
     } catch (error) {
-      console.error('[Settings] Failed to clear settings from database:', error);
+      console.error(
+        '[Settings] Failed to clear settings from database:',
+        error
+      );
     }
   }
 

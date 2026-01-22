@@ -16,28 +16,27 @@ import {
   type LibraryFile,
   type Task,
 } from '@/shared/db';
-import { useAgent, type AgentMessage, type MessageAttachment } from '@/shared/hooks/useAgent';
+import {
+  useAgent,
+  type AgentMessage,
+  type MessageAttachment,
+} from '@/shared/hooks/useAgent';
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import {
-  CheckCircle2,
-  ChevronDown,
-  FileText,
-  PanelLeft,
-} from 'lucide-react';
+import { CheckCircle2, ChevronDown, FileText, PanelLeft } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { ArtifactPreview, type Artifact } from '@/components/artifacts';
 import { Logo } from '@/components/common/logo';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
-import { ArtifactPreview, type Artifact } from '@/components/artifacts';
+import { SettingsModal } from '@/components/settings';
+import { ChatInput } from '@/components/shared/ChatInput';
 import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
 import { RightSidebar } from '@/components/task/RightSidebar';
 import { ToolExecutionItem } from '@/components/task/ToolExecutionItem';
-import { ChatInput } from '@/components/shared/ChatInput';
-import { SettingsModal } from '@/components/settings';
 
 interface LocationState {
   prompt?: string;
@@ -94,7 +93,6 @@ function TaskDetailContent() {
     stopAgent,
     loadTask,
     loadMessages,
-    clearMessages,
     phase,
     plan: _plan,
     approvePlan,
@@ -103,6 +101,7 @@ function TaskDetailContent() {
     respondToQuestion,
     sessionFolder,
     filesVersion,
+    backgroundTasks,
   } = useAgent();
   const { toggleLeft, setLeftOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
@@ -165,7 +164,8 @@ function TaskDetailContent() {
     const hasArtifacts = artifacts.length > 0;
     const hasWorkspace = !!workingDir;
     const hasFileOps = messages.some(
-      (m) => m.type === 'tool_use' &&
+      (m) =>
+        m.type === 'tool_use' &&
         ['Read', 'Write', 'Edit', 'Bash', 'Glob'].includes(m.name || '')
     );
     const hasMcpTools = messages.some(
@@ -175,7 +175,8 @@ function TaskDetailContent() {
       (m) => m.type === 'tool_use' && m.name === 'Skill'
     );
 
-    const hasContent = hasArtifacts || (hasWorkspace && hasFileOps) || hasMcpTools || hasSkills;
+    const hasContent =
+      hasArtifacts || (hasWorkspace && hasFileOps) || hasMcpTools || hasSkills;
 
     // Auto-expand when content becomes available (only once)
     if (hasContent) {
@@ -491,14 +492,26 @@ function TaskDetailContent() {
   useEffect(() => {
     async function loadAllTasks() {
       try {
-        const tasks = await getAllTasks();
-        setAllTasks(tasks);
+        const dbTasks = await getAllTasks();
+        setAllTasks((prev) => {
+          // Preserve current task if it exists in prev but not in database yet
+          // This handles the race condition where optimistic update added the task
+          // but database hasn't persisted it yet
+          const currentTaskInPrev = prev.find((t) => t.id === taskId);
+          const taskExistsInDb = dbTasks.some((t) => t.id === taskId);
+
+          if (currentTaskInPrev && !taskExistsInDb) {
+            // Keep the optimistic task at the beginning
+            return [currentTaskInPrev, ...dbTasks];
+          }
+          return dbTasks;
+        });
       } catch (error) {
         console.error('Failed to load tasks:', error);
       }
     }
     loadAllTasks();
-  }, [task]);
+  }, [task, taskId]);
 
   // Handle task deletion from sidebar
   const handleDeleteTask = async (id: string) => {
@@ -526,12 +539,11 @@ function TaskDetailContent() {
     }
   };
 
-  // Reset state when taskId changes
+  // Reset UI state when taskId changes (but don't touch agent/task state - let loadTask handle that)
   useEffect(() => {
     if (prevTaskIdRef.current !== taskId) {
       if (prevTaskIdRef.current !== undefined) {
-        // Reset agent state
-        clearMessages();
+        // Only reset UI state here - loadTask will handle task switching
         setTask(null);
         setHasStarted(false);
         isInitializingRef.current = false; // Reset for new task
@@ -551,7 +563,7 @@ function TaskDetailContent() {
       }
       prevTaskIdRef.current = taskId;
     }
-  }, [taskId, clearMessages, stopPreview]);
+  }, [taskId, stopPreview]);
 
   // Load existing task or start new one
   useEffect(() => {
@@ -573,17 +585,38 @@ function TaskDetailContent() {
 
       if (existingTask) {
         setTask(existingTask);
+        // Ensure this task is in the sidebar immediately
+        setAllTasks((prev) => {
+          const exists = prev.some((t) => t.id === existingTask.id);
+          return exists ? prev : [existingTask, ...prev];
+        });
         await loadMessages(taskId);
         setHasStarted(true);
         setIsLoading(false);
       } else if (initialPrompt && !hasStarted) {
         setHasStarted(true);
         setIsLoading(false);
+
+        // Immediately add the new task to sidebar (optimistic update)
+        const newTaskPreview: Task = {
+          id: taskId,
+          session_id: initialSessionId || '',
+          task_index: initialTaskIndex,
+          prompt: initialPrompt,
+          status: 'running',
+          favorite: false,
+          cost: 0,
+          duration: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setAllTasks((prev) => [newTaskPreview, ...prev]);
+
         // Pass session info if available
         const sessionInfo = initialSessionId
           ? { sessionId: initialSessionId, taskIndex: initialTaskIndex }
           : undefined;
-        await runAgent(initialPrompt, taskId, sessionInfo);
+        await runAgent(initialPrompt, taskId, sessionInfo, initialAttachments);
         const newTask = await loadTask(taskId);
         setTask(newTask);
       } else {
@@ -599,7 +632,12 @@ function TaskDetailContent() {
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
     async (text: string, messageAttachments?: MessageAttachment[]) => {
-      if ((text.trim() || (messageAttachments && messageAttachments.length > 0)) && !isRunning && taskId) {
+      if (
+        (text.trim() ||
+          (messageAttachments && messageAttachments.length > 0)) &&
+        !isRunning &&
+        taskId
+      ) {
         await continueConversation(text.trim(), messageAttachments);
       }
     },
@@ -616,7 +654,9 @@ function TaskDetailContent() {
     console.log('  - initialAttachments:', initialAttachments?.length || 0);
     if (initialAttachments && initialAttachments.length > 0) {
       initialAttachments.forEach((a, i) => {
-        console.log(`  - initialAttachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`);
+        console.log(
+          `  - initialAttachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
+        );
       });
       return initialAttachments;
     }
@@ -624,7 +664,10 @@ function TaskDetailContent() {
     const firstUserMessage = messages.find((m) => m.type === 'user');
     console.log('  - firstUserMessage found:', !!firstUserMessage);
     if (firstUserMessage?.attachments) {
-      console.log('  - firstUserMessage.attachments:', firstUserMessage.attachments.length);
+      console.log(
+        '  - firstUserMessage.attachments:',
+        firstUserMessage.attachments.length
+      );
     }
     return firstUserMessage?.attachments;
   }, [initialAttachments, messages]);
@@ -634,8 +677,7 @@ function TaskDetailContent() {
   const firstMessageIsUserWithSameContent = useMemo(() => {
     const firstMessage = messages[0];
     return (
-      firstMessage?.type === 'user' &&
-      firstMessage?.content === displayPrompt
+      firstMessage?.type === 'user' && firstMessage?.content === displayPrompt
     );
   }, [messages, displayPrompt]);
 
@@ -648,6 +690,11 @@ function TaskDetailContent() {
           currentTaskId={taskId}
           onDeleteTask={handleDeleteTask}
           onToggleFavorite={handleToggleFavorite}
+          runningTaskIds={[
+            ...backgroundTasks.filter((t) => t.isRunning).map((t) => t.taskId),
+            // Include current task if it's running
+            ...(isRunning && taskId ? [taskId] : []),
+          ]}
         />
 
         {/* Main Content Area with Responsive Layout */}
@@ -752,7 +799,10 @@ function TaskDetailContent() {
                 ) : (
                   <div className="max-w-full min-w-0 space-y-4">
                     {displayPrompt && !firstMessageIsUserWithSameContent && (
-                      <UserMessage content={displayPrompt} attachments={displayAttachments} />
+                      <UserMessage
+                        content={displayPrompt}
+                        attachments={displayAttachments}
+                      />
                     )}
 
                     <MessageList
@@ -868,7 +918,9 @@ function UserMessage({
   if (attachments && attachments.length > 0) {
     console.log('[UserMessage] Rendering attachments:', attachments.length);
     attachments.forEach((a, i) => {
-      console.log(`[UserMessage] Attachment ${i}: type=${a.type}, name=${a.name}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`);
+      console.log(
+        `[UserMessage] Attachment ${i}: type=${a.type}, name=${a.name}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
+      );
     });
   }
 
@@ -1234,7 +1286,9 @@ function TaskGroupComponent({
               )}
             />
             <span className="flex-1 text-left">
-              {isExpanded ? t.task.hideSteps : t.task.showSteps.replace('{count}', String(tools.length))}
+              {isExpanded
+                ? t.task.hideSteps
+                : t.task.showSteps.replace('{count}', String(tools.length))}
             </span>
           </button>
 
@@ -1332,7 +1386,8 @@ function MessageItem({
                     e.preventDefault();
                     if (href) {
                       try {
-                        const { openUrl } = await import('@tauri-apps/plugin-opener');
+                        const { openUrl } =
+                          await import('@tauri-apps/plugin-opener');
                         await openUrl(href);
                       } catch {
                         window.open(href, '_blank');
@@ -1385,7 +1440,10 @@ function ErrorMessage({ message }: { message: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Check if error is related to API key configuration
-  const isApiKeyError = /invalid api key|api key|authentication|unauthorized|please run \/login/i.test(message);
+  const isApiKeyError =
+    /invalid api key|api key|authentication|unauthorized|please run \/login/i.test(
+      message
+    );
 
   if (isApiKeyError) {
     return (
@@ -1401,10 +1459,12 @@ function ErrorMessage({ message }: { message: string }) {
             </svg>
           </div>
           <div className="flex flex-col gap-1">
-            <p className="text-muted-foreground text-sm">{t.task.apiKeyError}</p>
+            <p className="text-muted-foreground text-sm">
+              {t.task.apiKeyError}
+            </p>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="text-primary hover:text-primary/80 cursor-pointer text-sm underline underline-offset-2 text-left"
+              className="text-primary hover:text-primary/80 cursor-pointer text-left text-sm underline underline-offset-2"
             >
               {t.task.configureModel}
             </button>

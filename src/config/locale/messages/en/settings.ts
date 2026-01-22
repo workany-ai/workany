@@ -67,7 +67,8 @@ export default {
   sandboxAutoDetect:
     'Container runtime will be automatically selected based on script type (Node.js, Python, Bun, etc.)',
   defaultSandbox: 'Default Sandbox',
-  defaultSandboxDescription: 'Choose the sandbox environment for script execution',
+  defaultSandboxDescription:
+    'Choose the sandbox environment for script execution',
   sandboxNative: 'Native',
   sandboxNativeDescription: 'Run directly on host, no isolation',
   sandboxCodex: 'Codex Sandbox',
@@ -164,9 +165,11 @@ export default {
 
   // Data
   data: 'Data',
-  dataDescription: 'Manage your data: export backups, import data, or clear all data.',
+  dataDescription:
+    'Manage your data: export backups, import data, or clear all data.',
   dataExport: 'Export Data',
-  dataExportDescription: 'Export all tasks, messages, and settings to a JSON file.',
+  dataExportDescription:
+    'Export all tasks, messages, and settings to a JSON file.',
   dataExportButton: 'Export',
   dataExporting: 'Exporting...',
   dataImport: 'Import Data',
@@ -174,7 +177,8 @@ export default {
   dataImportButton: 'Import',
   dataImporting: 'Importing...',
   dataClear: 'Clear Data',
-  dataClearDescription: 'Permanently delete all data. This action cannot be undone.',
+  dataClearDescription:
+    'Permanently delete all data. This action cannot be undone.',
   dataClearButton: 'Clear',
   dataClearing: 'Clearing...',
   dataSuccess: 'Success',

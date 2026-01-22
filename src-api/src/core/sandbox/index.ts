@@ -133,11 +133,15 @@ export async function getBestProviderWithInfo(): Promise<ProviderSelectionResult
   }
 
   // 2. Fallback to Native (local execution)
-  console.log('[Sandbox] ⚠️ Codex not available, falling back to Native (local) execution');
+  console.log(
+    '[Sandbox] ⚠️ Codex not available, falling back to Native (local) execution'
+  );
 
   try {
     const nativeProvider = await registry.getInstance('native');
-    console.log('[Sandbox] ✅ Using Native sandbox (no isolation, local execution)');
+    console.log(
+      '[Sandbox] ✅ Using Native sandbox (no isolation, local execution)'
+    );
     return {
       provider: nativeProvider,
       usedFallback: true,
@@ -147,7 +151,7 @@ export async function getBestProviderWithInfo(): Promise<ProviderSelectionResult
     console.error('[Sandbox] Native provider also failed:', error);
     throw new Error(
       '无法初始化沙箱环境。Codex 和本机执行环境都不可用。\n' +
-      '请检查系统环境或联系技术支持。'
+        '请检查系统环境或联系技术支持。'
     );
   }
 }
@@ -182,16 +186,18 @@ export async function runScriptInSandbox(
   workDir: string,
   options?: ScriptOptions
 ): Promise<SandboxExecResult> {
-  const { provider, usedFallback, fallbackReason } = await getBestProviderWithInfo();
+  const { provider, usedFallback, fallbackReason } =
+    await getBestProviderWithInfo();
   const result = await provider.runScript(filePath, workDir, options);
   const caps = provider.getCapabilities();
 
   // Log which provider was used
-  const providerLabel = provider.type === 'codex'
-    ? '🔒 Codex Sandbox (进程隔离)'
-    : provider.type === 'claude'
-    ? '🔒 Claude Sandbox (容器隔离)'
-    : '⚠️ Native (本机执行)';
+  const providerLabel =
+    provider.type === 'codex'
+      ? '🔒 Codex Sandbox (进程隔离)'
+      : provider.type === 'claude'
+        ? '🔒 Claude Sandbox (容器隔离)'
+        : '⚠️ Native (本机执行)';
   console.log(`[Sandbox] Script executed via: ${providerLabel}`);
 
   if (usedFallback && fallbackReason) {
@@ -224,16 +230,18 @@ export async function getSandboxInfo(): Promise<{
   await initSandbox();
 
   try {
-    const { provider, usedFallback, fallbackReason } = await getBestProviderWithInfo();
+    const { provider, usedFallback, fallbackReason } =
+      await getBestProviderWithInfo();
     const caps = provider.getCapabilities();
 
-    const isolationLabel = caps.isolation === 'vm'
-      ? 'VM 硬件隔离'
-      : caps.isolation === 'container'
-      ? '容器隔离'
-      : caps.isolation === 'process'
-      ? '进程隔离'
-      : '无隔离';
+    const isolationLabel =
+      caps.isolation === 'vm'
+        ? 'VM 硬件隔离'
+        : caps.isolation === 'container'
+          ? '容器隔离'
+          : caps.isolation === 'process'
+            ? '进程隔离'
+            : '无隔离';
 
     return {
       available: true,

@@ -52,11 +52,13 @@ agent.post('/plan', async (c) => {
   console.log('[AgentAPI] POST /plan received:', {
     hasPrompt: !!body.prompt,
     hasModelConfig: !!body.modelConfig,
-    modelConfig: body.modelConfig ? {
-      hasApiKey: !!body.modelConfig.apiKey,
-      baseUrl: body.modelConfig.baseUrl,
-      model: body.modelConfig.model,
-    } : null,
+    modelConfig: body.modelConfig
+      ? {
+          hasApiKey: !!body.modelConfig.apiKey,
+          baseUrl: body.modelConfig.baseUrl,
+          model: body.modelConfig.model,
+        }
+      : null,
   });
 
   if (!body.prompt) {
@@ -86,10 +88,12 @@ agent.post('/execute', async (c) => {
   console.log('[AgentAPI] POST /execute received:', {
     planId: body.planId,
     hasPrompt: !!body.prompt,
-    sandboxConfig: body.sandboxConfig ? {
-      enabled: body.sandboxConfig.enabled,
-      provider: body.sandboxConfig.provider,
-    } : null,
+    sandboxConfig: body.sandboxConfig
+      ? {
+          enabled: body.sandboxConfig.enabled,
+          provider: body.sandboxConfig.provider,
+        }
+      : null,
   });
 
   if (!body.planId) {
@@ -125,24 +129,32 @@ agent.post('/', async (c) => {
   console.log('[AgentAPI] POST / received:', {
     hasPrompt: !!body.prompt,
     hasModelConfig: !!body.modelConfig,
-    modelConfig: body.modelConfig ? {
-      hasApiKey: !!body.modelConfig.apiKey,
-      baseUrl: body.modelConfig.baseUrl,
-      model: body.modelConfig.model,
-    } : null,
-    sandboxConfig: body.sandboxConfig ? {
-      enabled: body.sandboxConfig.enabled,
-      provider: body.sandboxConfig.provider,
-    } : null,
+    modelConfig: body.modelConfig
+      ? {
+          hasApiKey: !!body.modelConfig.apiKey,
+          baseUrl: body.modelConfig.baseUrl,
+          model: body.modelConfig.model,
+        }
+      : null,
+    sandboxConfig: body.sandboxConfig
+      ? {
+          enabled: body.sandboxConfig.enabled,
+          provider: body.sandboxConfig.provider,
+        }
+      : null,
     hasImages: !!body.images,
     imagesCount: body.images?.length || 0,
   });
 
   // Debug logging for images
   if (body.images && body.images.length > 0) {
-    body.images.forEach((img: { data: string; mimeType: string }, i: number) => {
-      console.log(`[AgentAPI] Image ${i}: mimeType=${img.mimeType}, dataLength=${img.data?.length || 0}`);
-    });
+    body.images.forEach(
+      (img: { data: string; mimeType: string }, i: number) => {
+        console.log(
+          `[AgentAPI] Image ${i}: mimeType=${img.mimeType}, dataLength=${img.data?.length || 0}`
+        );
+      }
+    );
   } else {
     console.log('[AgentAPI] No images in request');
   }

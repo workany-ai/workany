@@ -1,6 +1,6 @@
 {
   "name": "workany-api",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "node --import tsx --watch src/index.ts",

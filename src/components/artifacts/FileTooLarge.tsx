@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react';
+
 import type { Artifact } from './types';
 import { formatFileSize } from './utils';
 

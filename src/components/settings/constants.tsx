@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react';
-import type { SettingsCategory } from './types';
 import {
   Cpu,
   Database,
@@ -11,6 +10,8 @@ import {
   Sparkles,
   User,
 } from 'lucide-react';
+
+import type { SettingsCategory } from './types';
 
 // Category icons mapping
 export const categoryIcons: Record<
@@ -40,10 +41,7 @@ export const providerApiKeyUrls: Record<string, string> = {
 };
 
 // Default provider IDs that cannot be deleted
-export const defaultProviderIds = [
-  'openrouter',
-  'volcengine',
-];
+export const defaultProviderIds = ['openrouter', 'volcengine'];
 
 // Popular models for each provider (for suggestions)
 export const providerDefaultModels: Record<string, string[]> = {
@@ -51,54 +49,28 @@ export const providerDefaultModels: Record<string, string[]> = {
     'anthropic/claude-sonnet-4-5-20250514',
     'anthropic/claude-opus-4-5-20250514',
   ],
-  anthropic: [
-    'claude-sonnet-4-5-20250514',
-    'claude-opus-4-5-20250514',
-  ],
-  openai: [
-    'gpt-4o',
-    'gpt-4o-mini',
-    'o1-preview',
-  ],
+  anthropic: ['claude-sonnet-4-5-20250514', 'claude-opus-4-5-20250514'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'o1-preview'],
   // Custom providers - provide common model name patterns
-  default: [
-    'claude-sonnet-4-5-20250514',
-    'claude-sonnet-4-20250514',
-  ],
+  default: ['claude-sonnet-4-5-20250514', 'claude-sonnet-4-20250514'],
 };
 
 // Model suggestions for custom providers (matched by name pattern)
 export const customProviderModels: Record<string, string[]> = {
-  '火山': [
+  火山: [
     'doubao-1-5-pro-256k-250115',
     'doubao-1-5-lite-32k-250115',
     'deepseek-v3-250324',
   ],
-  'volcengine': [
+  volcengine: [
     'doubao-1-5-pro-256k-250115',
     'doubao-1-5-lite-32k-250115',
     'deepseek-v3-250324',
   ],
-  'deepseek': [
-    'deepseek-chat',
-    'deepseek-coder',
-    'deepseek-reasoner',
-  ],
-  'moonshot': [
-    'moonshot-v1-8k',
-    'moonshot-v1-32k',
-    'moonshot-v1-128k',
-  ],
-  'zhipu': [
-    'glm-4-plus',
-    'glm-4-flash',
-    'glm-4-long',
-  ],
-  'qwen': [
-    'qwen-max',
-    'qwen-plus',
-    'qwen-turbo',
-  ],
+  deepseek: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+  moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
+  qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
 };
 
 // Re-export API config

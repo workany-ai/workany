@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, Loader2, Plus, Settings, Trash2, X } from 'lucide-react';
 import { getMcpConfigPath } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { FolderOpen, Loader2, Plus, Settings, Trash2, X } from 'lucide-react';
+
+import { Switch } from '../components/Switch';
+import { API_BASE_URL } from '../constants';
 import type {
   MCPConfig,
   MCPServerStdio,
@@ -10,8 +13,6 @@ import type {
   MCPSubTab,
   SettingsTabProps,
 } from '../types';
-import { Switch } from '../components/Switch';
-import { API_BASE_URL } from '../constants';
 
 export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
   const [servers, setServers] = useState<MCPServerUI[]>([]);
@@ -83,9 +84,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
               ? undefined
               : (serverConfig as MCPServerStdio).command,
             args: isHttp ? undefined : (serverConfig as MCPServerStdio).args,
-            url: isHttp
-              ? (serverConfig as { url: string }).url
-              : undefined,
+            url: isHttp ? (serverConfig as { url: string }).url : undefined,
             headers: isHttp
               ? (serverConfig as { headers?: Record<string, string> }).headers
               : undefined,
@@ -125,7 +124,9 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
         }
       }
 
-      const config: MCPConfig = { mcpServers: mcpServers as MCPConfig['mcpServers'] };
+      const config: MCPConfig = {
+        mcpServers: mcpServers as MCPConfig['mcpServers'],
+      };
 
       const response = await fetch(`${API_BASE_URL}/mcp/config`, {
         method: 'POST',

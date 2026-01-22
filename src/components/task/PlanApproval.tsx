@@ -16,15 +16,19 @@ export function PlanApproval({
   onReject,
 }: PlanApprovalProps) {
   // Check if all steps are completed
-  const isAllCompleted = plan.steps.every((step) => step.status === 'completed');
+  const isAllCompleted = plan.steps.every(
+    (step) => step.status === 'completed'
+  );
 
   return (
-    <div className={cn(
-      "space-y-4 rounded-xl border p-4",
-      isAllCompleted && !isWaitingApproval
-        ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20"
-        : "border-primary/30 bg-accent/30"
-    )}>
+    <div
+      className={cn(
+        'space-y-4 rounded-xl border p-4',
+        isAllCompleted && !isWaitingApproval
+          ? 'border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20'
+          : 'border-primary/30 bg-accent/30'
+      )}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="text-foreground flex items-center gap-2 text-sm font-medium">
@@ -39,7 +43,7 @@ export function PlanApproval({
               待确认
             </span>
           ) : isAllCompleted ? (
-            <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-full px-2 py-0.5 text-xs">
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
               已完成
             </span>
           ) : null}

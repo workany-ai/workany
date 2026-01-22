@@ -3,9 +3,11 @@ import { useAgent, type MessageAttachment } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { FileText, Globe, Palette, Smartphone } from 'lucide-react';
-import { ChatInput } from '@/components/shared/ChatInput';
-import { AgentMessages } from './AgentMessages';
 import { nanoid } from 'nanoid';
+
+import { ChatInput } from '@/components/shared/ChatInput';
+
+import { AgentMessages } from './AgentMessages';
 
 interface QuickAction {
   icon: React.ReactNode;
@@ -40,9 +42,13 @@ const quickActions: QuickAction[] = [
 export function TaskInput() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const { messages, isRunning, runAgent, stopAgent, setSessionInfo } = useAgent();
+  const { messages, isRunning, runAgent, stopAgent, setSessionInfo } =
+    useAgent();
 
-  const handleSubmit = async (text: string, attachments?: MessageAttachment[]) => {
+  const handleSubmit = async (
+    text: string,
+    attachments?: MessageAttachment[]
+  ) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
     // Generate session info
@@ -58,10 +64,15 @@ export function TaskInput() {
     await runAgent(text, taskId, { sessionId, taskIndex }, attachments);
 
     // Navigate to task detail page with attachments in state
-    console.log('[TaskInput] Navigating with attachments:', attachments?.length || 0);
+    console.log(
+      '[TaskInput] Navigating with attachments:',
+      attachments?.length || 0
+    );
     if (attachments && attachments.length > 0) {
       attachments.forEach((a, i) => {
-        console.log(`[TaskInput] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`);
+        console.log(
+          `[TaskInput] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
+        );
       });
     }
     navigate(`/task/${taskId}`, {

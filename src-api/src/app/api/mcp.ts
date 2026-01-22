@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-
 import { Hono } from 'hono';
 
 const mcp = new Hono();

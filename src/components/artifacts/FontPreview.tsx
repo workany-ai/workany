@@ -1,4 +1,5 @@
 import { ExternalLink, FileText } from 'lucide-react';
+
 import type { PreviewComponentProps } from './types';
 import { openFileExternal } from './utils';
 

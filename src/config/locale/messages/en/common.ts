@@ -28,12 +28,14 @@ export default {
   unfavorite: 'Remove from favorites',
   deleteTask: 'Delete task',
   deleteTaskConfirm: 'Are you sure you want to delete this task?',
-  deleteTaskDescription: 'This action cannot be undone. All messages in this task will be permanently deleted.',
+  deleteTaskDescription:
+    'This action cannot be undone. All messages in this task will be permanently deleted.',
 
   // API error messages
   errors: {
     connectionFailed: 'Connection failed, retrying...',
-    connectionFailedFinal: 'Unable to connect. Please check your network or try again later',
+    connectionFailedFinal:
+      'Unable to connect. Please check your network or try again later',
     corsError: 'Request blocked. Please check service configuration',
     timeout: 'Request timed out. Please try again',
     serverNotRunning: 'Service not running. Please start the app first',

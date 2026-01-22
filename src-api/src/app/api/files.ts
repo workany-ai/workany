@@ -5,11 +5,11 @@
  * Uses Node.js fs module for reliable filesystem access.
  */
 
-import { Hono } from 'hono';
+import { exec } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Hono } from 'hono';
 
 import {
   getAllSkillsDirs,
@@ -191,7 +191,10 @@ files.post('/readdir', async (c) => {
     // Security check: only allow reading from home directory
     const homedir = process.env.HOME || process.env.USERPROFILE || '';
     if (!dirPath.startsWith(homedir) && !dirPath.startsWith('/tmp')) {
-      return c.json({ error: 'Access denied: path must be within home directory' }, 403);
+      return c.json(
+        { error: 'Access denied: path must be within home directory' },
+        403
+      );
     }
 
     // Check if directory exists
@@ -331,7 +334,7 @@ files.get('/skills-dir', async (c) => {
   }
 
   // Return first existing directory for backward compatibility
-  const firstExisting = results.find(r => r.exists);
+  const firstExisting = results.find((r) => r.exists);
   return c.json({
     path: firstExisting?.path || '',
     exists: !!firstExisting,
@@ -399,10 +402,26 @@ files.get('/detect-editor', async (c) => {
 
   // Common editors to check (in priority order)
   const editors = [
-    { name: 'Cursor', command: 'cursor', check: platform === 'darwin' ? 'cursor' : 'cursor.cmd' },
-    { name: 'VS Code', command: 'code', check: platform === 'darwin' ? 'code' : 'code.cmd' },
-    { name: 'VS Code Insiders', command: 'code-insiders', check: 'code-insiders' },
-    { name: 'Sublime Text', command: platform === 'darwin' ? 'subl' : 'subl', check: 'subl' },
+    {
+      name: 'Cursor',
+      command: 'cursor',
+      check: platform === 'darwin' ? 'cursor' : 'cursor.cmd',
+    },
+    {
+      name: 'VS Code',
+      command: 'code',
+      check: platform === 'darwin' ? 'code' : 'code.cmd',
+    },
+    {
+      name: 'VS Code Insiders',
+      command: 'code-insiders',
+      check: 'code-insiders',
+    },
+    {
+      name: 'Sublime Text',
+      command: platform === 'darwin' ? 'subl' : 'subl',
+      check: 'subl',
+    },
     { name: 'Atom', command: 'atom', check: 'atom' },
     { name: 'WebStorm', command: 'webstorm', check: 'webstorm' },
     { name: 'PyCharm', command: 'pycharm', check: 'pycharm' },
@@ -411,14 +430,15 @@ files.get('/detect-editor', async (c) => {
   for (const editor of editors) {
     try {
       // Check if editor command exists
-      const checkCmd = platform === 'win32'
-        ? `where ${editor.check}`
-        : `which ${editor.check}`;
+      const checkCmd =
+        platform === 'win32'
+          ? `where ${editor.check}`
+          : `which ${editor.check}`;
       await execAsync(checkCmd);
       return c.json({
         success: true,
         editor: editor.name,
-        command: editor.command
+        command: editor.command,
       });
     } catch {
       // Editor not found, try next
@@ -430,7 +450,7 @@ files.get('/detect-editor', async (c) => {
   return c.json({
     success: true,
     editor: 'Default Editor',
-    command: null
+    command: null,
   });
 });
 
@@ -476,9 +496,10 @@ files.post('/open-in-editor', async (c) => {
 
     for (const editor of editors) {
       try {
-        const checkCmd = platform === 'win32'
-          ? `where ${editor.command}`
-          : `which ${editor.command}`;
+        const checkCmd =
+          platform === 'win32'
+            ? `where ${editor.command}`
+            : `which ${editor.command}`;
         await execAsync(checkCmd);
         editorCommand = editor.command;
         editorName = editor.name;
@@ -547,7 +568,10 @@ files.post('/open', async (c) => {
 
     // Security check: only allow opening files from home directory
     if (!filePath.startsWith(homedir) && !filePath.startsWith('/tmp')) {
-      return c.json({ error: 'Access denied: path must be within home directory' }, 403);
+      return c.json(
+        { error: 'Access denied: path must be within home directory' },
+        403
+      );
     }
 
     // Check if file exists

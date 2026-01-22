@@ -49,7 +49,8 @@ function getTargetTriple(): string {
  */
 function getPythonCommand(): string | undefined {
   const os = platform();
-  const commands = os === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+  const commands =
+    os === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
 
   for (const cmd of commands) {
     try {
@@ -199,14 +200,14 @@ function getBundledCodexPath(): string | undefined {
 function getCodexPath(): string | undefined {
   const os = platform();
 
-  console.log(`[CodexProvider] getCodexPath() called, platform: ${os}, arch: ${process.arch}`);
+  console.log(
+    `[CodexProvider] getCodexPath() called, platform: ${os}, arch: ${process.arch}`
+  );
   console.log(`[CodexProvider] process.execPath: ${process.execPath}`);
 
   // Check CODEX_PATH env var first (highest priority - user override)
   if (process.env.CODEX_PATH && existsSync(process.env.CODEX_PATH)) {
-    console.log(
-      `[CodexProvider] Using CODEX_PATH: ${process.env.CODEX_PATH}`
-    );
+    console.log(`[CodexProvider] Using CODEX_PATH: ${process.env.CODEX_PATH}`);
     return process.env.CODEX_PATH;
   }
   console.log(`[CodexProvider] CODEX_PATH not set`);
@@ -247,7 +248,9 @@ function getCodexPath(): string | undefined {
           path.join(homedir(), '.npm-global', 'bin', 'codex'),
         ];
 
-  console.log(`[CodexProvider] Checking common paths: ${commonPaths.join(', ')}`);
+  console.log(
+    `[CodexProvider] Checking common paths: ${commonPaths.join(', ')}`
+  );
   for (const p of commonPaths) {
     if (existsSync(p)) {
       console.log(`[CodexProvider] Found codex at common path: ${p}`);
@@ -280,7 +283,9 @@ export class CodexProvider implements ISandboxProvider {
     console.log('[CodexProvider] Checking availability...');
     this.codexPath = getCodexPath();
     const available = this.codexPath !== undefined;
-    console.log(`[CodexProvider] isAvailable: ${available}, path: ${this.codexPath || 'not found'}`);
+    console.log(
+      `[CodexProvider] isAvailable: ${available}, path: ${this.codexPath || 'not found'}`
+    );
     return available;
   }
 

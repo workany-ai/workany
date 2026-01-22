@@ -5,10 +5,6 @@
  * It uses the agents abstraction layer to support multiple providers.
  */
 
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
-
 import {
   createAgent,
   createAgentFromEnv,
@@ -21,52 +17,12 @@ import {
   type SandboxConfig,
   type TaskPlan,
 } from '@/core/agent';
-
 // ============================================================================
-// File-based logging for debugging in distributed apps
+// Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
 // ============================================================================
-const LOG_DIR = join(homedir(), '.workany', 'logs');
-const LOG_FILE = join(LOG_DIR, 'agent-service.log');
+import { createLogger } from '@/shared/utils/logger';
 
-function ensureLogDir() {
-  try {
-    if (!existsSync(LOG_DIR)) {
-      mkdirSync(LOG_DIR, { recursive: true });
-    }
-  } catch {
-    // Ignore errors
-  }
-}
-
-function logToFile(level: string, message: string, data?: unknown) {
-  try {
-    ensureLogDir();
-    const timestamp = new Date().toISOString();
-    let logLine = `[${timestamp}] [${level}] ${message}`;
-    if (data !== undefined) {
-      logLine += ` ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
-    }
-    logLine += '\n';
-    appendFileSync(LOG_FILE, logLine);
-  } catch {
-    // Ignore logging errors
-  }
-}
-
-const serviceLogger = {
-  info: (message: string, data?: unknown) => {
-    console.log(message, data ?? '');
-    logToFile('INFO', message, data);
-  },
-  error: (message: string, data?: unknown) => {
-    console.error(message, data ?? '');
-    logToFile('ERROR', message, data);
-  },
-  warn: (message: string, data?: unknown) => {
-    console.warn(message, data ?? '');
-    logToFile('WARN', message, data);
-  },
-};
+const serviceLogger = createLogger('AgentService');
 
 // Global agent instance (lazy initialized)
 let globalAgent: IAgent | null = null;

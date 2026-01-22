@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -16,14 +14,17 @@ import {
   Radio,
   X,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+import { VitePreview } from '@/components/task/VitePreview';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { VitePreview } from '@/components/task/VitePreview';
-import type { Artifact, ArtifactPreviewProps, PreviewMode, ViewMode } from './types';
+
 import { AudioPreview } from './AudioPreview';
 import { CodePreview } from './CodePreview';
 import { DocxPreview } from './DocxPreview';
@@ -33,8 +34,12 @@ import { FontPreview } from './FontPreview';
 import { ImagePreview } from './ImagePreview';
 import { PdfPreview } from './PdfPreview';
 import { PptxPreview } from './PptxPreview';
-import { VideoPreview } from './VideoPreview';
-import { WebSearchPreview } from './WebSearchPreview';
+import type {
+  Artifact,
+  ArtifactPreviewProps,
+  PreviewMode,
+  ViewMode,
+} from './types';
 import {
   getFileExtension,
   getOpenWithApp,
@@ -42,9 +47,17 @@ import {
   parseCSV,
   parseFrontmatter,
 } from './utils';
+import { VideoPreview } from './VideoPreview';
+import { WebSearchPreview } from './WebSearchPreview';
 
 // Expandable text component for long content
-function ExpandableText({ text, maxLength = 100 }: { text: string; maxLength?: number }) {
+function ExpandableText({
+  text,
+  maxLength = 100,
+}: {
+  text: string;
+  maxLength?: number;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const needsTruncation = text.length > maxLength;
 
@@ -57,7 +70,7 @@ function ExpandableText({ text, maxLength = 100 }: { text: string; maxLength?: n
       {isExpanded ? text : `${text.slice(0, maxLength)}...`}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="ml-1 text-xs text-primary hover:underline"
+        className="text-primary ml-1 text-xs hover:underline"
       >
         {isExpanded ? 'Show less' : 'Show more'}
       </button>
@@ -80,14 +93,36 @@ export function ArtifactPreview({
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isNodeAvailable, setIsNodeAvailable] = useState<boolean | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { t, tt } = useLanguage();
 
+  // Check if Node.js is available (required for Live Preview)
+  useEffect(() => {
+    async function checkNodeAvailable() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/preview/node-available`);
+        const data = await response.json();
+        setIsNodeAvailable(data.available);
+        console.log('[ArtifactPreview] Node.js available:', data.available);
+      } catch (error) {
+        console.error(
+          '[ArtifactPreview] Failed to check Node.js availability:',
+          error
+        );
+        setIsNodeAvailable(false);
+      }
+    }
+    checkNodeAvailable();
+  }, []);
+
   // Check if live preview is available for this artifact
+  // Requires: HTML artifact + onStartLivePreview handler + Node.js installed
   const canUseLivePreview = useMemo(() => {
     if (!artifact) return false;
+    if (!isNodeAvailable) return false;
     return artifact.type === 'html' && onStartLivePreview !== undefined;
-  }, [artifact, onStartLivePreview]);
+  }, [artifact, onStartLivePreview, isNodeAvailable]);
 
   // Auto-switch to live mode if live preview is already running
   useEffect(() => {
@@ -132,7 +167,10 @@ export function ArtifactPreview({
 
     if (artifact.path) {
       try {
-        console.log('[ArtifactPreview] Opening file with system app:', artifact.path);
+        console.log(
+          '[ArtifactPreview] Opening file with system app:',
+          artifact.path
+        );
         const response = await fetch(`${API_BASE_URL}/files/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -163,10 +201,47 @@ export function ArtifactPreview({
     if (codeTypes.includes(artifact.type)) return true;
     const ext = getFileExtension(artifact.name);
     const codeExtensions = [
-      'js', 'jsx', 'ts', 'tsx', 'py', 'rb', 'go', 'rs', 'java', 'cpp', 'c', 'h', 'hpp',
-      'css', 'scss', 'less', 'html', 'htm', 'json', 'xml', 'yaml', 'yml', 'md', 'sql',
-      'sh', 'bash', 'zsh', 'toml', 'ini', 'conf', 'env', 'gitignore', 'dockerfile',
-      'makefile', 'gradle', 'swift', 'kt', 'scala', 'php', 'vue', 'svelte'
+      'js',
+      'jsx',
+      'ts',
+      'tsx',
+      'py',
+      'rb',
+      'go',
+      'rs',
+      'java',
+      'cpp',
+      'c',
+      'h',
+      'hpp',
+      'css',
+      'scss',
+      'less',
+      'html',
+      'htm',
+      'json',
+      'xml',
+      'yaml',
+      'yml',
+      'md',
+      'sql',
+      'sh',
+      'bash',
+      'zsh',
+      'toml',
+      'ini',
+      'conf',
+      'env',
+      'gitignore',
+      'dockerfile',
+      'makefile',
+      'gradle',
+      'swift',
+      'kt',
+      'scala',
+      'php',
+      'vue',
+      'svelte',
     ];
     return codeExtensions.includes(ext);
   }, [artifact]);
@@ -186,7 +261,10 @@ export function ArtifactPreview({
       if (result.success) {
         console.log('[ArtifactPreview] Opened in', result.editor);
       } else {
-        console.error('[ArtifactPreview] Failed to open in editor:', result.error);
+        console.error(
+          '[ArtifactPreview] Failed to open in editor:',
+          result.error
+        );
       }
     } catch (err) {
       console.error('[ArtifactPreview] Failed to open in editor:', err);
@@ -195,7 +273,8 @@ export function ArtifactPreview({
 
   // Generate iframe content for HTML with inlined assets
   // Only compute when in static preview mode to avoid unnecessary blob URL creation/revocation
-  const shouldShowStaticPreview = viewMode === 'preview' && previewMode === 'static';
+  const shouldShowStaticPreview =
+    viewMode === 'preview' && previewMode === 'static';
 
   const iframeSrc = useMemo(() => {
     // Only create blob URL when we need to show static preview
@@ -209,7 +288,12 @@ export function ArtifactPreview({
 
     const blob = new Blob([enhancedHtml], { type: 'text/html' });
     return URL.createObjectURL(blob);
-  }, [artifact?.content, artifact?.type, allArtifacts, shouldShowStaticPreview]);
+  }, [
+    artifact?.content,
+    artifact?.type,
+    allArtifacts,
+    shouldShowStaticPreview,
+  ]);
 
   // Cleanup blob URL when it changes or on unmount
   useEffect(() => {
@@ -379,7 +463,11 @@ export function ArtifactPreview({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>{isFullscreen ? t.preview.exitFullscreen : t.preview.fullscreen}</p>
+                <p>
+                  {isFullscreen
+                    ? t.preview.exitFullscreen
+                    : t.preview.fullscreen}
+                </p>
               </TooltipContent>
             </Tooltip>
 
@@ -606,21 +694,26 @@ function PreviewContent({
   // Markdown Preview
   if (artifact.type === 'markdown' && artifact.content) {
     // Parse YAML frontmatter and content
-    const { frontmatter, content: markdownContent } = parseFrontmatter(artifact.content);
+    const { frontmatter, content: markdownContent } = parseFrontmatter(
+      artifact.content
+    );
     return (
       <div className="bg-background h-full overflow-auto">
         <div className="max-w-none p-6">
           {/* Frontmatter Table */}
           {frontmatter && Object.keys(frontmatter).length > 0 && (
-            <div className="mb-6 rounded-lg border border-border/50 overflow-hidden">
+            <div className="border-border/50 mb-6 overflow-hidden rounded-lg border">
               <table className="w-full text-sm">
                 <tbody>
                   {Object.entries(frontmatter).map(([key, value]) => (
-                    <tr key={key} className="border-b border-border/30 last:border-b-0">
-                      <td className="bg-muted/30 px-4 py-2 font-medium text-muted-foreground w-32 align-top">
+                    <tr
+                      key={key}
+                      className="border-border/30 border-b last:border-b-0"
+                    >
+                      <td className="bg-muted/30 text-muted-foreground w-32 px-4 py-2 align-top font-medium">
                         {key}
                       </td>
-                      <td className="px-4 py-2 text-foreground">
+                      <td className="text-foreground px-4 py-2">
                         <ExpandableText text={value} maxLength={100} />
                       </td>
                     </tr>
@@ -630,7 +723,7 @@ function PreviewContent({
             </div>
           )}
           {/* Markdown Content */}
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-h1:text-xl prose-h1:font-semibold prose-h2:text-lg prose-h2:font-semibold">
+          <div className="prose prose-sm dark:prose-invert prose-h1:text-xl prose-h1:font-semibold prose-h2:text-lg prose-h2:font-semibold max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {markdownContent}
             </ReactMarkdown>

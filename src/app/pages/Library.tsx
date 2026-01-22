@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteTask, getAllTasks, updateTask, type Task } from '@/shared/db';
+import {
+  subscribeToBackgroundTasks,
+  type BackgroundTask,
+} from '@/shared/lib/background-tasks';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { Search } from 'lucide-react';
@@ -18,7 +22,15 @@ export function LibraryPage() {
 // Format relative time with i18n support
 function formatRelativeTime(
   dateStr: string,
-  t: { justNow: string; minuteAgo: string; minutesAgo: string; hourAgo: string; hoursAgo: string; dayAgo: string; daysAgo: string }
+  t: {
+    justNow: string;
+    minuteAgo: string;
+    minutesAgo: string;
+    hourAgo: string;
+    hoursAgo: string;
+    dayAgo: string;
+    daysAgo: string;
+  }
 ): string {
   const now = new Date();
   const date = new Date(dateStr);
@@ -30,9 +42,15 @@ function formatRelativeTime(
   if (diffMinutes < 1) {
     return t.justNow;
   } else if (diffMinutes < 60) {
-    return (diffMinutes === 1 ? t.minuteAgo : t.minutesAgo).replace('{count}', String(diffMinutes));
+    return (diffMinutes === 1 ? t.minuteAgo : t.minutesAgo).replace(
+      '{count}',
+      String(diffMinutes)
+    );
   } else if (diffHours < 24) {
-    return (diffHours === 1 ? t.hourAgo : t.hoursAgo).replace('{count}', String(diffHours));
+    return (diffHours === 1 ? t.hourAgo : t.hoursAgo).replace(
+      '{count}',
+      String(diffHours)
+    );
   } else if (diffDays === 1) {
     return t.dayAgo;
   } else {
@@ -45,9 +63,16 @@ function LibraryContent() {
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+
+  // Subscribe to background tasks
+  useEffect(() => {
+    const unsubscribe = subscribeToBackgroundTasks(setBackgroundTasks);
+    return unsubscribe;
+  }, []);
 
   // Load tasks
   useEffect(() => {
@@ -126,6 +151,9 @@ function LibraryContent() {
         tasks={tasks}
         onDeleteTask={handleDeleteTask}
         onToggleFavorite={handleToggleFavorite}
+        runningTaskIds={backgroundTasks
+          .filter((t) => t.isRunning)
+          .map((t) => t.taskId)}
       />
 
       {/* Main Content */}
@@ -148,7 +176,10 @@ function LibraryContent() {
             {/* Count & Select */}
             <div className="mb-2 flex items-center gap-3 px-1">
               <span className="text-muted-foreground text-sm">
-                {(filteredTasks.length === 1 ? t.library.chatsCount : t.library.chatsCountPlural).replace('{count}', String(filteredTasks.length))}
+                {(filteredTasks.length === 1
+                  ? t.library.chatsCount
+                  : t.library.chatsCountPlural
+                ).replace('{count}', String(filteredTasks.length))}
               </span>
               <button
                 onClick={handleSelectToggle}
@@ -220,7 +251,10 @@ function LibraryContent() {
                       </h3>
                       <p className="text-muted-foreground mt-0.5 text-sm">
                         {t.library.lastMessage}{' '}
-                        {formatRelativeTime(task.updated_at || task.created_at, t.library)}
+                        {formatRelativeTime(
+                          task.updated_at || task.created_at,
+                          t.library
+                        )}
                       </p>
                     </div>
                   </button>

@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
-import { readFile, stat } from '@tauri-apps/plugin-fs';
-import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Presentation } from 'lucide-react';
-import JSZip from 'jszip';
 import { cn } from '@/shared/lib/utils';
-import type { PreviewComponentProps, PptxSlide } from './types';
+import { readFile, stat } from '@tauri-apps/plugin-fs';
+import JSZip from 'jszip';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  Presentation,
+} from 'lucide-react';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { PptxSlide, PreviewComponentProps } from './types';
 import { isRemoteUrl, MAX_PREVIEW_SIZE, openFileExternal } from './utils';
 
 export function PptxPreview({ artifact }: PreviewComponentProps) {
@@ -248,7 +255,7 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
           className={cn(
             'absolute left-4 z-10 flex size-10 items-center justify-center rounded-full transition-all',
             'bg-background/80 hover:bg-background shadow-lg',
-            'disabled:opacity-30 disabled:cursor-not-allowed'
+            'disabled:cursor-not-allowed disabled:opacity-30'
           )}
         >
           <ChevronLeft className="text-foreground size-5" />
@@ -260,7 +267,7 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
           className={cn(
             'absolute right-4 z-10 flex size-10 items-center justify-center rounded-full transition-all',
             'bg-background/80 hover:bg-background shadow-lg',
-            'disabled:opacity-30 disabled:cursor-not-allowed'
+            'disabled:cursor-not-allowed disabled:opacity-30'
           )}
         >
           <ChevronRight className="text-foreground size-5" />

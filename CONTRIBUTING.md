@@ -16,7 +16,7 @@ Please be kind and respectful when participating in this project. We are committ
 
 ### Reporting Bugs
 
-1. Search [Issues](https://github.com/user/workany/issues) to check if a similar issue already exists
+1. Search [Issues](https://github.com/workany-ai/workany/issues) to check if a similar issue already exists
 2. If not, create a new Issue
 3. Use a clear title to describe the problem
 4. Provide the following information:
@@ -40,12 +40,12 @@ Please be kind and respectful when participating in this project. We are committ
 1. Fork this repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/your-username/workany.git
+   git clone https://github.com/YOUR-USERNAME/workany.git
    cd workany
    ```
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/user/workany.git
+   git remote add upstream https://github.com/workany-ai/workany.git
    ```
 4. Install dependencies:
    ```bash
@@ -174,13 +174,17 @@ pnpm tsc --noEmit
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).
+By contributing to this project, you agree that:
+
+1. Your contributions will be licensed under the [WorkAny Community License](LICENSE)
+2. ThinkAny, LLC may use your contributed code for commercial purposes, including cloud services and enterprise editions
+3. ThinkAny, LLC may adjust the open-source agreement as deemed necessary
 
 ## Contact
 
 If you have any questions, feel free to reach out:
 
-- Ask questions in GitHub Issues
-- Email the project maintainers
+- GitHub Issues: [github.com/workany-ai/workany/issues](https://github.com/workany-ai/workany/issues)
+- Email: support@workany.ai
 
 Thank you for your contributions!

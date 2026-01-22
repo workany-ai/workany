@@ -3,20 +3,31 @@
  */
 
 import { useState } from 'react';
-import { Download, Upload, Trash2, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
-
-import { useLanguage } from '@/shared/providers/language-provider';
-import { cn } from '@/shared/lib/utils';
 import {
-  getAllTasks,
-  getAllSessions,
-  getMessagesByTaskId,
-  getAllFiles,
-  deleteTask,
   deleteMessagesByTaskId,
+  deleteTask,
+  getAllFiles,
+  getAllSessions,
+  getAllTasks,
+  getMessagesByTaskId,
 } from '@/shared/db/database';
-import { getSettings, saveSettings, clearAllSettings, type Settings } from '@/shared/db/settings';
+import {
+  clearAllSettings,
+  getSettings,
+  saveSettings,
+  type Settings,
+} from '@/shared/db/settings';
 import { getSessionsDir } from '@/shared/lib/paths';
+import { cn } from '@/shared/lib/utils';
+import { useLanguage } from '@/shared/providers/language-provider';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Loader2,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 
 // Check if running in Tauri environment
 function isTauri(): boolean {
@@ -244,7 +255,8 @@ export function DataSettings() {
     <div className="space-y-6">
       {/* Description */}
       <p className="text-muted-foreground text-sm">
-        {t.settings.dataDescription || 'Manage your data: export backups, import data, or clear all data.'}
+        {t.settings.dataDescription ||
+          'Manage your data: export backups, import data, or clear all data.'}
       </p>
 
       {/* Export Data */}
@@ -255,7 +267,8 @@ export function DataSettings() {
               {t.settings.dataExport || 'Export Data'}
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
-              {t.settings.dataExportDescription || 'Export all tasks, messages, and settings to a JSON file.'}
+              {t.settings.dataExportDescription ||
+                'Export all tasks, messages, and settings to a JSON file.'}
             </p>
           </div>
           <button
@@ -285,7 +298,8 @@ export function DataSettings() {
               {t.settings.dataImport || 'Import Data'}
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
-              {t.settings.dataImportDescription || 'Import data from a previously exported JSON file.'}
+              {t.settings.dataImportDescription ||
+                'Import data from a previously exported JSON file.'}
             </p>
           </div>
           <button
@@ -315,7 +329,8 @@ export function DataSettings() {
               {t.settings.dataClear || 'Clear Data'}
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
-              {t.settings.dataClearDescription || 'Permanently delete all data. This action cannot be undone.'}
+              {t.settings.dataClearDescription ||
+                'Permanently delete all data. This action cannot be undone.'}
             </p>
           </div>
           <button
@@ -359,7 +374,8 @@ export function DataSettings() {
             </div>
 
             <p className="text-muted-foreground mb-6 text-sm">
-              {t.settings.dataClearConfirmDescription || 'Choose what data you want to clear:'}
+              {t.settings.dataClearConfirmDescription ||
+                'Choose what data you want to clear:'}
             </p>
 
             <div className="space-y-3">
@@ -375,7 +391,8 @@ export function DataSettings() {
                     {t.settings.dataClearTasksOnly || 'Clear Tasks Only'}
                   </div>
                   <div className="text-muted-foreground text-sm">
-                    {t.settings.dataClearTasksOnlyDescription || 'Delete all tasks and messages, keep settings'}
+                    {t.settings.dataClearTasksOnlyDescription ||
+                      'Delete all tasks and messages, keep settings'}
                   </div>
                 </div>
               </button>
@@ -392,7 +409,8 @@ export function DataSettings() {
                     {t.settings.dataClearAll || 'Clear All Data'}
                   </div>
                   <div className="text-muted-foreground text-sm">
-                    {t.settings.dataClearAllDescription || 'Delete all tasks, messages, and settings'}
+                    {t.settings.dataClearAllDescription ||
+                      'Delete all tasks, messages, and settings'}
                   </div>
                 </div>
               </button>

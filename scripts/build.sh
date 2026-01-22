@@ -239,52 +239,9 @@ bundle_cli_tools() {
         rm -rf "$temp_dir"
     fi
 
-    # Bundle npm (includes npx) from Node.js distribution
-    log_info "Bundling npm and npx..."
-    local npm_cache_dir="$cache_dir/${node_filename}/lib/node_modules/npm"
-
-    if [ -d "$npm_cache_dir" ]; then
-        # Use cached npm
-        log_info "Using cached npm from $npm_cache_dir"
-        mkdir -p "$bundle_dir/lib/node_modules"
-        cp -r "$npm_cache_dir" "$bundle_dir/lib/node_modules/"
-    else
-        # Download Node.js again to get npm
-        log_info "Downloading Node.js distribution to extract npm..."
-        local temp_dir=$(mktemp -d)
-        cd "$temp_dir"
-
-        if [ "$node_platform" = "win" ]; then
-            if curl -fsSL "$node_url" -o node.zip 2>/dev/null; then
-                unzip -q node.zip
-                mkdir -p "$bundle_dir/node_modules"
-                cp -r "${node_filename}/node_modules/npm" "$bundle_dir/node_modules/"
-                # Cache npm for future builds
-                mkdir -p "$cache_dir/${node_filename}/lib/node_modules"
-                cp -r "${node_filename}/node_modules/npm" "$cache_dir/${node_filename}/lib/node_modules/"
-            fi
-        else
-            if curl -fsSL "$node_url" | tar xz 2>/dev/null; then
-                mkdir -p "$bundle_dir/lib/node_modules"
-                cp -r "${node_filename}/lib/node_modules/npm" "$bundle_dir/lib/node_modules/"
-                # Cache npm for future builds
-                mkdir -p "$cache_dir/${node_filename}/lib/node_modules"
-                cp -r "${node_filename}/lib/node_modules/npm" "$cache_dir/${node_filename}/lib/node_modules/"
-            fi
-        fi
-
-        cd "$PROJECT_ROOT"
-        rm -rf "$temp_dir"
-    fi
-
-    # Verify npm was bundled
-    if [ -f "$bundle_dir/lib/node_modules/npm/bin/npm-cli.js" ]; then
-        log_info "npm bundled successfully"
-    elif [ -f "$bundle_dir/node_modules/npm/bin/npm-cli.js" ]; then
-        log_info "npm bundled successfully (Windows layout)"
-    else
-        log_warn "npm bundling may have failed - Live Preview may not work without system npm"
-    fi
+    # Note: npm is NOT bundled - Live Preview requires system Node.js/npm
+    # This keeps the bundle size smaller and avoids V8 compatibility issues
+    # Users without Node.js will only have Static Preview available
 
     # Verify Node.js binary
     if [ ! -f "$bundle_dir/node${node_ext}" ]; then
@@ -404,28 +361,24 @@ bundle_cli_tools() {
     # 2. Secure timestamp included
     # 3. Hardened runtime enabled
     if [ "$node_platform" = "darwin" ] && [ "$SKIP_SIGNING" != "true" ]; then
-        log_info "Signing native modules for macOS notarization..."
+        log_info "Signing all Mach-O binaries for macOS notarization..."
 
         # Get signing identity from environment or use default
         local signing_identity="${APPLE_SIGNING_IDENTITY:-Developer ID Application}"
 
-        # Find and sign all binary files (.node, .dylib, rg executables)
-        find . -type f \( -name "*.node" -o -name "*.dylib" -o -name "rg" \) | while read -r binary_file; do
-            log_info "  Signing: $binary_file"
-            codesign --force --timestamp --options runtime --sign "$signing_identity" "$binary_file" 2>&1 || {
-                log_warn "  Failed to sign $binary_file, trying with specific identity..."
-                local identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-                if [ -n "$identity" ]; then
-                    codesign --force --timestamp --options runtime --sign "$identity" "$binary_file"
-                fi
-            }
+        # Find and sign ALL Mach-O binary files (not just by extension)
+        find . -type f | while read -r file; do
+            if file "$file" 2>/dev/null | grep -q "Mach-O"; then
+                log_info "  Signing: $file"
+                codesign --force --timestamp --options runtime --sign "$signing_identity" "$file" 2>&1 || {
+                    log_warn "  Failed to sign $file, trying with specific identity..."
+                    local identity=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+                    if [ -n "$identity" ]; then
+                        codesign --force --timestamp --options runtime --sign "$identity" "$file"
+                    fi
+                }
+            fi
         done
-
-        # Also sign the Node.js binary itself
-        if [ -f "node" ]; then
-            log_info "  Signing: node binary"
-            codesign --force --timestamp --options runtime --sign "$signing_identity" "node" 2>&1 || true
-        fi
 
         log_info "Native module signing completed"
     fi
@@ -750,6 +703,48 @@ copy_cli_bundle_to_app() {
     else
         log_error "Failed to copy cli-bundle"
         return 1
+    fi
+
+    # Re-sign the entire app bundle after adding cli-bundle
+    # This is required because adding files invalidates the signature
+    if [ "$SKIP_SIGNING" != "true" ]; then
+        log_info "Re-signing app bundle after adding cli-bundle..."
+
+        local app_bundle=""
+        case "$target" in
+            aarch64-apple-darwin|x86_64-apple-darwin)
+                app_bundle="$PROJECT_ROOT/src-tauri/target/$target/release/bundle/macos/WorkAny.app"
+                ;;
+            current)
+                local arch=$(uname -m)
+                if [ "$arch" = "arm64" ]; then
+                    app_bundle="$PROJECT_ROOT/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/WorkAny.app"
+                else
+                    app_bundle="$PROJECT_ROOT/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/WorkAny.app"
+                fi
+                ;;
+        esac
+
+        if [ -d "$app_bundle" ]; then
+            local signing_identity="${APPLE_SIGNING_IDENTITY:-Developer ID Application}"
+            local entitlements="$PROJECT_ROOT/src-tauri/entitlements.plist"
+
+            # Sign all Mach-O binaries in cli-bundle first
+            log_info "  Signing cli-bundle binaries..."
+            find "$app_bundle/Contents/MacOS/cli-bundle" -type f 2>/dev/null | while read -r file; do
+                if file "$file" 2>/dev/null | grep -q "Mach-O"; then
+                    codesign --force --timestamp --options runtime --sign "$signing_identity" "$file" 2>&1 || true
+                fi
+            done
+
+            # Re-sign the entire app bundle with entitlements
+            log_info "  Re-signing entire app bundle..."
+            codesign --force --deep --timestamp --options runtime \
+                --entitlements "$entitlements" \
+                --sign "$signing_identity" "$app_bundle"
+
+            log_info "App bundle re-signed successfully"
+        fi
     fi
 }
 

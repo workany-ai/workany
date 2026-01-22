@@ -14,17 +14,19 @@ import {
 } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import type { SettingsCategory } from './types';
+
 import { categoryIcons } from './constants';
-import { AccountSettings } from './tabs/AccountSettings';
-import { GeneralSettings } from './tabs/GeneralSettings';
-import { WorkplaceSettings } from './tabs/WorkplaceSettings';
-import { ModelSettings } from './tabs/ModelSettings';
-import { MCPSettings } from './tabs/MCPSettings';
-import { SkillsSettings } from './tabs/SkillsSettings';
-import { DataSettings } from './tabs/DataSettings';
 import { AboutSettings } from './tabs/AboutSettings';
+import { AccountSettings } from './tabs/AccountSettings';
+import { DataSettings } from './tabs/DataSettings';
+import { GeneralSettings } from './tabs/GeneralSettings';
+import { MCPSettings } from './tabs/MCPSettings';
+import { ModelSettings } from './tabs/ModelSettings';
+import { SkillsSettings } from './tabs/SkillsSettings';
+import { WorkplaceSettings } from './tabs/WorkplaceSettings';
+import type { SettingsCategory } from './types';
 
 interface SettingsModalProps {
   open: boolean;
@@ -32,10 +34,15 @@ interface SettingsModalProps {
   initialCategory?: SettingsCategory;
 }
 
-export function SettingsModal({ open, onOpenChange, initialCategory }: SettingsModalProps) {
+export function SettingsModal({
+  open,
+  onOpenChange,
+  initialCategory,
+}: SettingsModalProps) {
   const [settings, setSettings] = useState<SettingsType>(getSettings);
-  const [activeCategory, setActiveCategory] =
-    useState<SettingsCategory>(initialCategory || 'account');
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(
+    initialCategory || 'account'
+  );
 
   // Update active category when initialCategory changes
   useEffect(() => {

@@ -11,6 +11,7 @@ import {
   FileText,
   Globe,
   ListTodo,
+  Loader2,
   MoreHorizontal,
   PanelLeft,
   PanelLeftOpen,
@@ -47,6 +48,7 @@ interface LeftSidebarProps {
   currentTaskId?: string;
   onDeleteTask?: (taskId: string) => void;
   onToggleFavorite?: (taskId: string, favorite: boolean) => void;
+  runningTaskIds?: string[]; // Tasks running in background
 }
 
 // Delete confirmation dialog component
@@ -121,6 +123,7 @@ export function LeftSidebar({
   currentTaskId,
   onDeleteTask,
   onToggleFavorite,
+  runningTaskIds = [],
 }: LeftSidebarProps) {
   const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
@@ -244,6 +247,9 @@ export function LeftSidebar({
               <div className="scrollbar-hide mt-1 flex-1 space-y-0.5 overflow-y-auto">
                 {tasks.slice(0, 10).map((task) => {
                   const TaskIcon = getTaskIcon(task.prompt);
+                  const isRunningInBackground = runningTaskIds.includes(
+                    task.id
+                  );
                   return (
                     <div
                       key={task.id}
@@ -255,59 +261,75 @@ export function LeftSidebar({
                       )}
                       onClick={() => handleSelectTask(task.id)}
                     >
-                      <TaskIcon className="size-4 shrink-0" />
+                      <div className="relative shrink-0">
+                        <TaskIcon className="size-4" />
+                        {/* Running indicator */}
+                        {isRunningInBackground && (
+                          <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                          </span>
+                        )}
+                      </div>
                       <span className="min-w-0 flex-1 truncate text-sm">
                         {task.prompt}
                       </span>
-                      {/* Favorite star / More menu button - same position */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
-                          >
-                            {/* Show star when favorited (hide on hover), show menu icon on hover */}
-                            {task.favorite ? (
-                              <>
-                                <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
-                                <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground hidden size-4 group-hover:block" />
-                              </>
-                            ) : (
-                              <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground size-4 opacity-0 group-hover:opacity-100" />
-                            )}
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          sideOffset={4}
-                          className="min-w-[140px]"
-                        >
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => handleToggleFavorite(task, e)}
-                          >
-                            <Star
-                              className={cn(
-                                'size-4',
-                                task.favorite && 'fill-amber-400 text-amber-400'
+                      {/* Running indicator for running tasks, dropdown menu for completed tasks */}
+                      {isRunningInBackground ? (
+                        <div className="flex size-6 shrink-0 items-center justify-center">
+                          <Loader2 className="text-primary size-4 animate-spin" />
+                        </div>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
+                            >
+                              {/* Show star when favorited (hide on hover), show menu icon on hover */}
+                              {task.favorite ? (
+                                <>
+                                  <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
+                                  <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground hidden size-4 group-hover:block" />
+                                </>
+                              ) : (
+                                <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground size-4 opacity-0 group-hover:opacity-100" />
                               )}
-                            />
-                            <span>
-                              {task.favorite
-                                ? t.common.unfavorite
-                                : t.common.favorite}
-                            </span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="cursor-pointer text-red-500 focus:text-red-500"
-                            onClick={(e) => handleDeleteClick(task.id, e)}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            sideOffset={4}
+                            className="min-w-[140px]"
                           >
-                            <Trash2 className="size-4" />
-                            <span>{t.common.delete}</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={(e) => handleToggleFavorite(task, e)}
+                            >
+                              <Star
+                                className={cn(
+                                  'size-4',
+                                  task.favorite &&
+                                    'fill-amber-400 text-amber-400'
+                                )}
+                              />
+                              <span>
+                                {task.favorite
+                                  ? t.common.unfavorite
+                                  : t.common.favorite}
+                              </span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red-500 focus:text-red-500"
+                              onClick={(e) => handleDeleteClick(task.id, e)}
+                            >
+                              <Trash2 className="size-4" />
+                              <span>{t.common.delete}</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   );
                 })}
@@ -443,109 +465,126 @@ export function LeftSidebar({
                     {/* Invisible bridge to prevent losing hover when moving to popup */}
                     <div className="absolute top-0 left-full z-50 h-full w-3" />
                     <div className="bg-background border-border/60 absolute top-0 left-full z-50 ml-2 max-h-[70vh] w-80 overflow-hidden rounded-xl border shadow-xl">
-                    {/* Popup Header */}
-                    <div className="border-border/50 bg-muted/30 border-b px-4 py-3">
-                      <h3 className="text-foreground text-sm font-medium">
-                        {t.nav.allTasks}
-                      </h3>
-                    </div>
+                      {/* Popup Header */}
+                      <div className="border-border/50 bg-muted/30 border-b px-4 py-3">
+                        <h3 className="text-foreground text-sm font-medium">
+                          {t.nav.allTasks}
+                        </h3>
+                      </div>
 
-                    {/* Tasks List */}
-                    <div className="max-h-[calc(70vh-48px)] overflow-y-auto p-2">
-                      {tasks.length === 0 ? (
-                        <div className="py-8 text-center">
-                          <p className="text-muted-foreground text-sm">
-                            {t.nav.noTasksYet}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-0.5">
-                          {tasks.slice(0, 10).map((task) => {
-                            const TaskIcon = getTaskIcon(task.prompt);
-                            return (
-                              <div
-                                key={task.id}
-                                className={cn(
-                                  'group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
-                                  currentTaskId === task.id
-                                    ? 'bg-accent text-accent-foreground'
-                                    : 'text-foreground/80 hover:bg-accent/50'
-                                )}
-                                onClick={() => handleSelectTask(task.id)}
-                              >
-                                <TaskIcon className="text-muted-foreground size-5 shrink-0" />
-                                <span className="min-w-0 flex-1 truncate text-sm">
-                                  {task.prompt}
-                                </span>
-                                {/* Favorite star / More menu button - same position */}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
-                                    >
-                                      {/* Show star when favorited (hide on hover), show menu icon on hover */}
-                                      {task.favorite ? (
-                                        <>
-                                          <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
-                                          <MoreHorizontal className="text-muted-foreground hover:text-foreground hidden size-4 group-hover:block" />
-                                        </>
-                                      ) : (
-                                        <MoreHorizontal className="text-muted-foreground hover:text-foreground size-4 opacity-0 group-hover:opacity-100" />
-                                      )}
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent
-                                    align="end"
-                                    sideOffset={4}
-                                    className="min-w-[140px]"
-                                  >
-                                    <DropdownMenuItem
-                                      className="cursor-pointer"
-                                      onClick={(e) =>
-                                        handleToggleFavorite(task, e)
-                                      }
-                                    >
-                                      <Star
-                                        className={cn(
-                                          'size-4',
-                                          task.favorite &&
-                                            'fill-amber-400 text-amber-400'
-                                        )}
-                                      />
-                                      <span>
-                                        {task.favorite
-                                          ? t.common.unfavorite
-                                          : t.common.favorite}
+                      {/* Tasks List */}
+                      <div className="max-h-[calc(70vh-48px)] overflow-y-auto p-2">
+                        {tasks.length === 0 ? (
+                          <div className="py-8 text-center">
+                            <p className="text-muted-foreground text-sm">
+                              {t.nav.noTasksYet}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {tasks.slice(0, 10).map((task) => {
+                              const TaskIcon = getTaskIcon(task.prompt);
+                              const isRunningInBackground =
+                                runningTaskIds.includes(task.id);
+                              return (
+                                <div
+                                  key={task.id}
+                                  className={cn(
+                                    'group flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                                    currentTaskId === task.id
+                                      ? 'bg-accent text-accent-foreground'
+                                      : 'text-foreground/80 hover:bg-accent/50'
+                                  )}
+                                  onClick={() => handleSelectTask(task.id)}
+                                >
+                                  <div className="relative shrink-0">
+                                    <TaskIcon className="text-muted-foreground size-5" />
+                                    {/* Running indicator */}
+                                    {isRunningInBackground && (
+                                      <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                        <span className="relative inline-flex size-2 rounded-full bg-green-500" />
                                       </span>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="cursor-pointer text-red-500 focus:text-red-500"
-                                      onClick={(e) =>
-                                        handleDeleteClick(task.id, e)
-                                      }
-                                    >
-                                      <Trash2 className="size-4" />
-                                      <span>{t.common.delete}</span>
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            );
-                          })}
-                          {tasks.length > 10 && (
-                            <button
-                              onClick={() => navigate('/library')}
-                              className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
-                            >
-                              <span className="text-sm">{t.common.more}</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                                    )}
+                                  </div>
+                                  <span className="min-w-0 flex-1 truncate text-sm">
+                                    {task.prompt}
+                                  </span>
+                                  {/* Running indicator for running tasks, dropdown menu for completed tasks */}
+                                  {isRunningInBackground ? (
+                                    <div className="flex size-6 shrink-0 items-center justify-center">
+                                      <Loader2 className="text-primary size-4 animate-spin" />
+                                    </div>
+                                  ) : (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
+                                        >
+                                          {/* Show star when favorited (hide on hover), show menu icon on hover */}
+                                          {task.favorite ? (
+                                            <>
+                                              <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
+                                              <MoreHorizontal className="text-muted-foreground hover:text-foreground hidden size-4 group-hover:block" />
+                                            </>
+                                          ) : (
+                                            <MoreHorizontal className="text-muted-foreground hover:text-foreground size-4 opacity-0 group-hover:opacity-100" />
+                                          )}
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent
+                                        align="end"
+                                        sideOffset={4}
+                                        className="min-w-[140px]"
+                                      >
+                                        <DropdownMenuItem
+                                          className="cursor-pointer"
+                                          onClick={(e) =>
+                                            handleToggleFavorite(task, e)
+                                          }
+                                        >
+                                          <Star
+                                            className={cn(
+                                              'size-4',
+                                              task.favorite &&
+                                                'fill-amber-400 text-amber-400'
+                                            )}
+                                          />
+                                          <span>
+                                            {task.favorite
+                                              ? t.common.unfavorite
+                                              : t.common.favorite}
+                                          </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="cursor-pointer text-red-500 focus:text-red-500"
+                                          onClick={(e) =>
+                                            handleDeleteClick(task.id, e)
+                                          }
+                                        >
+                                          <Trash2 className="size-4" />
+                                          <span>{t.common.delete}</span>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {tasks.length > 10 && (
+                              <button
+                                onClick={() => navigate('/library')}
+                                className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
+                              >
+                                <span className="text-sm">{t.common.more}</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   </>
                 )}
               </div>

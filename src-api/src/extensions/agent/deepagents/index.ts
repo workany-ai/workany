@@ -265,13 +265,17 @@ export class DeepAgentsAdapter extends BaseAgent {
     // Use the plan passed in options, or fall back to local lookup
     const plan = options.plan || this.getPlan(options.planId);
     if (!plan) {
-      console.error(`[DeepAgents ${session.id}] Plan not found: ${options.planId}`);
+      console.error(
+        `[DeepAgents ${session.id}] Plan not found: ${options.planId}`
+      );
       yield { type: 'error', message: `Plan not found: ${options.planId}` };
       yield { type: 'done' };
       return;
     }
 
-    console.log(`[DeepAgents ${session.id}] Using plan: ${plan.id} (${plan.goal})`);
+    console.log(
+      `[DeepAgents ${session.id}] Using plan: ${plan.id} (${plan.goal})`
+    );
 
     try {
       const tools = this.convertTools(options.allowedTools);

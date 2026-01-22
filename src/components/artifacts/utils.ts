@@ -1,5 +1,6 @@
-import type { Artifact } from './types';
 import { API_BASE_URL } from '@/config';
+
+import type { Artifact } from './types';
 
 // Max file size for preview (50MB)
 export const MAX_PREVIEW_SIZE = 50 * 1024 * 1024;
@@ -8,7 +9,8 @@ export const MAX_PREVIEW_SIZE = 50 * 1024 * 1024;
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
@@ -310,8 +312,10 @@ export function parseFrontmatter(content: string): {
       const key = line.substring(0, colonIndex).trim();
       let value = line.substring(colonIndex + 1).trim();
       // Remove surrounding quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
         value = value.slice(1, -1);
       }
       if (key && value) {

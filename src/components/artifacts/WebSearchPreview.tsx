@@ -5,9 +5,10 @@
  * website icons, titles, and domain names.
  */
 
-import { Globe, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/shared/lib/utils';
+import { ChevronDown, ChevronUp, ExternalLink, Globe } from 'lucide-react';
+
 import type { Artifact } from './types';
 
 interface SearchResult {
@@ -96,7 +97,11 @@ function parseSearchResults(content: string): SearchGroup[] {
     queryMatches.push({ query: qMatch[1], index: qMatch.index });
   }
 
-  console.log('[WebSearchPreview] Query matches:', queryMatches.length, queryMatches.map(q => q.query));
+  console.log(
+    '[WebSearchPreview] Query matches:',
+    queryMatches.length,
+    queryMatches.map((q) => q.query)
+  );
 
   // Find "Links:" and extract the JSON array after it
   let searchPos = 0;
@@ -114,7 +119,12 @@ function parseSearchResults(content: string): SearchGroup[] {
 
     if (content[bracketPos] === '[') {
       const jsonStr = extractJsonArray(content, bracketPos);
-      console.log('[WebSearchPreview] Found Links at', linksIndex, 'JSON length:', jsonStr?.length);
+      console.log(
+        '[WebSearchPreview] Found Links at',
+        linksIndex,
+        'JSON length:',
+        jsonStr?.length
+      );
 
       if (jsonStr) {
         try {
@@ -147,7 +157,7 @@ function parseSearchResults(content: string): SearchGroup[] {
       const nextQmIndex = queryMatches[i + 1]?.index ?? Infinity;
 
       const linksForQuery = linksSections.find(
-        ls => ls.index > qm.index && ls.index < nextQmIndex
+        (ls) => ls.index > qm.index && ls.index < nextQmIndex
       );
 
       if (linksForQuery) {
@@ -218,15 +228,15 @@ function SearchResultItem({ result }: SearchResultItemProps) {
             }}
           />
         ) : null}
-        <Globe className={cn('size-4 text-muted-foreground', faviconUrl && 'hidden')} />
+        <Globe
+          className={cn('text-muted-foreground size-4', faviconUrl && 'hidden')}
+        />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-foreground truncate text-sm font-medium">
           {result.title || domain}
         </div>
-        <div className="text-muted-foreground truncate text-xs">
-          {domain}
-        </div>
+        <div className="text-muted-foreground truncate text-xs">{domain}</div>
       </div>
       <ExternalLink className="text-muted-foreground size-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
@@ -238,7 +248,10 @@ interface SearchGroupCardProps {
   defaultExpanded?: boolean;
 }
 
-function SearchGroupCard({ group, defaultExpanded = true }: SearchGroupCardProps) {
+function SearchGroupCard({
+  group,
+  defaultExpanded = true,
+}: SearchGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
@@ -282,14 +295,16 @@ export function WebSearchPreview({ artifact }: { artifact: Artifact }) {
   console.log('[WebSearchPreview] Content preview:', content.slice(0, 200));
   console.log('[WebSearchPreview] Parsed groups:', groups.length, groups);
 
-  if (groups.length === 0 || groups.every(g => g.results.length === 0)) {
+  if (groups.length === 0 || groups.every((g) => g.results.length === 0)) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8">
         <Globe className="text-muted-foreground/50 mb-4 size-12" />
         <p className="text-muted-foreground text-sm">No search results</p>
         {content && (
           <details className="mt-4 max-w-md">
-            <summary className="text-muted-foreground cursor-pointer text-xs">Show raw content</summary>
+            <summary className="text-muted-foreground cursor-pointer text-xs">
+              Show raw content
+            </summary>
             <pre className="bg-muted mt-2 max-h-40 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
               {content.slice(0, 500)}...
             </pre>
@@ -304,8 +319,9 @@ export function WebSearchPreview({ artifact }: { artifact: Artifact }) {
   return (
     <div className="h-full overflow-auto">
       <div className="p-4">
-        <div className="text-muted-foreground mb-4 text-xs uppercase tracking-wide">
-          {groups.length} {groups.length === 1 ? 'search' : 'searches'} · {totalResults} results
+        <div className="text-muted-foreground mb-4 text-xs tracking-wide uppercase">
+          {groups.length} {groups.length === 1 ? 'search' : 'searches'} ·{' '}
+          {totalResults} results
         </div>
         <div className="space-y-4">
           {groups.map((group, index) => (

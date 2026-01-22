@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { readFile, stat } from '@tauri-apps/plugin-fs';
-import { ExternalLink, FileText, Loader2 } from 'lucide-react';
-import JSZip from 'jszip';
 import { cn } from '@/shared/lib/utils';
-import type { DocxParagraph, PreviewComponentProps } from './types';
+import { readFile, stat } from '@tauri-apps/plugin-fs';
+import JSZip from 'jszip';
+import { ExternalLink, FileText, Loader2 } from 'lucide-react';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { DocxParagraph, PreviewComponentProps } from './types';
 import { isRemoteUrl, MAX_PREVIEW_SIZE, openFileExternal } from './utils';
 
 export function DocxPreview({ artifact }: PreviewComponentProps) {

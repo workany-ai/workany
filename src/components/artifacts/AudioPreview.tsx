@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/shared/lib/utils';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { Loader2, Music, Pause, Play } from 'lucide-react';
-import { cn } from '@/shared/lib/utils';
+
 import type { PreviewComponentProps } from './types';
 import { getAudioMimeType, isRemoteUrl } from './utils';
 
@@ -109,7 +110,10 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
-      console.log('[Audio Preview] Loaded, duration:', audioRef.current.duration);
+      console.log(
+        '[Audio Preview] Loaded, duration:',
+        audioRef.current.duration
+      );
     }
   };
 
@@ -232,11 +236,11 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
             }}
           >
             <div
-              className="bg-primary absolute left-0 top-0 h-full rounded-full transition-all duration-150"
+              className="bg-primary absolute top-0 left-0 h-full rounded-full transition-all duration-150"
               style={{ width: `${progress}%` }}
             />
             <div
-              className="bg-foreground absolute top-1/2 -translate-y-1/2 size-3 rounded-full shadow-lg transition-all duration-150"
+              className="bg-foreground absolute top-1/2 size-3 -translate-y-1/2 rounded-full shadow-lg transition-all duration-150"
               style={{ left: `calc(${progress}% - 6px)` }}
             />
           </div>
@@ -268,7 +272,7 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
               'bg-primary text-primary-foreground',
               'hover:bg-primary/90 hover:scale-105',
               'active:scale-95',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
+              'disabled:cursor-not-allowed disabled:opacity-50'
             )}
           >
             {isPlaying ? (

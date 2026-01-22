@@ -1,9 +1,10 @@
+import { useTheme } from '@/shared/providers/theme-provider';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import {
   oneDark,
   oneLight,
 } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { useTheme } from '@/shared/providers/theme-provider';
+
 import type { PreviewComponentProps } from './types';
 import { getLanguageHint } from './utils';
 

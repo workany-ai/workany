@@ -36,8 +36,13 @@ async function ensureInitialized() {
  */
 async function getProviderWithFallback(
   preferredProvider?: SandboxProviderType
-): Promise<{ provider: Awaited<ReturnType<typeof getSandboxProvider>>; usedFallback: boolean }> {
-  console.log(`[Sandbox] getProviderWithFallback called with: ${preferredProvider || 'auto'}`);
+): Promise<{
+  provider: Awaited<ReturnType<typeof getSandboxProvider>>;
+  usedFallback: boolean;
+}> {
+  console.log(
+    `[Sandbox] getProviderWithFallback called with: ${preferredProvider || 'auto'}`
+  );
 
   if (!preferredProvider) {
     console.log(`[Sandbox] No preferred provider, using getBestProvider()`);
@@ -51,15 +56,22 @@ async function getProviderWithFallback(
 
     // Check if provider is available
     const isAvailable = await provider.isAvailable();
-    console.log(`[Sandbox] Provider ${preferredProvider} isAvailable: ${isAvailable}`);
+    console.log(
+      `[Sandbox] Provider ${preferredProvider} isAvailable: ${isAvailable}`
+    );
 
     if (isAvailable) {
       console.log(`[Sandbox] ✅ Using provider: ${preferredProvider}`);
       return { provider, usedFallback: false };
     }
-    console.log(`[Sandbox] ⚠️ Provider ${preferredProvider} not available, falling back to native`);
+    console.log(
+      `[Sandbox] ⚠️ Provider ${preferredProvider} not available, falling back to native`
+    );
   } catch (error) {
-    console.log(`[Sandbox] ❌ Failed to get provider ${preferredProvider}:`, error);
+    console.log(
+      `[Sandbox] ❌ Failed to get provider ${preferredProvider}:`,
+      error
+    );
   }
 
   // Fallback to native
@@ -83,7 +95,8 @@ sandbox.get('/debug/codex-paths', async (c) => {
   // Target triple
   let targetTriple = '';
   if (platform === 'darwin') {
-    targetTriple = arch === 'arm64' ? '-aarch64-apple-darwin' : '-x86_64-apple-darwin';
+    targetTriple =
+      arch === 'arm64' ? '-aarch64-apple-darwin' : '-x86_64-apple-darwin';
   } else if (platform === 'linux') {
     targetTriple = '-x86_64-unknown-linux-gnu';
   } else if (platform === 'win32') {
@@ -101,7 +114,7 @@ sandbox.get('/debug/codex-paths', async (c) => {
     '/usr/local/bin/codex',
   ];
 
-  const results = pathsToCheck.map(p => ({
+  const results = pathsToCheck.map((p) => ({
     path: p,
     exists: fs.existsSync(p),
   }));
@@ -184,7 +197,8 @@ sandbox.post('/exec', async (c) => {
     }
 
     // Get the appropriate provider with fallback
-    const { provider: sandboxProvider, usedFallback } = await getProviderWithFallback(preferredProvider);
+    const { provider: sandboxProvider, usedFallback } =
+      await getProviderWithFallback(preferredProvider);
     if (usedFallback) {
       console.log(`[Sandbox] Using native fallback for exec`);
     }
@@ -200,13 +214,14 @@ sandbox.post('/exec', async (c) => {
 
     const result = await sandboxProvider.exec(execOptions);
     const caps = sandboxProvider.getCapabilities();
-    const isolationLabel = caps.isolation === 'vm'
-      ? 'VM 硬件隔离'
-      : caps.isolation === 'container'
-      ? '容器隔离'
-      : caps.isolation === 'process'
-      ? '进程隔离'
-      : '无隔离';
+    const isolationLabel =
+      caps.isolation === 'vm'
+        ? 'VM 硬件隔离'
+        : caps.isolation === 'container'
+          ? '容器隔离'
+          : caps.isolation === 'process'
+            ? '进程隔离'
+            : '无隔离';
 
     return c.json({
       success: result.exitCode === 0,
@@ -318,7 +333,8 @@ sandbox.post('/run/file', async (c) => {
     // Get the appropriate provider with fallback
     // Note: Sandbox cannot write files to host - scripts should output to stdout
     // and agent will use Write tool to save results
-    const { provider: sandboxProvider, usedFallback } = await getProviderWithFallback(effectiveProvider);
+    const { provider: sandboxProvider, usedFallback } =
+      await getProviderWithFallback(effectiveProvider);
     if (usedFallback) {
       console.log(`[Sandbox] Using native fallback for run/file`);
     }
@@ -348,13 +364,14 @@ sandbox.post('/run/file', async (c) => {
     );
 
     const caps = sandboxProvider.getCapabilities();
-    const isolationLabel = caps.isolation === 'vm'
-      ? 'VM 硬件隔离'
-      : caps.isolation === 'container'
-      ? '容器隔离'
-      : caps.isolation === 'process'
-      ? '进程隔离'
-      : '无隔离';
+    const isolationLabel =
+      caps.isolation === 'vm'
+        ? 'VM 硬件隔离'
+        : caps.isolation === 'container'
+          ? '容器隔离'
+          : caps.isolation === 'process'
+            ? '进程隔离'
+            : '无隔离';
 
     return c.json({
       success: result.exitCode === 0,
@@ -418,7 +435,8 @@ sandbox.post('/run/node', async (c) => {
     }
 
     // Get the appropriate provider with fallback
-    const { provider: sandboxProvider } = await getProviderWithFallback(preferredProvider);
+    const { provider: sandboxProvider } =
+      await getProviderWithFallback(preferredProvider);
 
     // Write script to a temp file first
     const workDir = cwd || '/tmp';
@@ -503,16 +521,18 @@ sandbox.post('/exec/stream', async (c) => {
 
   return streamSSE(c, async (stream) => {
     try {
-      const { provider: sandboxProvider } = await getProviderWithFallback(preferredProvider);
+      const { provider: sandboxProvider } =
+        await getProviderWithFallback(preferredProvider);
 
       const caps = sandboxProvider.getCapabilities();
-      const isolationLabel = caps.isolation === 'vm'
-        ? 'VM 硬件隔离'
-        : caps.isolation === 'container'
-        ? '容器隔离'
-        : caps.isolation === 'process'
-        ? '进程隔离'
-        : '无隔离';
+      const isolationLabel =
+        caps.isolation === 'vm'
+          ? 'VM 硬件隔离'
+          : caps.isolation === 'container'
+            ? '容器隔离'
+            : caps.isolation === 'process'
+              ? '进程隔离'
+              : '无隔离';
 
       await stream.writeSSE({
         data: JSON.stringify({

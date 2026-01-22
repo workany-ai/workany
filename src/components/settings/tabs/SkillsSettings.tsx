@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import { getSkillsDir } from '@/shared/lib/paths';
+import { cn } from '@/shared/lib/utils';
+import { useLanguage } from '@/shared/providers/language-provider';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ChevronDown,
   ChevronRight,
@@ -15,19 +20,15 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { getSkillsDir } from '@/shared/lib/paths';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+
+import { Switch } from '../components/Switch';
+import { API_BASE_URL } from '../constants';
 import type {
   SettingsTabProps,
   SkillFile,
   SkillInfo,
   SkillsSubTab,
 } from '../types';
-import { Switch } from '../components/Switch';
-import { API_BASE_URL } from '../constants';
 
 // Get file icon based on extension
 function getSkillFileIcon(filename: string) {
@@ -473,14 +474,20 @@ export function SkillsSettings({
                   >
                     <FolderOpen className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                     <span className="truncate">
-                      {settings.skillsPath || `${settings.workDir || '~/.workany'}/skills`}
+                      {settings.skillsPath ||
+                        `${settings.workDir || '~/.workany'}/skills`}
                     </span>
                   </button>
                   <button
                     onClick={async () => {
                       // Reset to workDir/skills
-                      const workDir = settings.workDir || (await getSkillsDir()).replace('/skills', '');
-                      onSettingsChange({ ...settings, skillsPath: `${workDir}/skills` });
+                      const workDir =
+                        settings.workDir ||
+                        (await getSkillsDir()).replace('/skills', '');
+                      onSettingsChange({
+                        ...settings,
+                        skillsPath: `${workDir}/skills`,
+                      });
                     }}
                     className="text-muted-foreground hover:text-foreground border-border hover:bg-accent h-10 cursor-pointer rounded-lg border px-3 text-sm transition-colors"
                   >

@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { API_BASE_URL, API_PORT } from '@/config';
+import { translations, type Language } from '@/config/locale';
 import {
   createFile,
   createMessage,
@@ -11,14 +13,20 @@ import {
   type Task,
 } from '@/shared/db';
 import { getSettings } from '@/shared/db/settings';
-import { getAppDataDir } from '@/shared/lib/paths';
 import {
-  saveAttachments,
   loadAttachments,
+  saveAttachments,
   type AttachmentReference,
 } from '@/shared/lib/attachments';
-import { API_BASE_URL, API_PORT } from '@/config';
-import { translations, type Language } from '@/config/locale';
+import {
+  addBackgroundTask,
+  getBackgroundTask,
+  removeBackgroundTask,
+  subscribeToBackgroundTasks,
+  updateBackgroundTaskStatus,
+  type BackgroundTask,
+} from '@/shared/lib/background-tasks';
+import { getAppDataDir } from '@/shared/lib/paths';
 
 const AGENT_SERVER_URL = API_BASE_URL;
 
@@ -26,7 +34,9 @@ const AGENT_SERVER_URL = API_BASE_URL;
 function getErrorMessages() {
   const settings = getSettings();
   const lang = (settings.language || 'zh-CN') as Language;
-  return translations[lang]?.common?.errors || translations['zh-CN'].common.errors;
+  return (
+    translations[lang]?.common?.errors || translations['zh-CN'].common.errors
+  );
 }
 
 console.log(
@@ -40,7 +50,11 @@ function formatFetchError(error: unknown, _endpoint: string): string {
   const t = getErrorMessages();
 
   // Common error patterns - use friendly messages
-  if (message === 'Load failed' || message === 'Failed to fetch' || message.includes('NetworkError')) {
+  if (
+    message === 'Load failed' ||
+    message === 'Failed to fetch' ||
+    message.includes('NetworkError')
+  ) {
     return t.connectionFailedFinal;
   }
 
@@ -132,12 +146,17 @@ function getModelConfig():
       (p) => p.id === settings.defaultProvider
     );
 
-    console.log('[useAgent] Found provider:', provider ? {
-      id: provider.id,
-      name: provider.name,
-      hasApiKey: !!provider.apiKey,
-      hasBaseUrl: !!provider.baseUrl,
-    } : 'NOT FOUND');
+    console.log(
+      '[useAgent] Found provider:',
+      provider
+        ? {
+            id: provider.id,
+            name: provider.name,
+            hasApiKey: !!provider.apiKey,
+            hasBaseUrl: !!provider.baseUrl,
+          }
+        : 'NOT FOUND'
+    );
 
     if (!provider) return undefined;
 
@@ -191,7 +210,10 @@ function getSandboxConfig():
 
     // Only return if sandbox is enabled
     if (!settings.sandboxEnabled) {
-      console.warn('[useAgent] ⚠️ Sandbox is DISABLED in settings - sandboxEnabled:', settings.sandboxEnabled);
+      console.warn(
+        '[useAgent] ⚠️ Sandbox is DISABLED in settings - sandboxEnabled:',
+        settings.sandboxEnabled
+      );
       return undefined;
     }
 
@@ -344,7 +366,10 @@ export interface UseAgentReturn {
   ) => Promise<string>;
   approvePlan: () => Promise<void>;
   rejectPlan: () => void;
-  continueConversation: (reply: string, attachments?: MessageAttachment[]) => Promise<void>;
+  continueConversation: (
+    reply: string,
+    attachments?: MessageAttachment[]
+  ) => Promise<void>;
   stopAgent: () => Promise<void>;
   clearMessages: () => void;
   loadTask: (taskId: string) => Promise<Task | null>;
@@ -358,6 +383,9 @@ export interface UseAgentReturn {
     answers: Record<string, string>
   ) => Promise<void>;
   setSessionInfo: (sessionId: string, taskIndex: number) => void;
+  // Background tasks
+  backgroundTasks: BackgroundTask[];
+  runningBackgroundTaskCount: number;
 }
 
 // Helper to determine file type from file extension
@@ -691,7 +719,8 @@ function buildConversationHistory(
       history.push({
         role: 'user',
         content: msg.content || '',
-        imagePaths: imagePaths && imagePaths.length > 0 ? imagePaths : undefined,
+        imagePaths:
+          imagePaths && imagePaths.length > 0 ? imagePaths : undefined,
       });
     } else if (msg.type === 'text') {
       // Accumulate assistant text
@@ -733,6 +762,24 @@ export function useAgent(): UseAgentReturn {
   const sessionIdRef = useRef<string | null>(null); // Backend session ID for API calls
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeTaskIdRef = useRef<string | null>(null); // Track which task is currently active (for message isolation)
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null); // For polling messages when restored from background
+  // Use refs to track current values for callbacks (to avoid stale closures)
+  const taskIdRef = useRef<string | null>(null);
+  const isRunningRef = useRef<boolean>(false);
+  const initialPromptRef = useRef<string>('');
+
+  // Keep refs in sync with state (for use in callbacks to avoid stale closures)
+  useEffect(() => {
+    taskIdRef.current = taskId;
+  }, [taskId]);
+
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
+  useEffect(() => {
+    initialPromptRef.current = initialPrompt;
+  }, [initialPrompt]);
 
   // Helper to set session info
   const setSessionInfo = useCallback((sessionId: string, taskIndex: number) => {
@@ -741,15 +788,51 @@ export function useAgent(): UseAgentReturn {
   }, []);
 
   // Load existing task from database
+  // This function handles task switching (moving running task to background)
+  // and loading task metadata. Message loading and background restoration is done by loadMessages.
   const loadTask = useCallback(async (id: string): Promise<Task | null> => {
-    // Abort any existing stream before switching to a new task
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // If there's a running task, move it to background instead of aborting
+    // Use refs to get current values (avoid stale closures)
+    const currentTaskId = taskIdRef.current;
+    const currentIsRunning = isRunningRef.current;
+    const currentPrompt = initialPromptRef.current;
+
+    if (
+      abortControllerRef.current &&
+      currentTaskId &&
+      currentIsRunning &&
+      currentTaskId !== id
+    ) {
+      console.log('[useAgent] Moving task to background:', currentTaskId);
+      addBackgroundTask({
+        taskId: currentTaskId,
+        sessionId: sessionIdRef.current || '',
+        abortController: abortControllerRef.current,
+        isRunning: true,
+        prompt: currentPrompt,
+      });
+      // Clear refs but don't abort - task continues in background
       abortControllerRef.current = null;
+      sessionIdRef.current = null;
+
+      // Clear UI state for the old task
+      setMessages([]);
+      setPendingPermission(null);
+      setPendingQuestion(null);
+      setPlan(null);
     }
 
-    // Set this as the active task (stops any lingering stream processing)
+    // Stop any existing polling from previous task
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+
+    // Set this as the active task
     activeTaskIdRef.current = id;
+
+    // Note: Background restoration and running state is handled by loadMessages
+    // Don't set isRunning here - let loadMessages determine the correct state
 
     try {
       const task = await getTask(id);
@@ -766,7 +849,10 @@ export function useAgent(): UseAgentReturn {
             const appDir = await getAppDataDir();
             const computedSessionFolder = `${appDir}/sessions/${task.session_id}`;
             setSessionFolder(computedSessionFolder);
-            console.log('[useAgent] Loaded sessionFolder from task:', computedSessionFolder);
+            console.log(
+              '[useAgent] Loaded sessionFolder from task:',
+              computedSessionFolder
+            );
           } catch (error) {
             console.error('Failed to compute session folder:', error);
           }
@@ -781,13 +867,147 @@ export function useAgent(): UseAgentReturn {
 
   // Load existing messages from database
   const loadMessages = useCallback(async (id: string): Promise<void> => {
-    // Abort any existing stream before switching to a new task
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    // Note: Task switching logic is handled by loadTask, not here
+    // This function just loads messages for the specified task
+
+    // Check if the task we're loading is running in background
+    const backgroundTask = getBackgroundTask(id);
+    const isRestoringFromBackground =
+      backgroundTask && backgroundTask.isRunning;
+
+    if (isRestoringFromBackground) {
+      console.log(
+        '[useAgent] Task is running in background (loadMessages), restoring:',
+        id
+      );
+      abortControllerRef.current = backgroundTask.abortController;
+      sessionIdRef.current = backgroundTask.sessionId;
+
+      // Check if the abort controller is still valid (stream still running)
+      if (abortControllerRef.current.signal.aborted) {
+        console.log('[useAgent] Background task was already completed/aborted');
+        setIsRunning(false);
+        setPhase('idle');
+        abortControllerRef.current = null;
+        removeBackgroundTask(id);
+      } else {
+        setIsRunning(true);
+        setPhase('executing'); // Note: might not be accurate if task was in planning phase
+        removeBackgroundTask(id);
+
+        // Start polling for new messages (messages will be loaded immediately below)
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+        const pollingTaskId = id;
+        let lastMessageCount = 0;
+        let stuckCount = 0; // Count how many polls without new messages
+        const MAX_STUCK_COUNT = 10; // Stop after 10 seconds of no progress
+
+        refreshIntervalRef.current = setInterval(async () => {
+          const isStillActive = activeTaskIdRef.current === pollingTaskId;
+
+          // Check abort signal
+          if (
+            !abortControllerRef.current ||
+            abortControllerRef.current.signal.aborted
+          ) {
+            if (refreshIntervalRef.current) {
+              clearInterval(refreshIntervalRef.current);
+              refreshIntervalRef.current = null;
+            }
+            if (isStillActive) {
+              setIsRunning(false);
+              setPhase('idle');
+            }
+            return;
+          }
+
+          // Also check task status in database - it might have completed
+          try {
+            const taskStatus = await getTask(pollingTaskId);
+            if (
+              taskStatus &&
+              ['completed', 'error', 'stopped'].includes(taskStatus.status)
+            ) {
+              console.log(
+                '[useAgent] Task completed in database, stopping poll:',
+                taskStatus.status
+              );
+              if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+              }
+              if (isStillActive) {
+                setIsRunning(false);
+                setPhase('idle');
+              }
+              return;
+            }
+          } catch (error) {
+            console.error('[useAgent] Failed to check task status:', error);
+          }
+
+          if (isStillActive) {
+            // Refresh messages from database
+            try {
+              const dbMessages = await getMessagesByTaskId(pollingTaskId);
+              const agentMessages: AgentMessage[] = dbMessages.map((msg) => ({
+                type: msg.type as AgentMessage['type'],
+                content: msg.content || undefined,
+                name: msg.tool_name || undefined,
+                input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+                output: msg.tool_output || undefined,
+                toolUseId: msg.tool_use_id || undefined,
+                subtype: msg.subtype as AgentMessage['subtype'],
+                message: msg.error_message || undefined,
+              }));
+              setMessages(agentMessages);
+
+              // Check if we're stuck (no new messages for too long)
+              if (dbMessages.length === lastMessageCount) {
+                stuckCount++;
+                if (stuckCount >= MAX_STUCK_COUNT) {
+                  console.log(
+                    '[useAgent] Task appears stuck, stopping poll after',
+                    MAX_STUCK_COUNT,
+                    'seconds'
+                  );
+                  if (refreshIntervalRef.current) {
+                    clearInterval(refreshIntervalRef.current);
+                    refreshIntervalRef.current = null;
+                  }
+                  setIsRunning(false);
+                  setPhase('idle');
+                  return;
+                }
+              } else {
+                // Got new messages, reset stuck counter
+                stuckCount = 0;
+                lastMessageCount = dbMessages.length;
+              }
+            } catch (error) {
+              console.error('[useAgent] Failed to refresh messages:', error);
+            }
+          }
+        }, 1000);
+      }
+    } else {
+      // Task is NOT running in background - it's a completed/stopped task
+      // Reset running state to ensure we don't show running indicators
+      console.log('[useAgent] Loading messages for completed task:', id);
+      setIsRunning(false);
+      setPhase('idle');
       abortControllerRef.current = null;
+
+      // Stop any existing polling
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
     }
 
-    // Set this as the active task (stops any lingering stream processing)
+    // Set this as the active task
     activeTaskIdRef.current = id;
 
     try {
@@ -819,7 +1039,10 @@ export function useAgent(): UseAgentReturn {
             attachments,
           });
         } else if (msg.type === 'text') {
-          agentMessages.push({ type: 'text' as const, content: msg.content || undefined });
+          agentMessages.push({
+            type: 'text' as const,
+            content: msg.content || undefined,
+          });
         } else if (msg.type === 'tool_use') {
           agentMessages.push({
             type: 'tool_use' as const,
@@ -833,7 +1056,10 @@ export function useAgent(): UseAgentReturn {
             output: msg.tool_output || undefined,
           });
         } else if (msg.type === 'result') {
-          agentMessages.push({ type: 'result' as const, subtype: msg.subtype || undefined });
+          agentMessages.push({
+            type: 'result' as const,
+            subtype: msg.subtype || undefined,
+          });
         } else if (msg.type === 'error') {
           agentMessages.push({
             type: 'error' as const,
@@ -842,16 +1068,24 @@ export function useAgent(): UseAgentReturn {
         } else if (msg.type === 'plan') {
           // Restore plan message with parsed plan data
           try {
-            const planData = msg.content ? JSON.parse(msg.content) as TaskPlan : undefined;
+            const planData = msg.content
+              ? (JSON.parse(msg.content) as TaskPlan)
+              : undefined;
             if (planData) {
-              // Mark all steps as completed since this is a loaded plan
-              const completedPlan: TaskPlan = {
-                ...planData,
-                steps: planData.steps.map((s) => ({ ...s, status: 'completed' as const })),
-              };
+              // Only mark steps as completed if task is NOT running
+              // For running tasks (restored from background), keep original status
+              const restoredPlan: TaskPlan = isRestoringFromBackground
+                ? planData
+                : {
+                    ...planData,
+                    steps: planData.steps.map((s) => ({
+                      ...s,
+                      status: 'completed' as const,
+                    })),
+                  };
               agentMessages.push({
                 type: 'plan' as const,
-                plan: completedPlan,
+                plan: restoredPlan,
               });
             }
           } catch {
@@ -901,12 +1135,9 @@ export function useAgent(): UseAgentReturn {
         const { done, value } = await reader.read();
         if (done) break;
 
-        // Check if task switched - stop processing this stream
-        if (!isActiveTask()) {
-          console.log(`[useAgent] Task switched, stopping stream for task ${currentTaskId}`);
-          reader.cancel();
-          break;
-        }
+        // Note: We no longer cancel the reader when task switches.
+        // Background tasks continue to process the stream and save to database.
+        // UI updates are skipped for inactive tasks via isActiveTask() checks below.
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -917,35 +1148,43 @@ export function useAgent(): UseAgentReturn {
             try {
               const data = JSON.parse(line.slice(6)) as AgentMessage;
 
-              // Double-check task is still active before any state update
-              if (!isActiveTask()) {
-                console.log(`[useAgent] Ignoring message for inactive task ${currentTaskId}`);
-                continue;
-              }
+              // Check if this is the active task for UI updates
+              const isActive = isActiveTask();
 
               if (data.type === 'session') {
-                sessionIdRef.current = data.sessionId || null;
+                if (isActive) {
+                  sessionIdRef.current = data.sessionId || null;
+                }
               } else if (data.type === 'done') {
-                // Stream ended - mark all plan steps as completed
-                setPendingPermission(null);
-                setPlan((currentPlan) => {
-                  if (!currentPlan) return currentPlan;
-                  return {
-                    ...currentPlan,
-                    steps: currentPlan.steps.map((step) => ({
-                      ...step,
-                      status: 'completed' as const,
-                    })),
-                  };
-                });
+                // Update background task status (always, even if not active)
+                updateBackgroundTaskStatus(currentTaskId, false);
+
+                // UI updates only for active task
+                if (isActive) {
+                  // Stream ended - mark all plan steps as completed
+                  setPendingPermission(null);
+                  setPlan((currentPlan) => {
+                    if (!currentPlan) return currentPlan;
+                    return {
+                      ...currentPlan,
+                      steps: currentPlan.steps.map((step) => ({
+                        ...step,
+                        status: 'completed' as const,
+                      })),
+                    };
+                  });
+                }
               } else if (data.type === 'permission_request') {
-                // Handle permission request - pause and wait for user response
-                if (data.permission) {
+                // Handle permission request - only for active task
+                if (isActive && data.permission) {
                   setPendingPermission(data.permission);
                   setMessages((prev) => [...prev, data]);
                 }
               } else {
-                setMessages((prev) => [...prev, data]);
+                // UI update only for active task
+                if (isActive) {
+                  setMessages((prev) => [...prev, data]);
+                }
 
                 // Extract file paths from text messages
                 if (data.type === 'text' && data.content) {
@@ -963,7 +1202,12 @@ export function useAgent(): UseAgentReturn {
                   totalToolCount++;
 
                   // Handle AskUserQuestion tool - show question UI and pause execution
-                  if (data.name === 'AskUserQuestion' && data.input) {
+                  // Only handle for active task to avoid affecting wrong task's UI
+                  if (
+                    isActive &&
+                    data.name === 'AskUserQuestion' &&
+                    data.input
+                  ) {
                     const input = data.input as { questions?: AgentQuestion[] };
                     if (input.questions && Array.isArray(input.questions)) {
                       setPendingQuestion({
@@ -973,7 +1217,9 @@ export function useAgent(): UseAgentReturn {
                       });
                       // Stop agent execution and wait for user response
                       // The user's answer will be sent via continueConversation
-                      console.log('[useAgent] AskUserQuestion detected, pausing execution');
+                      console.log(
+                        '[useAgent] AskUserQuestion detected, pausing execution'
+                      );
                       setIsRunning(false);
                       if (abortControllerRef.current) {
                         abortControllerRef.current.abort();
@@ -981,9 +1227,12 @@ export function useAgent(): UseAgentReturn {
                       }
                       // Also stop backend agent
                       if (sessionIdRef.current) {
-                        fetch(`${AGENT_SERVER_URL}/agent/stop/${sessionIdRef.current}`, {
-                          method: 'POST',
-                        }).catch(() => {});
+                        fetch(
+                          `${AGENT_SERVER_URL}/agent/stop/${sessionIdRef.current}`,
+                          {
+                            method: 'POST',
+                          }
+                        ).catch(() => {});
                       }
                       reader.cancel();
                       return; // Stop processing this stream
@@ -1004,8 +1253,16 @@ export function useAgent(): UseAgentReturn {
                     pendingToolUses.delete(data.toolUseId);
 
                     // Trigger working files refresh for file-writing tools
-                    const fileWritingTools = ['Write', 'Edit', 'Bash', 'NotebookEdit'];
-                    if (fileWritingTools.includes(toolUse.name) || toolUse.name.includes('sandbox')) {
+                    const fileWritingTools = [
+                      'Write',
+                      'Edit',
+                      'Bash',
+                      'NotebookEdit',
+                    ];
+                    if (
+                      fileWritingTools.includes(toolUse.name) ||
+                      toolUse.name.includes('sandbox')
+                    ) {
                       setFilesVersion((v) => v + 1);
                     }
                   }
@@ -1094,12 +1351,21 @@ export function useAgent(): UseAgentReturn {
       sessionInfo?: SessionInfo,
       attachments?: MessageAttachment[]
     ): Promise<string> => {
-      if (isRunning) return existingTaskId || '';
-
-      // Abort any existing stream before starting a new task
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      // If there's already a running task, move it to background
+      if (isRunning && abortControllerRef.current && taskId) {
+        console.log(
+          '[useAgent] Moving current task to background before starting new:',
+          taskId
+        );
+        addBackgroundTask({
+          taskId: taskId,
+          sessionId: sessionIdRef.current || '',
+          abortController: abortControllerRef.current,
+          isRunning: true,
+          prompt: initialPrompt,
+        });
         abortControllerRef.current = null;
+        sessionIdRef.current = null;
       }
 
       setIsRunning(true);
@@ -1174,7 +1440,9 @@ export function useAgent(): UseAgentReturn {
       if (attachments && attachments.length > 0) {
         console.log('[useAgent] Attachments received:', attachments.length);
         attachments.forEach((a, i) => {
-          console.log(`[useAgent] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`);
+          console.log(
+            `[useAgent] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
+          );
         });
         console.log('[useAgent] Valid images for API:', images?.length || 0);
       }
@@ -1199,11 +1467,21 @@ export function useAgent(): UseAgentReturn {
           // Save user message to database (save attachments to files first)
           try {
             let attachmentRefs: string | undefined;
-            if (attachments && attachments.length > 0 && computedSessionFolder) {
+            if (
+              attachments &&
+              attachments.length > 0 &&
+              computedSessionFolder
+            ) {
               // Save attachments to file system and get references
-              const refs = await saveAttachments(computedSessionFolder, attachments);
+              const refs = await saveAttachments(
+                computedSessionFolder,
+                attachments
+              );
               attachmentRefs = JSON.stringify(refs);
-              console.log('[useAgent] Saved attachments to files:', refs.length);
+              console.log(
+                '[useAgent] Saved attachments to files:',
+                refs.length
+              );
               // Trigger working files refresh
               setFilesVersion((v) => v + 1);
             }
@@ -1249,17 +1527,20 @@ export function useAgent(): UseAgentReturn {
         }
 
         // Phase 1: Request planning (no images)
-        const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent/plan`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            prompt,
-            modelConfig,
-          }),
-          signal: abortController.signal,
-        });
+        const response = await fetchWithRetry(
+          `${AGENT_SERVER_URL}/agent/plan`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              prompt,
+              modelConfig,
+            }),
+            signal: abortController.signal,
+          }
+        );
 
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
@@ -1279,12 +1560,8 @@ export function useAgent(): UseAgentReturn {
           const { done, value } = await reader.read();
           if (done) break;
 
-          // Check if task switched - stop processing this stream
-          if (!isActiveTask()) {
-            console.log(`[useAgent] Task switched during planning, stopping stream for task ${currentTaskId}`);
-            reader.cancel();
-            break;
-          }
+          // Note: We no longer cancel the reader when task switches.
+          // Planning streams continue in background, UI updates are skipped for inactive tasks.
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -1295,27 +1572,29 @@ export function useAgent(): UseAgentReturn {
               try {
                 const data = JSON.parse(line.slice(6)) as AgentMessage;
 
-                // Double-check task is still active before any state update
-                if (!isActiveTask()) {
-                  console.log(`[useAgent] Ignoring planning message for inactive task ${currentTaskId}`);
-                  continue;
-                }
+                // Check if this task is still active for UI updates
+                const isActive = isActiveTask();
 
                 if (data.type === 'session') {
-                  sessionIdRef.current = data.sessionId || null;
+                  if (isActive) {
+                    sessionIdRef.current = data.sessionId || null;
+                  }
                 } else if (data.type === 'direct_answer' && data.content) {
                   // Simple question - direct answer, no plan needed
                   console.log(
                     '[useAgent] Received direct answer, no plan needed'
                   );
-                  setMessages((prev) => [
-                    ...prev,
-                    { type: 'text', content: data.content },
-                  ]);
-                  setPlan(null); // Clear any plan when we get a direct answer
-                  setPhase('idle');
+                  // UI updates only for active task
+                  if (isActive) {
+                    setMessages((prev) => [
+                      ...prev,
+                      { type: 'text', content: data.content },
+                    ]);
+                    setPlan(null); // Clear any plan when we get a direct answer
+                    setPhase('idle');
+                  }
 
-                  // Save to database
+                  // Save to database (always)
                   try {
                     await createMessage({
                       task_id: currentTaskId,
@@ -1328,16 +1607,23 @@ export function useAgent(): UseAgentReturn {
                   }
                 } else if (data.type === 'plan' && data.plan) {
                   // Complex task - received the plan, wait for approval
-                  setPlan(data.plan);
-                  setPhase('awaiting_approval');
-                  setMessages((prev) => [...prev, data]);
+                  // UI updates only for active task
+                  if (isActive) {
+                    setPlan(data.plan);
+                    setPhase('awaiting_approval');
+                    setMessages((prev) => [...prev, data]);
+                  }
                 } else if (data.type === 'text') {
-                  setMessages((prev) => [...prev, data]);
+                  if (isActive) {
+                    setMessages((prev) => [...prev, data]);
+                  }
                 } else if (data.type === 'done') {
                   // Planning done
                 } else if (data.type === 'error') {
-                  setMessages((prev) => [...prev, data]);
-                  setPhase('idle');
+                  if (isActive) {
+                    setMessages((prev) => [...prev, data]);
+                    setPhase('idle');
+                  }
                 }
               } catch {
                 // Ignore parse errors
@@ -1349,12 +1635,17 @@ export function useAgent(): UseAgentReturn {
         if ((error as Error).name !== 'AbortError') {
           const errorMessage = formatFetchError(error, '/agent/plan');
           console.error('[useAgent] Request failed:', error);
-          setMessages((prev) => [
-            ...prev,
-            { type: 'error', message: errorMessage },
-          ]);
-          setPhase('idle');
 
+          // UI updates only for active task
+          if (activeTaskIdRef.current === currentTaskId) {
+            setMessages((prev) => [
+              ...prev,
+              { type: 'error', message: errorMessage },
+            ]);
+            setPhase('idle');
+          }
+
+          // Save to database (always)
           try {
             await createMessage({
               task_id: currentTaskId,
@@ -1367,8 +1658,11 @@ export function useAgent(): UseAgentReturn {
           }
         }
       } finally {
-        setIsRunning(false);
-        abortControllerRef.current = null;
+        // Only update running state if this is still the active task
+        if (activeTaskIdRef.current === currentTaskId) {
+          setIsRunning(false);
+          abortControllerRef.current = null;
+        }
       }
 
       return currentTaskId;
@@ -1379,6 +1673,9 @@ export function useAgent(): UseAgentReturn {
   // Phase 2: Execute the approved plan
   const approvePlan = useCallback(async (): Promise<void> => {
     if (!plan || !taskId || phase !== 'awaiting_approval') return;
+
+    // Ensure this task is the active one before execution
+    activeTaskIdRef.current = taskId;
 
     setIsRunning(true);
     setPhase('executing');
@@ -1418,22 +1715,25 @@ export function useAgent(): UseAgentReturn {
       const sandboxConfig = getSandboxConfig();
       const skillsPath = getSkillsPath();
 
-      const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          planId: plan.id,
-          prompt: initialPrompt,
-          workDir,
-          taskId,
-          modelConfig,
-          sandboxConfig,
-          skillsPath,
-        }),
-        signal: abortController.signal,
-      });
+      const response = await fetchWithRetry(
+        `${AGENT_SERVER_URL}/agent/execute`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            planId: plan.id,
+            prompt: initialPrompt,
+            workDir,
+            taskId,
+            modelConfig,
+            sandboxConfig,
+            skillsPath,
+          }),
+          signal: abortController.signal,
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
@@ -1444,11 +1744,16 @@ export function useAgent(): UseAgentReturn {
       if ((error as Error).name !== 'AbortError') {
         const errorMessage = formatFetchError(error, '/agent/execute');
         console.error('[useAgent] Execute failed:', error);
-        setMessages((prev) => [
-          ...prev,
-          { type: 'error', message: errorMessage },
-        ]);
 
+        // UI updates only for active task
+        if (activeTaskIdRef.current === taskId) {
+          setMessages((prev) => [
+            ...prev,
+            { type: 'error', message: errorMessage },
+          ]);
+        }
+
+        // Save to database (always)
         try {
           await createMessage({
             task_id: taskId,
@@ -1461,9 +1766,83 @@ export function useAgent(): UseAgentReturn {
         }
       }
     } finally {
-      setIsRunning(false);
-      setPhase('idle');
-      abortControllerRef.current = null;
+      // Only update running state if this is still the active task
+      if (activeTaskIdRef.current === taskId) {
+        setIsRunning(false);
+        setPhase('idle');
+        abortControllerRef.current = null;
+
+        // Reload messages from database to ensure all are displayed
+        // (in case some were missed during streaming)
+        try {
+          const dbMessages = await getMessagesByTaskId(taskId);
+          const agentMessages: AgentMessage[] = [];
+          for (const msg of dbMessages) {
+            if (msg.type === 'user') {
+              agentMessages.push({
+                type: 'user' as const,
+                content: msg.content || undefined,
+              });
+            } else if (msg.type === 'text') {
+              agentMessages.push({
+                type: 'text' as const,
+                content: msg.content || undefined,
+              });
+            } else if (msg.type === 'tool_use') {
+              agentMessages.push({
+                type: 'tool_use' as const,
+                name: msg.tool_name || undefined,
+                input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+              });
+            } else if (msg.type === 'tool_result') {
+              agentMessages.push({
+                type: 'tool_result' as const,
+                toolUseId: msg.tool_use_id || undefined,
+                output: msg.tool_output || undefined,
+              });
+            } else if (msg.type === 'result') {
+              agentMessages.push({
+                type: 'result' as const,
+                subtype: msg.subtype || undefined,
+              });
+            } else if (msg.type === 'error') {
+              agentMessages.push({
+                type: 'error' as const,
+                message: msg.error_message || undefined,
+              });
+            } else if (msg.type === 'plan') {
+              try {
+                const planData = msg.content
+                  ? (JSON.parse(msg.content) as TaskPlan)
+                  : undefined;
+                if (planData) {
+                  const completedPlan: TaskPlan = {
+                    ...planData,
+                    steps: planData.steps.map((s) => ({
+                      ...s,
+                      status: 'completed' as const,
+                    })),
+                  };
+                  agentMessages.push({
+                    type: 'plan' as const,
+                    plan: completedPlan,
+                  });
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            } else {
+              agentMessages.push({ type: msg.type as AgentMessage['type'] });
+            }
+          }
+          setMessages(agentMessages);
+        } catch (reloadError) {
+          console.error(
+            '[useAgent] Failed to reload messages after execution:',
+            reloadError
+          );
+        }
+      }
     }
   }, [plan, taskId, phase, initialPrompt, processStream, sessionFolder]);
 
@@ -1483,7 +1862,8 @@ export function useAgent(): UseAgentReturn {
       const userMessage: AgentMessage = {
         type: 'user',
         content: reply,
-        attachments: attachments && attachments.length > 0 ? attachments : undefined,
+        attachments:
+          attachments && attachments.length > 0 ? attachments : undefined,
       };
       setMessages((prev) => [...prev, userMessage]);
 
@@ -1543,9 +1923,14 @@ export function useAgent(): UseAgentReturn {
 
         // Debug logging for image attachments
         if (attachments && attachments.length > 0) {
-          console.log('[useAgent] continueConversation attachments:', attachments.length);
+          console.log(
+            '[useAgent] continueConversation attachments:',
+            attachments.length
+          );
           attachments.forEach((att, i) => {
-            console.log(`[useAgent] Attachment ${i}: type=${att.type}, hasData=${!!att.data}, dataLength=${att.data?.length || 0}`);
+            console.log(
+              `[useAgent] Attachment ${i}: type=${att.type}, hasData=${!!att.data}, dataLength=${att.data?.length || 0}`
+            );
           });
           console.log('[useAgent] Valid images for API:', images?.length || 0);
         }
@@ -1578,15 +1963,19 @@ export function useAgent(): UseAgentReturn {
         if ((error as Error).name !== 'AbortError') {
           const errorMessage = formatFetchError(error, '/agent');
           console.error('[useAgent] Continue conversation failed:', error);
-          setMessages((prev) => [
-            ...prev,
-            {
-              type: 'error',
-              message: errorMessage,
-            },
-          ]);
 
-          // Save error to database
+          // UI updates only for active task
+          if (activeTaskIdRef.current === taskId) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: 'error',
+                message: errorMessage,
+              },
+            ]);
+          }
+
+          // Save error to database (always)
           try {
             await createMessage({
               task_id: taskId,
@@ -1599,14 +1988,23 @@ export function useAgent(): UseAgentReturn {
           }
         }
       } finally {
-        setIsRunning(false);
-        abortControllerRef.current = null;
+        // Only update running state if this is still the active task
+        if (activeTaskIdRef.current === taskId) {
+          setIsRunning(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [isRunning, taskId, messages, initialPrompt, processStream, sessionFolder]
   );
 
   const stopAgent = useCallback(async () => {
+    // Stop polling if active
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+
     // Abort the fetch request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -1636,7 +2034,14 @@ export function useAgent(): UseAgentReturn {
   }, [taskId]);
 
   const clearMessages = useCallback(() => {
-    // Abort any existing stream
+    // Stop polling if active
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+
+    // This function is for complete cleanup (e.g., starting fresh)
+    // For task switching, use loadTask which handles moving to background
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -1649,6 +2054,7 @@ export function useAgent(): UseAgentReturn {
     setPendingQuestion(null);
     setPhase('idle');
     setPlan(null);
+    setIsRunning(false);
     sessionIdRef.current = null;
     activeTaskIdRef.current = null;
   }, []);
@@ -1731,6 +2137,55 @@ export function useAgent(): UseAgentReturn {
   // taskFolder is now the same as sessionFolder (no task subfolders)
   const taskFolder = sessionFolder;
 
+  // Track background tasks
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
+
+  // Subscribe to background task changes
+  useEffect(() => {
+    const unsubscribe = subscribeToBackgroundTasks((tasks) => {
+      setBackgroundTasks(tasks);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Cleanup on unmount - move running task to background instead of abandoning it
+  useEffect(() => {
+    return () => {
+      // Stop polling if active
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+
+      // If there's a running task when unmounting, move it to background
+      // so it continues running and shows in the sidebar
+      const currentTaskId = taskIdRef.current;
+      const currentIsRunning = isRunningRef.current;
+      const currentPrompt = initialPromptRef.current;
+
+      if (abortControllerRef.current && currentTaskId && currentIsRunning) {
+        console.log(
+          '[useAgent] Moving task to background on unmount:',
+          currentTaskId
+        );
+        addBackgroundTask({
+          taskId: currentTaskId,
+          sessionId: sessionIdRef.current || '',
+          abortController: abortControllerRef.current,
+          isRunning: true,
+          prompt: currentPrompt,
+        });
+        // Don't clear refs here since the effect is cleaning up
+        // The stream will continue to run and save to database
+      }
+    };
+  }, []);
+
+  // Get count of running background tasks
+  const runningBackgroundTaskCount = backgroundTasks.filter(
+    (t) => t.isRunning
+  ).length;
+
   return {
     messages,
     isRunning,
@@ -1755,5 +2210,8 @@ export function useAgent(): UseAgentReturn {
     respondToPermission,
     respondToQuestion,
     setSessionInfo,
+    // Background tasks
+    backgroundTasks,
+    runningBackgroundTaskCount,
   };
 }

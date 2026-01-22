@@ -7,6 +7,11 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '@/config';
+import { saveSettingItem } from '@/shared/db/settings';
+import { cn } from '@/shared/lib/utils';
+import { useLanguage } from '@/shared/providers/language-provider';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   AlertCircle,
   ArrowRight,
@@ -20,13 +25,6 @@ import {
   RefreshCw,
   Terminal,
 } from 'lucide-react';
-import { openUrl } from '@tauri-apps/plugin-opener';
-
-import { useLanguage } from '@/shared/providers/language-provider';
-import { cn } from '@/shared/lib/utils';
-import { saveSettingItem } from '@/shared/db/settings';
-
-import { API_BASE_URL } from '@/config';
 
 // Helper function to open external URLs
 const openExternalUrl = async (url: string) => {
@@ -62,9 +60,15 @@ export function SetupPage() {
   const [dependencies, setDependencies] = useState<DependencyStatus[]>([]);
   const [allRequiredInstalled, setAllRequiredInstalled] = useState(false);
   const [expandedDep, setExpandedDep] = useState<string | null>(null);
-  const [installCommands, setInstallCommands] = useState<Record<string, InstallCommands>>({});
-  const [installStates, setInstallStates] = useState<Record<string, InstallState>>({});
-  const [installErrors, setInstallErrors] = useState<Record<string, string>>({});
+  const [installCommands, setInstallCommands] = useState<
+    Record<string, InstallCommands>
+  >({});
+  const [installStates, setInstallStates] = useState<
+    Record<string, InstallState>
+  >({});
+  const [installErrors, setInstallErrors] = useState<Record<string, string>>(
+    {}
+  );
   const [apiError, setApiError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -101,7 +105,10 @@ export function SetupPage() {
           return;
         }
       } catch (error) {
-        console.error(`[Setup] Attempt ${attempt + 1}/${maxRetries} failed:`, error);
+        console.error(
+          `[Setup] Attempt ${attempt + 1}/${maxRetries} failed:`,
+          error
+        );
         if (attempt < maxRetries - 1) {
           await new Promise((resolve) => setTimeout(resolve, retryDelay));
           setRetryCount(attempt + 1);
@@ -119,7 +126,9 @@ export function SetupPage() {
 
   const loadInstallCommands = async (depId: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/dependencies/${depId}/install-commands`);
+      const response = await fetch(
+        `${API_BASE_URL}/health/dependencies/${depId}/install-commands`
+      );
       const data = await response.json();
       if (data.success) {
         setInstallCommands((prev) => ({
@@ -128,20 +137,29 @@ export function SetupPage() {
         }));
       }
     } catch (error) {
-      console.error(`[Setup] Failed to load install commands for ${depId}:`, error);
+      console.error(
+        `[Setup] Failed to load install commands for ${depId}:`,
+        error
+      );
     }
   };
 
-  const handleInstall = async (depId: string, method: 'npm' | 'brew' | 'auto') => {
+  const handleInstall = async (
+    depId: string,
+    method: 'npm' | 'brew' | 'auto'
+  ) => {
     setInstallStates((prev) => ({ ...prev, [depId]: 'installing' }));
     setInstallErrors((prev) => ({ ...prev, [depId]: '' }));
 
     try {
-      const response = await fetch(`${API_BASE_URL}/health/dependencies/${depId}/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method }),
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/health/dependencies/${depId}/install`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method }),
+        }
+      );
 
       const data = await response.json();
 
@@ -200,7 +218,8 @@ export function SetupPage() {
           {t.setup?.title || 'Welcome to WorkAny'}
         </h1>
         <p className="text-muted-foreground mt-2">
-          {t.setup?.subtitle || "Let's make sure you have all the required tools installed"}
+          {t.setup?.subtitle ||
+            "Let's make sure you have all the required tools installed"}
         </p>
       </div>
 
@@ -218,7 +237,9 @@ export function SetupPage() {
                   <h3 className="text-foreground font-medium">
                     {t.setup?.apiError || 'Unable to check dependencies'}
                   </h3>
-                  <p className="text-muted-foreground mt-1 text-sm">{apiError}</p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {apiError}
+                  </p>
                   <button
                     onClick={checkDependencies}
                     className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
@@ -277,7 +298,9 @@ export function SetupPage() {
                   {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-foreground font-medium">{dep.name}</span>
+                      <span className="text-foreground font-medium">
+                        {dep.name}
+                      </span>
                       {dep.required && !dep.installed && (
                         <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-500">
                           {t.setup?.required || 'Required'}
@@ -289,7 +312,9 @@ export function SetupPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-muted-foreground mt-0.5 text-sm">{dep.description}</p>
+                    <p className="text-muted-foreground mt-0.5 text-sm">
+                      {dep.description}
+                    </p>
                     {dep.installed && dep.version && (
                       <p className="text-muted-foreground mt-1 text-xs">
                         {t.setup?.version || 'Version'}: {dep.version}
@@ -359,7 +384,8 @@ export function SetupPage() {
                     {commands && (
                       <div className="space-y-2">
                         <p className="text-muted-foreground text-xs">
-                          {t.setup?.orRunCommand || 'Or run one of these commands:'}
+                          {t.setup?.orRunCommand ||
+                            'Or run one of these commands:'}
                         </p>
                         <div className="space-y-1.5">
                           {commands.npm && (
@@ -415,7 +441,9 @@ export function SetupPage() {
                     {installState === 'success' && (
                       <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-green-500">
                         <CheckCircle2 className="size-4" />
-                        <p className="text-sm">{t.setup?.installSuccess || 'Installed successfully!'}</p>
+                        <p className="text-sm">
+                          {t.setup?.installSuccess || 'Installed successfully!'}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -452,7 +480,10 @@ export function SetupPage() {
             {/* Continue Button */}
             <button
               onClick={handleContinue}
-              disabled={!allRequiredInstalled && dependencies.some((d) => d.required && !d.installed)}
+              disabled={
+                !allRequiredInstalled &&
+                dependencies.some((d) => d.required && !d.installed)
+              }
               className={cn(
                 'flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors',
                 allRequiredInstalled

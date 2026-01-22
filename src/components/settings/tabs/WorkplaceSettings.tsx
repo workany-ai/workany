@@ -1,7 +1,8 @@
-import { FolderOpen, Shield, ShieldOff } from 'lucide-react';
 import { getAppDataDir } from '@/shared/lib/paths';
-import { useLanguage } from '@/shared/providers/language-provider';
 import { cn } from '@/shared/lib/utils';
+import { useLanguage } from '@/shared/providers/language-provider';
+import { FolderOpen, Shield, ShieldOff } from 'lucide-react';
+
 import type { WorkplaceSettingsProps } from '../types';
 
 // Sandbox options (only codex and native, others hidden)
@@ -43,7 +44,7 @@ export function WorkplaceSettings({
         <p className="text-muted-foreground text-xs">
           {t.settings.defaultSandboxDescription}
         </p>
-        <div className="grid grid-cols-2 gap-2 max-w-md">
+        <div className="grid max-w-md grid-cols-2 gap-2">
           {sandboxOptions.map((option) => {
             const Icon = option.icon;
             const isSelected = settings.defaultSandboxProvider === option.id;

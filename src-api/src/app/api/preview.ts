@@ -8,10 +8,23 @@ import { Hono } from 'hono';
 
 import {
   getPreviewManager,
+  isNodeAvailable,
   type PreviewConfig,
 } from '@/shared/services/preview';
 
 const preview = new Hono();
+
+/**
+ * Check if Node.js is available for Live Preview
+ *
+ * GET /preview/node-available
+ * Returns: { available: boolean }
+ */
+preview.get('/node-available', (c) => {
+  const available = isNodeAvailable();
+  console.log(`[Preview API] Node.js available: ${available}`);
+  return c.json({ available });
+});
 
 /**
  * Start a Vite preview server

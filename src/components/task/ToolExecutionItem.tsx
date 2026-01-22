@@ -90,19 +90,21 @@ function isExpectedWarning(toolName: string, output: string): boolean {
   const lowerOutput = output.toLowerCase();
 
   // Read tool: file not found is expected when creating new files
-  if (toolName === 'Read' && (
-    lowerOutput.includes('file does not exist') ||
-    lowerOutput.includes('no such file') ||
-    lowerOutput.includes('file not found')
-  )) {
+  if (
+    toolName === 'Read' &&
+    (lowerOutput.includes('file does not exist') ||
+      lowerOutput.includes('no such file') ||
+      lowerOutput.includes('file not found'))
+  ) {
     return true;
   }
 
   // Grep/Glob: no matches is informational, not an error
-  if ((toolName === 'Grep' || toolName === 'Glob') && (
-    lowerOutput.includes('no matches') ||
-    lowerOutput.includes('no files found')
-  )) {
+  if (
+    (toolName === 'Grep' || toolName === 'Glob') &&
+    (lowerOutput.includes('no matches') ||
+      lowerOutput.includes('no files found'))
+  ) {
     return true;
   }
 
@@ -121,18 +123,24 @@ function getResultInfo(
   let output = result.output || result.content || '';
 
   // Extract content from <tool_use_error> tag if present
-  const toolUseErrorMatch = output.match(/<tool_use_error>([\s\S]*?)<\/tool_use_error>/);
+  const toolUseErrorMatch = output.match(
+    /<tool_use_error>([\s\S]*?)<\/tool_use_error>/
+  );
   if (toolUseErrorMatch) {
     output = toolUseErrorMatch[1].trim();
   }
 
-  const isError = result.isError || output.toLowerCase().includes('error') || toolUseErrorMatch;
+  const isError =
+    result.isError ||
+    output.toLowerCase().includes('error') ||
+    toolUseErrorMatch;
   const isWarning = isExpectedWarning(toolName, output);
 
   if (isError) {
     // Show first line or truncated output as error summary
     const firstLine = output.split('\n').find((l) => l.trim()) || output;
-    const truncated = firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+    const truncated =
+      firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
     return {
       hasContent: true,
       summary: truncated || 'Error occurred',
@@ -149,23 +157,48 @@ function getResultInfo(
 
   switch (toolName) {
     case 'Bash':
-      if (lineCount === 0) return { hasContent: false, summary: '(No output)', isWarning: false };
+      if (lineCount === 0)
+        return { hasContent: false, summary: '(No output)', isWarning: false };
       if (lineCount === 1)
-        return { hasContent: true, summary: lines[0].slice(0, 80), isWarning: false };
-      return { hasContent: true, summary: `${lineCount} lines of output`, isWarning: false };
+        return {
+          hasContent: true,
+          summary: lines[0].slice(0, 80),
+          isWarning: false,
+        };
+      return {
+        hasContent: true,
+        summary: `${lineCount} lines of output`,
+        isWarning: false,
+      };
 
     case 'Read':
-      return { hasContent: true, summary: `Read ${lineCount} lines`, isWarning: false };
+      return {
+        hasContent: true,
+        summary: `Read ${lineCount} lines`,
+        isWarning: false,
+      };
 
     case 'Write':
-      return { hasContent: true, summary: 'File created successfully', isWarning: false };
+      return {
+        hasContent: true,
+        summary: 'File created successfully',
+        isWarning: false,
+      };
 
     case 'Edit':
-      return { hasContent: true, summary: 'File modified successfully', isWarning: false };
+      return {
+        hasContent: true,
+        summary: 'File modified successfully',
+        isWarning: false,
+      };
 
     case 'Grep':
       if (lineCount === 0)
-        return { hasContent: false, summary: 'No matches found', isWarning: false };
+        return {
+          hasContent: false,
+          summary: 'No matches found',
+          isWarning: false,
+        };
       return {
         hasContent: true,
         summary: `Found matches in ${lineCount} files`,
@@ -174,8 +207,16 @@ function getResultInfo(
 
     case 'Glob':
       if (lineCount === 0)
-        return { hasContent: false, summary: 'No files found', isWarning: false };
-      return { hasContent: true, summary: `Found ${lineCount} files`, isWarning: false };
+        return {
+          hasContent: false,
+          summary: 'No files found',
+          isWarning: false,
+        };
+      return {
+        hasContent: true,
+        summary: `Found ${lineCount} files`,
+        isWarning: false,
+      };
 
     case 'WebFetch':
       return {
@@ -185,13 +226,25 @@ function getResultInfo(
       };
 
     case 'WebSearch':
-      return { hasContent: true, summary: 'Search completed', isWarning: false };
+      return {
+        hasContent: true,
+        summary: 'Search completed',
+        isWarning: false,
+      };
 
     case 'TodoWrite':
-      return { hasContent: true, summary: 'Todo list updated', isWarning: false };
+      return {
+        hasContent: true,
+        summary: 'Todo list updated',
+        isWarning: false,
+      };
 
     case 'Task':
-      return { hasContent: true, summary: 'Subtask completed', isWarning: false };
+      return {
+        hasContent: true,
+        summary: 'Subtask completed',
+        isWarning: false,
+      };
 
     default:
       return {
@@ -230,7 +283,9 @@ function ToolDetailModal({
   const formatOutput = (output: string | undefined): string => {
     if (!output) return 'No output';
     // Extract content from <tool_use_error> tag if present
-    const toolUseErrorMatch = output.match(/<tool_use_error>([\s\S]*?)<\/tool_use_error>/);
+    const toolUseErrorMatch = output.match(
+      /<tool_use_error>([\s\S]*?)<\/tool_use_error>/
+    );
     let cleanOutput = toolUseErrorMatch ? toolUseErrorMatch[1].trim() : output;
     // Truncate very long output
     if (cleanOutput.length > 10000) {

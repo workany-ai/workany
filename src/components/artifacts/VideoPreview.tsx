@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { readFile, stat } from '@tauri-apps/plugin-fs';
 import { ExternalLink, Loader2, Video } from 'lucide-react';
-import type { PreviewComponentProps } from './types';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { PreviewComponentProps } from './types';
 import {
   getVideoMimeType,
   isRemoteUrl,
@@ -160,7 +161,7 @@ export function VideoPreview({ artifact }: PreviewComponentProps) {
           ref={videoRef}
           src={videoUrl || undefined}
           controls
-          className="bg-black h-auto max-h-[70vh] w-full rounded-lg shadow-xl"
+          className="h-auto max-h-[70vh] w-full rounded-lg bg-black shadow-xl"
           preload="metadata"
         >
           Your browser does not support the video tag.

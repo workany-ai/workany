@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import type { AIProvider, ModelSubTab, SettingsTabProps } from '../types';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
+
 import { Switch } from '../components/Switch';
 import {
   customProviderModels,
@@ -12,6 +12,7 @@ import {
   providerDefaultModels,
   providerIcons,
 } from '../constants';
+import type { AIProvider, ModelSubTab, SettingsTabProps } from '../types';
 
 // Get suggested models for a provider
 function getSuggestedModels(provider: AIProvider): string[] {
@@ -503,7 +504,7 @@ export function ModelSettings({
                       key={index}
                       className="bg-muted/50 flex items-center gap-2 rounded-lg px-3 py-2"
                     >
-                      <Check className="text-emerald-500 size-4 flex-shrink-0" />
+                      <Check className="size-4 flex-shrink-0 text-emerald-500" />
                       <span className="text-foreground flex-1 truncate text-sm">
                         {model}
                       </span>
@@ -513,7 +514,8 @@ export function ModelSettings({
                             (_, i) => i !== index
                           );
                           handleProviderUpdate(selectedProvider.id, {
-                            models: newModels.length > 0 ? newModels : ['default'],
+                            models:
+                              newModels.length > 0 ? newModels : ['default'],
                           });
                         }}
                         className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1"
@@ -546,7 +548,9 @@ export function ModelSettings({
                             setShowAddModel(false);
                           }
                         }}
-                        placeholder={t.settings.enterModelName || '输入模型名称'}
+                        placeholder={
+                          t.settings.enterModelName || '输入模型名称'
+                        }
                         className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                         autoFocus
                       />
@@ -588,13 +592,17 @@ export function ModelSettings({
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {getSuggestedModels(selectedProvider)
-                          .filter((model) => !(selectedProvider.models || []).includes(model))
+                          .filter(
+                            (model) =>
+                              !(selectedProvider.models || []).includes(model)
+                          )
                           .slice(0, 4)
                           .map((model) => (
                             <button
                               key={model}
                               onClick={() => {
-                                const currentModels = selectedProvider.models || [];
+                                const currentModels =
+                                  selectedProvider.models || [];
                                 if (!currentModels.includes(model)) {
                                   handleProviderUpdate(selectedProvider.id, {
                                     models: [...currentModels, model],

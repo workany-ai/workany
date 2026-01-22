@@ -6,7 +6,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-
 import { API_BASE_URL } from '@/config';
 
 const AGENT_SERVER_URL = API_BASE_URL;

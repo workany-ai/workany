@@ -8,6 +8,7 @@ import {
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { useTheme } from '@/shared/providers/theme-provider';
+
 import type { SettingsTabProps } from '../types';
 
 export function GeneralSettings({

@@ -5,58 +5,10 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, appendFileSync, mkdirSync } from 'fs';
+import { existsSync } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
-import { homedir, platform, arch } from 'os';
-import { join, dirname } from 'path';
-
-// ============================================================================
-// File-based logging for debugging in distributed apps
-// Logs are written to ~/.workany/logs/claude-agent.log
-// ============================================================================
-const LOG_DIR = join(homedir(), '.workany', 'logs');
-const LOG_FILE = join(LOG_DIR, 'claude-agent.log');
-
-function ensureLogDir() {
-  try {
-    if (!existsSync(LOG_DIR)) {
-      mkdirSync(LOG_DIR, { recursive: true });
-    }
-  } catch {
-    // Ignore errors
-  }
-}
-
-function logToFile(level: string, message: string, data?: unknown) {
-  try {
-    ensureLogDir();
-    const timestamp = new Date().toISOString();
-    let logLine = `[${timestamp}] [${level}] ${message}`;
-    if (data !== undefined) {
-      logLine += ` ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
-    }
-    logLine += '\n';
-    appendFileSync(LOG_FILE, logLine);
-  } catch {
-    // Ignore logging errors
-  }
-}
-
-// Logger that writes to both console and file
-const logger = {
-  info: (message: string, data?: unknown) => {
-    console.log(message, data ?? '');
-    logToFile('INFO', message, data);
-  },
-  error: (message: string, data?: unknown) => {
-    console.error(message, data ?? '');
-    logToFile('ERROR', message, data);
-  },
-  warn: (message: string, data?: unknown) => {
-    console.warn(message, data ?? '');
-    logToFile('WARN', message, data);
-  },
-};
+import { arch, homedir, platform } from 'os';
+import { dirname, join } from 'path';
 import {
   createSdkMcpServer,
   Options,
@@ -74,7 +26,6 @@ import {
   PLANNING_INSTRUCTION,
   type SandboxOptions,
 } from '@/core/agent/base';
-import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 // Import plugin definition helpers
 import { CLAUDE_METADATA, defineAgentPlugin } from '@/core/agent/plugin';
 import type { AgentPlugin } from '@/core/agent/plugin';
@@ -93,6 +44,13 @@ import {
   DEFAULT_API_PORT,
   DEFAULT_WORK_DIR,
 } from '@/config/constants';
+import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
+// ============================================================================
+// Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
+// ============================================================================
+import { createLogger } from '@/shared/utils/logger';
+
+const logger = createLogger('ClaudeAgent');
 
 // Sandbox API URL - use the main API's sandbox endpoints
 // API port: 2620 for production, 2026 for development
@@ -180,9 +138,7 @@ function getTargetTriple(): string {
   const cpuArch = arch();
 
   if (os === 'darwin') {
-    return cpuArch === 'arm64'
-      ? 'aarch64-apple-darwin'
-      : 'x86_64-apple-darwin';
+    return cpuArch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
   } else if (os === 'linux') {
     return cpuArch === 'arm64'
       ? 'aarch64-unknown-linux-gnu'
@@ -205,7 +161,8 @@ function getTargetTriple(): string {
 function getSidecarClaudeCodePath(): string | undefined {
   const os = platform();
   const targetTriple = getTargetTriple();
-  const claudeName = os === 'win32' ? `claude-${targetTriple}.exe` : `claude-${targetTriple}`;
+  const claudeName =
+    os === 'win32' ? `claude-${targetTriple}.exe` : `claude-${targetTriple}`;
 
   // Get the directory where this process (workany-api) is running from
   // In a packaged app, this would be the MacOS directory or the app directory
@@ -241,10 +198,20 @@ function getSidecarClaudeCodePath(): string | undefined {
 
     // Check if claude-bundle directory exists alongside the launcher
     const bundleDir = join(launcherDir, 'claude-bundle');
-    const claudeCliPath = join(bundleDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+    const claudeCliPath = join(
+      bundleDir,
+      'node_modules',
+      '@anthropic-ai',
+      'claude-code',
+      'cli.js'
+    );
     const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
 
-    if (existsSync(bundleDir) && existsSync(claudeCliPath) && existsSync(nodeBinPath)) {
+    if (
+      existsSync(bundleDir) &&
+      existsSync(claudeCliPath) &&
+      existsSync(nodeBinPath)
+    ) {
       console.log(`[Claude] Found bundled Claude Code at: ${launcherPath}`);
       console.log(`[Claude] Bundle directory: ${bundleDir}`);
       console.log(`[Claude] Node.js binary: ${nodeBinPath}`);
@@ -267,7 +234,13 @@ function getSidecarClaudeCodePath(): string | undefined {
   for (const bundleDir of bundleLocations) {
     if (!existsSync(bundleDir)) continue;
 
-    const claudeCliPath = join(bundleDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+    const claudeCliPath = join(
+      bundleDir,
+      'node_modules',
+      '@anthropic-ai',
+      'claude-code',
+      'cli.js'
+    );
     const nodeBinPath = join(bundleDir, os === 'win32' ? 'node.exe' : 'node');
 
     if (existsSync(claudeCliPath) && existsSync(nodeBinPath)) {
@@ -275,7 +248,9 @@ function getSidecarClaudeCodePath(): string | undefined {
       // The launcher script should be in the parent directory
       const launcherPath = join(dirname(bundleDir), claudeName);
       if (existsSync(launcherPath)) {
-        console.log(`[Claude] Found bundled Claude Code launcher at: ${launcherPath}`);
+        console.log(
+          `[Claude] Found bundled Claude Code launcher at: ${launcherPath}`
+        );
         return launcherPath;
       }
 
@@ -475,7 +450,9 @@ function getClaudeCodePath(): string | undefined {
     return sidecarPath;
   }
 
-  console.warn('[Claude] Claude Code not found. Please install it or rebuild the app with --with-claude flag.');
+  console.warn(
+    '[Claude] Claude Code not found. Please install it or rebuild the app with --with-claude flag.'
+  );
   return undefined;
 }
 
@@ -492,8 +469,8 @@ async function ensureClaudeCode(): Promise<string | undefined> {
     if (isPackagedApp()) {
       console.log(
         '[Claude] Claude Code not found in packaged app. ' +
-        'The app was built without --with-claude flag. ' +
-        'Attempting automatic installation...'
+          'The app was built without --with-claude flag. ' +
+          'Attempting automatic installation...'
       );
     } else {
       console.log(
@@ -930,7 +907,12 @@ export class ClaudeAgent extends BaseAgent {
       }
       logger.info('[ClaudeAgent] Using custom API key from config');
     } else {
-      logger.info('[ClaudeAgent] Using API key from environment:', env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY ? 'present' : 'missing');
+      logger.info(
+        '[ClaudeAgent] Using API key from environment:',
+        env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY
+          ? 'present'
+          : 'missing'
+      );
     }
 
     // Set base URL for custom API endpoints (like OpenRouter)
@@ -938,7 +920,10 @@ export class ClaudeAgent extends BaseAgent {
       env.ANTHROPIC_BASE_URL = this.config.baseUrl;
       console.log('[ClaudeAgent] Using custom base URL:', this.config.baseUrl);
     } else {
-      console.log('[ClaudeAgent] Using base URL from environment:', env.ANTHROPIC_BASE_URL || 'default');
+      console.log(
+        '[ClaudeAgent] Using base URL from environment:',
+        env.ANTHROPIC_BASE_URL || 'default'
+      );
     }
 
     // Set model configuration
@@ -950,13 +935,23 @@ export class ClaudeAgent extends BaseAgent {
       env.ANTHROPIC_DEFAULT_OPUS_MODEL = this.config.model;
       console.log('[ClaudeAgent] Model configured:', this.config.model);
     } else {
-      console.log('[ClaudeAgent] Model to use:', env.ANTHROPIC_MODEL || 'default from SDK');
+      console.log(
+        '[ClaudeAgent] Model to use:',
+        env.ANTHROPIC_MODEL || 'default from SDK'
+      );
     }
 
     // Debug: Log final environment variables for API configuration
     logger.info('[ClaudeAgent] Final env config:', {
-      ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN ? `${env.ANTHROPIC_AUTH_TOKEN.slice(0, 10)}...` : 'not set',
-      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY === undefined ? '(deleted)' : (env.ANTHROPIC_API_KEY === '' ? '(empty)' : `${env.ANTHROPIC_API_KEY.slice(0, 10)}...`),
+      ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN
+        ? `${env.ANTHROPIC_AUTH_TOKEN.slice(0, 10)}...`
+        : 'not set',
+      ANTHROPIC_API_KEY:
+        env.ANTHROPIC_API_KEY === undefined
+          ? '(deleted)'
+          : env.ANTHROPIC_API_KEY === ''
+            ? '(empty)'
+            : `${env.ANTHROPIC_API_KEY.slice(0, 10)}...`,
       ANTHROPIC_BASE_URL: env.ANTHROPIC_BASE_URL || 'not set',
       ANTHROPIC_MODEL: env.ANTHROPIC_MODEL || 'not set',
     });
@@ -967,23 +962,29 @@ export class ClaudeAgent extends BaseAgent {
   /**
    * Format conversation history for inclusion in prompt
    */
-  private formatConversationHistory(conversation?: ConversationMessage[]): string {
+  private formatConversationHistory(
+    conversation?: ConversationMessage[]
+  ): string {
     if (!conversation || conversation.length === 0) {
       return '';
     }
 
-    const formattedMessages = conversation.map((msg) => {
-      const role = msg.role === 'user' ? 'User' : 'Assistant';
-      let messageContent = `${role}: ${msg.content}`;
+    const formattedMessages = conversation
+      .map((msg) => {
+        const role = msg.role === 'user' ? 'User' : 'Assistant';
+        let messageContent = `${role}: ${msg.content}`;
 
-      // Include image references if present
-      if (msg.imagePaths && msg.imagePaths.length > 0) {
-        const imageRefs = msg.imagePaths.map((p, i) => `  - Image ${i + 1}: ${p}`).join('\n');
-        messageContent += `\n[Attached images in this message:\n${imageRefs}\nUse Read tool to view these images if needed]`;
-      }
+        // Include image references if present
+        if (msg.imagePaths && msg.imagePaths.length > 0) {
+          const imageRefs = msg.imagePaths
+            .map((p, i) => `  - Image ${i + 1}: ${p}`)
+            .join('\n');
+          messageContent += `\n[Attached images in this message:\n${imageRefs}\nUse Read tool to view these images if needed]`;
+        }
 
-      return messageContent;
-    }).join('\n\n');
+        return messageContent;
+      })
+      .join('\n\n');
 
     return `## Previous Conversation Context
 The following is the conversation history. Use this context to understand and respond to the current message appropriately.
@@ -1013,7 +1014,9 @@ ${formattedMessages}
     logger.info(`[Claude ${session.id}] Working directory: ${sessionCwd}`);
     logger.info(`[Claude ${session.id}] Direct execution started`);
     if (options?.conversation && options.conversation.length > 0) {
-      logger.info(`[Claude ${session.id}] Conversation history: ${options.conversation.length} messages`);
+      logger.info(
+        `[Claude ${session.id}] Conversation history: ${options.conversation.length} messages`
+      );
     }
     // Log sandbox config for debugging
     logger.info(`[Claude ${session.id}] Sandbox config received:`, {
@@ -1023,9 +1026,13 @@ ${formattedMessages}
       sandboxProvider: options?.sandbox?.provider,
     });
     if (options?.sandbox?.enabled) {
-      logger.info(`[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`);
+      logger.info(
+        `[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`
+      );
     } else {
-      logger.warn(`[Claude ${session.id}] Sandbox mode NOT enabled - scripts will run locally`);
+      logger.warn(
+        `[Claude ${session.id}] Sandbox mode NOT enabled - scripts will run locally`
+      );
     }
 
     const sentTextHashes = new Set<string>();
@@ -1043,12 +1050,18 @@ ${formattedMessages}
     // Handle image attachments - save to disk and reference in prompt
     let imageInstruction = '';
     if (options?.images && options.images.length > 0) {
-      console.log(`[Claude ${session.id}] Processing ${options.images.length} image(s)`);
+      console.log(
+        `[Claude ${session.id}] Processing ${options.images.length} image(s)`
+      );
       options.images.forEach((img, i) => {
-        console.log(`[Claude ${session.id}] Image ${i}: mimeType=${img.mimeType}, dataLength=${img.data?.length || 0}`);
+        console.log(
+          `[Claude ${session.id}] Image ${i}: mimeType=${img.mimeType}, dataLength=${img.data?.length || 0}`
+        );
       });
       const imagePaths = await saveImagesToDisk(options.images, sessionCwd);
-      console.log(`[Claude ${session.id}] Saved ${imagePaths.length} images to disk: ${imagePaths.join(', ')}`);
+      console.log(
+        `[Claude ${session.id}] Saved ${imagePaths.length} images to disk: ${imagePaths.join(', ')}`
+      );
       if (imagePaths.length > 0) {
         imageInstruction = `
 ## 🖼️ MANDATORY IMAGE ANALYSIS - DO THIS FIRST
@@ -1079,13 +1092,21 @@ User's request (answer this AFTER reading the images):
     }
 
     // Format conversation history to include context from previous messages
-    const conversationContext = this.formatConversationHistory(options?.conversation);
+    const conversationContext = this.formatConversationHistory(
+      options?.conversation
+    );
 
     // Add workspace instruction to prompt so skills know where to save files
     // If images are attached, put image instruction FIRST (highest priority)
     const enhancedPrompt = imageInstruction
-      ? imageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
-      : getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + prompt;
+      ? imageInstruction +
+        prompt +
+        '\n\n' +
+        getWorkspaceInstruction(sessionCwd, sandboxOpts) +
+        conversationContext
+      : getWorkspaceInstruction(sessionCwd, sandboxOpts) +
+        conversationContext +
+        prompt;
 
     // Ensure Claude Code is installed
     const claudeCodePath = await ensureClaudeCode();
@@ -1108,8 +1129,8 @@ User's request (answer this AFTER reading the images):
     // MCP servers are loaded separately via loadMcpServers() which reads both directories
     // Skills are loaded by Claude Code internally regardless of settingSources
     const settingSources: ('user' | 'project')[] = this.config.baseUrl
-      ? ['project']  // Custom API: skip user settings to avoid API config override
-      : ['user', 'project'];  // Default API: use both for full compatibility
+      ? ['project'] // Custom API: skip user settings to avoid API config override
+      : ['user', 'project']; // Default API: use both for full compatibility
 
     const queryOptions: Options = {
       cwd: sessionCwd,
@@ -1125,7 +1146,10 @@ User's request (answer this AFTER reading the images):
     };
 
     // Initialize MCP servers with user-configured servers
-    const mcpServers: Record<string, McpServerConfig | ReturnType<typeof createSandboxMcpServer>> = {
+    const mcpServers: Record<
+      string,
+      McpServerConfig | ReturnType<typeof createSandboxMcpServer>
+    > = {
       ...userMcpServers,
     };
 
@@ -1143,9 +1167,13 @@ User's request (answer this AFTER reading the images):
     // Only add mcpServers to options if there are any configured
     if (Object.keys(mcpServers).length > 0) {
       queryOptions.mcpServers = mcpServers;
-      logger.info(`[Claude ${session.id}] MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`);
+      logger.info(
+        `[Claude ${session.id}] MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`
+      );
     } else {
-      logger.warn(`[Claude ${session.id}] No MCP servers configured (sandbox disabled or no user MCP servers)`);
+      logger.warn(
+        `[Claude ${session.id}] No MCP servers configured (sandbox disabled or no user MCP servers)`
+      );
     }
 
     // Log query start for debugging
@@ -1174,11 +1202,14 @@ User's request (answer this AFTER reading the images):
     } catch (error) {
       // Log detailed error information to file for debugging
       logger.error(`[Claude ${session.id}] Error occurred`, {
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        } : error,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
         config: {
           baseUrl: this.config.baseUrl || '(default)',
           apiKey: this.config.apiKey ? 'configured' : 'not set',
@@ -1193,7 +1224,11 @@ User's request (answer this AFTER reading the images):
         errorParts.push(error.message);
 
         // Add stderr if available (from subprocess errors)
-        const errWithStderr = error as Error & { stderr?: string; stdout?: string; code?: number };
+        const errWithStderr = error as Error & {
+          stderr?: string;
+          stdout?: string;
+          code?: number;
+        };
         if (errWithStderr.stderr) {
           errorParts.push(`\nStderr: ${errWithStderr.stderr}`);
         }
@@ -1218,7 +1253,7 @@ User's request (answer this AFTER reading the images):
       }
 
       // Add environment config info for debugging
-      const envDebug = `\n\nAPI Config:\n- BASE_URL: ${this.config.baseUrl || '(default)'}\n- API_KEY: ${this.config.apiKey ? 'configured' : 'not set'}\n- MODEL: ${this.config.model || '(default)'}\n\n日志文件: ~/.workany/logs/claude-agent.log`;
+      const envDebug = `\n\nAPI Config:\n- BASE_URL: ${this.config.baseUrl || '(default)'}\n- API_KEY: ${this.config.apiKey ? 'configured' : 'not set'}\n- MODEL: ${this.config.model || '(default)'}\n\n日志文件: ~/.workany/logs/workany.log`;
       errorParts.push(envDebug);
 
       yield {
@@ -1385,7 +1420,9 @@ If you need to create any files during planning, use this directory.
       sandboxProvider: options.sandbox?.provider,
     });
     if (options.sandbox?.enabled) {
-      logger.info(`[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`);
+      logger.info(
+        `[Claude ${session.id}] Sandbox mode enabled with provider: ${options.sandbox.provider}`
+      );
     } else {
       logger.warn(`[Claude ${session.id}] Sandbox NOT enabled for execution`);
     }
@@ -1446,7 +1483,10 @@ If you need to create any files during planning, use this directory.
     };
 
     // Initialize MCP servers with user-configured servers
-    const mcpServers: Record<string, McpServerConfig | ReturnType<typeof createSandboxMcpServer>> = {
+    const mcpServers: Record<
+      string,
+      McpServerConfig | ReturnType<typeof createSandboxMcpServer>
+    > = {
       ...userMcpServers,
     };
 
@@ -1464,7 +1504,9 @@ If you need to create any files during planning, use this directory.
     // Only add mcpServers to options if there are any configured
     if (Object.keys(mcpServers).length > 0) {
       queryOptions.mcpServers = mcpServers;
-      logger.info(`[Claude ${session.id}] Execute MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`);
+      logger.info(
+        `[Claude ${session.id}] Execute MCP servers loaded: ${Object.keys(mcpServers).join(', ')}`
+      );
     } else {
       logger.warn(`[Claude ${session.id}] Execute: No MCP servers configured`);
     }

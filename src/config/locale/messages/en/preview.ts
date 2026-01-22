@@ -20,7 +20,8 @@ export default {
   openInNewTab: 'Open in new tab',
   openInApp: 'Open in {app}',
   openInEditor: 'Open in Editor',
-  documentHint: 'Document files can be opened with Microsoft Word or other compatible applications.',
+  documentHint:
+    'Document files can be opened with Microsoft Word or other compatible applications.',
   fileTooLarge: 'File too large to preview',
   openInSystemApp: 'Open in System App',
   fileSize: 'File size',
@@ -32,6 +33,7 @@ export default {
   previewError: 'Preview Error',
   retry: 'Retry',
   startPreview: 'Start Preview',
-  livePreviewHint: 'Start a live preview server to see changes in real-time with HMR',
+  livePreviewHint:
+    'Start a live preview server to see changes in real-time with HMR',
   stopServer: 'Stop server',
 };

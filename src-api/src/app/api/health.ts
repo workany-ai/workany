@@ -1,6 +1,6 @@
-import { Hono } from 'hono';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { Hono } from 'hono';
 
 const execAsync = promisify(exec);
 
@@ -60,7 +60,8 @@ const DEPENDENCIES: DependencyInfo[] = [
       brew: 'brew install claude-code',
       manual: 'Visit https://docs.anthropic.com/claude-code/install',
     },
-    installUrl: 'https://docs.anthropic.com/en/docs/claude-code/getting-started',
+    installUrl:
+      'https://docs.anthropic.com/en/docs/claude-code/getting-started',
   },
   {
     id: 'codex',
@@ -94,7 +95,8 @@ const DEPENDENCIES: DependencyInfo[] = [
     description: 'Python runtime for executing scripts',
     required: false,
     checkCommand: 'which python3 || which python',
-    versionCommand: 'python3 --version 2>/dev/null || python --version 2>/dev/null',
+    versionCommand:
+      'python3 --version 2>/dev/null || python --version 2>/dev/null',
     installCommands: {
       brew: 'brew install python',
       manual: 'Visit https://python.org',
@@ -177,7 +179,9 @@ async function getVersion(command: string): Promise<string | undefined> {
   }
 }
 
-async function runInstallCommand(command: string): Promise<{ success: boolean; output: string; error?: string }> {
+async function runInstallCommand(
+  command: string
+): Promise<{ success: boolean; output: string; error?: string }> {
   try {
     const { stdout, stderr } = await execAsync(command, {
       timeout: 120000, // 2 minutes timeout
@@ -303,11 +307,14 @@ health.post('/dependencies/:id/install', async (c) => {
   }
 
   if (!command) {
-    return c.json({
-      success: false,
-      error: `No ${method} install command available for ${dep.name}`,
-      installUrl: dep.installUrl,
-    }, 400);
+    return c.json(
+      {
+        success: false,
+        error: `No ${method} install command available for ${dep.name}`,
+        installUrl: dep.installUrl,
+      },
+      400
+    );
   }
 
   console.log(`[Health] Installing ${dep.name} with command: ${command}`);
@@ -332,13 +339,16 @@ health.post('/dependencies/:id/install', async (c) => {
         : `Installation completed but ${dep.name} not found in PATH`,
     });
   } else {
-    return c.json({
-      success: false,
-      error: result.error,
-      output: result.output,
-      installUrl: dep.installUrl,
-      message: `Failed to install ${dep.name}. Please install manually.`,
-    }, 500);
+    return c.json(
+      {
+        success: false,
+        error: result.error,
+        output: result.output,
+        installUrl: dep.installUrl,
+        message: `Failed to install ${dep.name}. Please install manually.`,
+      },
+      500
+    );
   }
 });
 

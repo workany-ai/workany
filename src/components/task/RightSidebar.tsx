@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import type { AgentMessage } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import type { Artifact, ArtifactType } from '@/components/artifacts';
-import { API_BASE_URL } from '@/config';
-
-const API_URL = API_BASE_URL;
 import {
   ChevronDown,
   ChevronRight,
@@ -37,6 +34,10 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+
+import type { Artifact, ArtifactType } from '@/components/artifacts';
+
+const API_URL = API_BASE_URL;
 
 // Re-export types for backwards compatibility
 export type { Artifact, ArtifactType };
@@ -442,7 +443,10 @@ const DEFAULT_VISIBLE_COUNT = 5;
 const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024;
 
 // Check file size via API
-async function checkFileSize(filePath: string, signal?: AbortSignal): Promise<number | null> {
+async function checkFileSize(
+  filePath: string,
+  signal?: AbortSignal
+): Promise<number | null> {
   try {
     const response = await fetch(`${API_URL}/files/stat`, {
       method: 'POST',
@@ -468,7 +472,10 @@ async function checkFileSize(filePath: string, signal?: AbortSignal): Promise<nu
 }
 
 // Read file content via API with optional abort signal
-async function readFileContent(filePath: string, signal?: AbortSignal): Promise<string | null> {
+async function readFileContent(
+  filePath: string,
+  signal?: AbortSignal
+): Promise<string | null> {
   try {
     const response = await fetch(`${API_URL}/files/read`, {
       method: 'POST',
@@ -615,7 +622,11 @@ function FileTreeItem({
       >
         <span className="text-muted-foreground/50 flex size-4 shrink-0 items-center justify-center">
           {file.isDir ? (
-            isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />
+            isExpanded ? (
+              <ChevronDown className="size-3" />
+            ) : (
+              <ChevronRight className="size-3" />
+            )
           ) : null}
         </span>
         {isLoading ? (
@@ -641,7 +652,6 @@ function FileTreeItem({
     </div>
   );
 }
-
 
 // Empty State Component
 function EmptyState({
@@ -733,7 +743,10 @@ function extractUsedSkillNames(messages: AgentMessage[]): Set<string> {
 }
 
 // Extract external folders from messages (folders outside workingDir that were accessed)
-function extractExternalFolders(messages: AgentMessage[], workingDir?: string): string[] {
+function extractExternalFolders(
+  messages: AgentMessage[],
+  workingDir?: string
+): string[] {
   const foldersSet = new Set<string>();
 
   // Helper to add folder if it's external
@@ -754,17 +767,37 @@ function extractExternalFolders(messages: AgentMessage[], workingDir?: string): 
   // Helper to extract paths from Bash command
   const extractPathsFromCommand = (command: string) => {
     // Only extract from file operation commands
-    const fileOpCommands = ['rm', 'mv', 'cp', 'mkdir', 'touch', 'cat', 'ls', 'find', 'open'];
+    const fileOpCommands = [
+      'rm',
+      'mv',
+      'cp',
+      'mkdir',
+      'touch',
+      'cat',
+      'ls',
+      'find',
+      'open',
+    ];
     const commandLower = command.toLowerCase().trim();
 
     // Check if command starts with a file operation
-    const isFileOp = fileOpCommands.some(op =>
-      commandLower.startsWith(op + ' ') || commandLower.includes(' ' + op + ' ')
+    const isFileOp = fileOpCommands.some(
+      (op) =>
+        commandLower.startsWith(op + ' ') ||
+        commandLower.includes(' ' + op + ' ')
     );
     if (!isFileOp) return;
 
     // Folders to ignore (system/hidden folders)
-    const ignoredFolders = ['Library', '.cache', '.npm', '.config', 'node_modules', '.git', '.Trash'];
+    const ignoredFolders = [
+      'Library',
+      '.cache',
+      '.npm',
+      '.config',
+      'node_modules',
+      '.git',
+      '.Trash',
+    ];
 
     // Match absolute paths (starting with /) or home paths (starting with ~)
     const pathRegex = /(?:^|[\s"'=])((?:~|\/)[^\s"'<>|&;]+)/g;
@@ -776,7 +809,7 @@ function extractExternalFolders(messages: AgentMessage[], workingDir?: string): 
 
       // Skip ignored folders
       const pathParts = path.split('/');
-      if (pathParts.some(part => ignoredFolders.includes(part))) {
+      if (pathParts.some((part) => ignoredFolders.includes(part))) {
         continue;
       }
 
@@ -959,7 +992,9 @@ export function RightSidebar({
   const [showAllTools, setShowAllTools] = useState(false);
   const [workingFiles, setWorkingFiles] = useState<WorkingFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [skillsDirs, setSkillsDirs] = useState<{ name: string; files: WorkingFile[] }[]>([]);
+  const [skillsDirs, setSkillsDirs] = useState<
+    { name: string; files: WorkingFile[] }[]
+  >([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
   const [outputExpanded, setOutputExpanded] = useState(true);
   const [editedExpanded, setEditedExpanded] = useState(true);
@@ -990,7 +1025,9 @@ export function RightSidebar({
         return files.map((file) => ({
           ...file,
           isExpanded: false, // Default all folders to collapsed
-          children: file.children ? addExpandedFlag(file.children, depth + 1) : undefined,
+          children: file.children
+            ? addExpandedFlag(file.children, depth + 1)
+            : undefined,
         }));
       }
 
@@ -1117,15 +1154,18 @@ export function RightSidebar({
   };
 
   return (
-    <div className="bg-background flex h-full flex-col overflow-y-auto overflow-x-hidden">
+    <div className="bg-background flex h-full flex-col overflow-x-hidden overflow-y-auto">
       {/* 1. Workspace Section */}
-      <CollapsibleSection title={t.task.workspace || 'Workspace'} defaultExpanded={true}>
+      <CollapsibleSection
+        title={t.task.workspace || 'Workspace'}
+        defaultExpanded={true}
+      >
         {/* Output folder subsection */}
-        <div className="mb-3 mt-1">
-          <div className="flex items-center gap-1 mb-1">
+        <div className="mt-1 mb-3">
+          <div className="mb-1 flex items-center gap-1">
             <button
               onClick={() => setOutputExpanded(!outputExpanded)}
-              className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               {outputExpanded ? (
                 <ChevronDown className="size-3" />
@@ -1139,7 +1179,7 @@ export function RightSidebar({
             {workingDir && (
               <button
                 onClick={() => handleOpenFolder(workingDir)}
-                className="ml-auto text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                className="text-muted-foreground hover:text-foreground ml-auto p-0.5 transition-colors"
                 title={t.task.openInFinder}
               >
                 <ExternalLink className="size-3" />
@@ -1178,10 +1218,10 @@ export function RightSidebar({
         {/* Edited folders subsection */}
         {externalFolders.length > 0 && (
           <div>
-            <div className="flex items-center gap-1 mb-1">
+            <div className="mb-1 flex items-center gap-1">
               <button
                 onClick={() => setEditedExpanded(!editedExpanded)}
-                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
               >
                 {editedExpanded ? (
                   <ChevronDown className="size-3" />
@@ -1220,10 +1260,12 @@ export function RightSidebar({
           <EmptyState icon={Package} description={t.task.noArtifacts} />
         ) : (
           <>
-            <div className={cn(
-              'space-y-1',
-              showAllArtifacts && 'max-h-[300px] overflow-y-auto'
-            )}>
+            <div
+              className={cn(
+                'space-y-1',
+                showAllArtifacts && 'max-h-[300px] overflow-y-auto'
+              )}
+            >
               {visibleArtifacts.map((artifact) => {
                 const IconComponent = getFileIcon(artifact.type);
                 const isSelected = selectedArtifact?.id === artifact.id;
@@ -1234,13 +1276,25 @@ export function RightSidebar({
                     onClick={() => onSelectArtifact(artifact)}
                     className={cn(
                       'flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors',
-                      isSelected
-                        ? 'bg-accent/60'
-                        : 'hover:bg-accent/30'
+                      isSelected ? 'bg-accent/60' : 'hover:bg-accent/30'
                     )}
                   >
-                    <IconComponent className={cn('size-3.5 shrink-0', isSelected ? 'text-foreground/70' : 'text-muted-foreground/60')} />
-                    <span className={cn('truncate text-sm', isSelected ? 'text-foreground' : 'text-foreground/80')}>{artifact.name}</span>
+                    <IconComponent
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        isSelected
+                          ? 'text-foreground/70'
+                          : 'text-muted-foreground/60'
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'truncate text-sm',
+                        isSelected ? 'text-foreground' : 'text-foreground/80'
+                      )}
+                    >
+                      {artifact.name}
+                    </span>
                   </button>
                 );
               })}
@@ -1265,10 +1319,12 @@ export function RightSidebar({
           <EmptyState icon={Wrench} description={t.task.noTools} />
         ) : (
           <>
-            <div className={cn(
-              'space-y-1',
-              showAllTools && 'max-h-[300px] overflow-y-auto'
-            )}>
+            <div
+              className={cn(
+                'space-y-1',
+                showAllTools && 'max-h-[300px] overflow-y-auto'
+              )}
+            >
               {visibleTools.map((tool) => {
                 const IconComponent = getToolIcon(tool.name);
                 return (
@@ -1284,7 +1340,9 @@ export function RightSidebar({
                     <IconComponent
                       className={cn(
                         'size-3.5 shrink-0',
-                        tool.isError ? 'text-red-400' : 'text-muted-foreground/60'
+                        tool.isError
+                          ? 'text-red-400'
+                          : 'text-muted-foreground/60'
                       )}
                     />
                     <span className="text-foreground/80 truncate text-sm">
@@ -1331,7 +1389,9 @@ export function RightSidebar({
                 className="flex items-center gap-2 rounded-md px-2 py-1.5"
               >
                 <Sparkles className="text-muted-foreground/60 size-3.5 shrink-0" />
-                <span className="text-foreground/80 truncate text-sm">{skillName}</span>
+                <span className="text-foreground/80 truncate text-sm">
+                  {skillName}
+                </span>
               </div>
             ))}
           </div>

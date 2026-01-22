@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { cn } from '@/shared/lib/utils';
 import { readFile, stat } from '@tauri-apps/plugin-fs';
+import JSZip from 'jszip';
 import { ExternalLink, FileSpreadsheet, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import JSZip from 'jszip';
-import { cn } from '@/shared/lib/utils';
-import type { ExcelSheet, PreviewComponentProps } from './types';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { ExcelSheet, PreviewComponentProps } from './types';
 import { isRemoteUrl, MAX_PREVIEW_SIZE, openFileExternal } from './utils';
 
 export function ExcelPreview({ artifact }: PreviewComponentProps) {
@@ -264,8 +265,8 @@ export function ExcelPreview({ artifact }: PreviewComponentProps) {
       <div className="border-border bg-muted/30 text-muted-foreground shrink-0 border-t px-3 py-1.5 text-xs">
         {currentSheet && (
           <span>
-            {currentSheet.data.length} rows × {currentSheet.data[0]?.length || 0}{' '}
-            columns
+            {currentSheet.data.length} rows ×{' '}
+            {currentSheet.data[0]?.length || 0} columns
           </span>
         )}
       </div>

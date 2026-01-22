@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { readFile, stat } from '@tauri-apps/plugin-fs';
 import { FileText, Loader2 } from 'lucide-react';
-import type { PreviewComponentProps } from './types';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { PreviewComponentProps } from './types';
 import { isRemoteUrl, MAX_PREVIEW_SIZE, openFileExternal } from './utils';
 
 export function PdfPreview({ artifact }: PreviewComponentProps) {

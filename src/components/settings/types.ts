@@ -1,4 +1,7 @@
-import type { Settings as SettingsType, AIProvider } from '@/shared/db/settings';
+import type {
+  AIProvider,
+  Settings as SettingsType,
+} from '@/shared/db/settings';
 
 export type { SettingsType, AIProvider };
 

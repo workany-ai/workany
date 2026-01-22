@@ -7,9 +7,13 @@ import {
   updateTask,
   type Task,
 } from '@/shared/db';
+import type { MessageAttachment } from '@/shared/hooks/useAgent';
+import {
+  subscribeToBackgroundTasks,
+  type BackgroundTask,
+} from '@/shared/lib/background-tasks';
 import { generateSessionId } from '@/shared/lib/session';
 import { useLanguage } from '@/shared/providers/language-provider';
-import type { MessageAttachment } from '@/shared/hooks/useAgent';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
@@ -25,7 +29,14 @@ export function HomePage() {
 function HomeContent() {
   const { t } = useLanguage();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const navigate = useNavigate();
+
+  // Subscribe to background tasks
+  useEffect(() => {
+    const unsubscribe = subscribeToBackgroundTasks(setBackgroundTasks);
+    return unsubscribe;
+  }, []);
 
   // Load tasks for sidebar
   useEffect(() => {
@@ -62,7 +73,10 @@ function HomeContent() {
     }
   };
 
-  const handleSubmit = async (text: string, attachments?: MessageAttachment[]) => {
+  const handleSubmit = async (
+    text: string,
+    attachments?: MessageAttachment[]
+  ) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
     const prompt = text.trim();
@@ -78,7 +92,10 @@ function HomeContent() {
 
     // Generate task ID and navigate with attachments
     const taskId = Date.now().toString();
-    console.log('[Home] Navigating with attachments:', attachments?.length || 0);
+    console.log(
+      '[Home] Navigating with attachments:',
+      attachments?.length || 0
+    );
 
     navigate(`/task/${taskId}`, {
       state: {
@@ -97,6 +114,9 @@ function HomeContent() {
         tasks={tasks}
         onDeleteTask={handleDeleteTask}
         onToggleFavorite={handleToggleFavorite}
+        runningTaskIds={backgroundTasks
+          .filter((t) => t.isRunning)
+          .map((t) => t.taskId)}
       />
 
       {/* Main Content */}
@@ -115,6 +135,7 @@ function HomeContent() {
               placeholder={t.home.inputPlaceholder}
               onSubmit={handleSubmit}
               className="w-full"
+              autoFocus
             />
           </div>
         </div>

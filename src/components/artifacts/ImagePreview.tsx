@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { readFile, stat } from '@tauri-apps/plugin-fs';
 import { Eye, FileText, Loader2 } from 'lucide-react';
-import type { PreviewComponentProps } from './types';
+
 import { FileTooLarge } from './FileTooLarge';
+import type { PreviewComponentProps } from './types';
 import {
   getImageMimeType,
   isRemoteUrl,

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import { Camera, User } from 'lucide-react';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { Camera, User } from 'lucide-react';
+
 import type { SettingsTabProps } from '../types';
 
 export function AccountSettings({

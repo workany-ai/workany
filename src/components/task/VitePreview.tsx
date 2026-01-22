@@ -6,10 +6,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import type { PreviewStatus } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   AlertCircle,
   ExternalLink,

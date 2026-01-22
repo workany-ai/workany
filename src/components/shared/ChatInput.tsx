@@ -6,7 +6,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MessageAttachment } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
+import { useLanguage } from '@/shared/providers/language-provider';
 import {
   ArrowUp,
   FileText,
@@ -16,14 +18,13 @@ import {
   Square,
   X,
 } from 'lucide-react';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { MessageAttachment } from '@/shared/hooks/useAgent';
-import { useLanguage } from '@/shared/providers/language-provider';
 
 // Attachment type for files and images
 export interface Attachment {
@@ -48,6 +49,8 @@ export interface ChatInputProps {
   className?: string;
   /** Whether to disable the input */
   disabled?: boolean;
+  /** Auto focus on mount */
+  autoFocus?: boolean;
 }
 
 // Generate unique ID for attachments
@@ -62,7 +65,9 @@ const isImageFile = (file: File) => {
   }
   // Fallback: check file extension for common image formats
   const ext = file.name.split('.').pop()?.toLowerCase();
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext || '');
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(
+    ext || ''
+  );
 };
 
 // Create preview for image files with error handling
@@ -90,6 +95,7 @@ export function ChatInput({
   variant = 'reply',
   className,
   disabled = false,
+  autoFocus = false,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -97,40 +103,68 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
+  const prevIsRunningRef = useRef(isRunning);
+
+  // Auto focus on mount if autoFocus is true
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [autoFocus]);
+
+  // Auto focus when agent stops running (reply completed)
+  useEffect(() => {
+    if (prevIsRunningRef.current && !isRunning && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+    prevIsRunningRef.current = isRunning;
+  }, [isRunning]);
 
   // Add files to attachments
   // forceImage: when true, treat all files as images (e.g., from clipboard paste)
-  const addFiles = useCallback(async (files: FileList | File[], forceImage = false) => {
-    const fileArray = Array.from(files);
-    const newAttachments: Attachment[] = [];
+  const addFiles = useCallback(
+    async (files: FileList | File[], forceImage = false) => {
+      const fileArray = Array.from(files);
+      const newAttachments: Attachment[] = [];
 
-    console.log('[ChatInput] addFiles called with', fileArray.length, 'files, forceImage:', forceImage);
+      console.log(
+        '[ChatInput] addFiles called with',
+        fileArray.length,
+        'files, forceImage:',
+        forceImage
+      );
 
-    for (const file of fileArray) {
-      const isImage = forceImage || isImageFile(file);
-      console.log(`[ChatInput] Processing file: name=${file.name}, type=${file.type}, size=${file.size}, isImage=${isImage}`);
+      for (const file of fileArray) {
+        const isImage = forceImage || isImageFile(file);
+        console.log(
+          `[ChatInput] Processing file: name=${file.name}, type=${file.type}, size=${file.size}, isImage=${isImage}`
+        );
 
-      const attachment: Attachment = {
-        id: generateId(),
-        file,
-        type: isImage ? 'image' : 'file',
-      };
+        const attachment: Attachment = {
+          id: generateId(),
+          file,
+          type: isImage ? 'image' : 'file',
+        };
 
-      if (isImage) {
-        try {
-          attachment.preview = await createImagePreview(file);
-          console.log(`[ChatInput] Created preview for ${file.name}, previewLength=${attachment.preview?.length || 0}`);
-        } catch (error) {
-          console.error('[ChatInput] Failed to create image preview:', error);
-          // Keep as image type but with empty preview - it will show file icon
+        if (isImage) {
+          try {
+            attachment.preview = await createImagePreview(file);
+            console.log(
+              `[ChatInput] Created preview for ${file.name}, previewLength=${attachment.preview?.length || 0}`
+            );
+          } catch (error) {
+            console.error('[ChatInput] Failed to create image preview:', error);
+            // Keep as image type but with empty preview - it will show file icon
+          }
         }
+
+        newAttachments.push(attachment);
       }
 
-      newAttachments.push(attachment);
-    }
-
-    setAttachments((prev) => [...prev, ...newAttachments]);
-  }, []);
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    },
+    []
+  );
 
   // Remove attachment
   const removeAttachment = useCallback((id: string) => {
@@ -185,7 +219,9 @@ export function ChatInput({
         if (a.type === 'image') {
           const hasPreview = a.preview && a.preview.length > 0;
           if (!hasPreview) {
-            console.warn(`[ChatInput] Skipping image ${a.file.name}: no preview data`);
+            console.warn(
+              `[ChatInput] Skipping image ${a.file.name}: no preview data`
+            );
           }
           return hasPreview;
         }
@@ -211,7 +247,9 @@ export function ChatInput({
     // Debug logging
     console.log('[ChatInput] Converting attachments:', result.length);
     result.forEach((a, i) => {
-      console.log(`[ChatInput] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}, mimeType=${a.mimeType}`);
+      console.log(
+        `[ChatInput] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}, mimeType=${a.mimeType}`
+      );
     });
 
     return result.length > 0 ? result : undefined;
@@ -259,12 +297,16 @@ export function ChatInput({
     // Calculate the new height
     const maxHeight = isHome ? 200 : 120; // Max height in pixels
     const minHeight = isHome ? 56 : 20; // Min height in pixels (home: taller default)
-    const newHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+    const newHeight = Math.min(
+      Math.max(textarea.scrollHeight, minHeight),
+      maxHeight
+    );
 
     textarea.style.height = `${newHeight}px`;
 
     // Enable/disable overflow based on content height
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    textarea.style.overflowY =
+      textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [value, isHome]);
 
   return (
@@ -312,7 +354,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={() => removeAttachment(attachment.id)}
-                className="bg-foreground text-background absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                className="bg-foreground text-background absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -345,7 +387,12 @@ export function ChatInput({
       />
 
       {/* Bottom Actions */}
-      <div className={cn('flex items-center justify-between', isHome ? 'mt-3' : 'mt-2')}>
+      <div
+        className={cn(
+          'flex items-center justify-between',
+          isHome ? 'mt-3' : 'mt-2'
+        )}
+      >
         {/* Add Button with Dropdown */}
         <div className="flex items-center gap-1">
           <DropdownMenu modal={false}>
@@ -360,7 +407,11 @@ export function ChatInput({
             >
               <Plus className={isHome ? 'size-4' : 'size-4'} />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={8} className="z-50 w-56">
+            <DropdownMenuContent
+              align="start"
+              sideOffset={8}
+              className="z-50 w-56"
+            >
               <DropdownMenuItem
                 onSelect={openFilePicker}
                 className="cursor-pointer gap-3 py-2.5"
