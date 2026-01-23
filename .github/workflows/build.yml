@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       platform:
@@ -212,8 +210,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    # Auto release on: push to main, push tag, or manual trigger with release=true
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release == 'true'
+    # Auto release on: push to main or manual trigger with release=true
+    if: github.ref == 'refs/heads/main' || github.event.inputs.release == 'true'
 
     permissions:
       contents: write
@@ -225,7 +223,16 @@ jobs:
           path: artifacts
 
       - name: Display structure of downloaded files
-        run: ls -R artifacts
+        run: |
+          ls -R artifacts
+          echo "---"
+          find artifacts -type f -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" | head -20
+
+      - name: Flatten artifacts for release
+        run: |
+          mkdir -p release-files
+          find artifacts -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" \) -exec cp {} release-files/ \;
+          ls -la release-files/
 
       - name: Checkout for version
         uses: actions/checkout@v4
@@ -243,11 +250,6 @@ jobs:
           generate_release_notes: true
           tag_name: v${{ steps.version.outputs.version }}
           name: WorkAny v${{ steps.version.outputs.version }}
-          files: |
-            artifacts/**/*.deb
-            artifacts/**/*.rpm
-            artifacts/**/*.msi
-            artifacts/**/*.exe
-            artifacts/**/*.dmg
+          files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

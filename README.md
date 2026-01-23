@@ -14,6 +14,8 @@ WorkAny is a desktop AI agent application that executes tasks through natural la
 
 [302.AI](https://302.ai/?utm_source=workany_github) is a pay-as-you-go AI application platform that offers the most comprehensive AI APIs and online applications available.
 
+> If you want to sponsor this project, please contact us via email: [hello@workany.ai](mailto:hello@workany.ai)
+
 ## Previews
 
 - Organize files
@@ -107,6 +109,15 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## Acknowledgments
 
 Some components are built with [ShipAny.ai](https://shipany.ai) - AI-powered full-stack development platform.
+
+## Community
+
+- [Join Discord](https://discord.gg/rDSmZ8HS39)
+- [Follow on X](https://x.com/workanyai)
+
+## ⭐️ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=workany-ai/workany&type=Timeline)](https://star-history.com/#workany-ai/workany&Timeline)
 
 ## License
 
