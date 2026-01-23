@@ -35,7 +35,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64
           - platform: linux
             os: ubuntu-22.04
             rust_target: x86_64-unknown-linux-gnu
@@ -43,7 +42,6 @@ jobs:
             bun_target: bun-linux-x64
             name: linux-x86_64
 
-          # Windows x86_64
           - platform: windows
             os: windows-latest
             rust_target: x86_64-pc-windows-msvc
@@ -51,7 +49,6 @@ jobs:
             bun_target: bun-windows-x64
             name: windows-x86_64
 
-          # macOS Intel
           - platform: macos-intel
             os: macos-latest
             rust_target: x86_64-apple-darwin
@@ -59,7 +56,6 @@ jobs:
             bun_target: bun-darwin-x64
             name: macos-intel
 
-          # macOS Apple Silicon
           - platform: macos-arm64
             os: macos-latest
             rust_target: aarch64-apple-darwin
@@ -69,43 +65,55 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    # Skip this job if platform doesn't match the input (for workflow_dispatch)
-    if: |
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.platform == 'all' ||
-      github.event.inputs.platform == matrix.platform
-
     steps:
+      - name: Check platform filter
+        id: check
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.platform }}" != "all" && "${{ github.event.inputs.platform }}" != "${{ matrix.platform }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Skipping ${{ matrix.platform }} (selected: ${{ github.event.inputs.platform }})"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Building ${{ matrix.platform }}"
+          fi
+
       - name: Checkout repository
+        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Install dependencies (Linux)
-        if: matrix.platform == 'linux'
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Node.js
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Setup pnpm
+        if: steps.check.outputs.skip != 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Setup Bun
+        if: steps.check.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Get pnpm store directory
+        if: steps.check.outputs.skip != 'true'
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
+        if: steps.check.outputs.skip != 'true'
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
@@ -114,21 +122,24 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Setup Rust
+        if: steps.check.outputs.skip != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust_target }}
 
       - name: Setup Rust cache
+        if: steps.check.outputs.skip != 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
           shared-key: ${{ matrix.name }}
 
       - name: Install frontend dependencies
+        if: steps.check.outputs.skip != 'true'
         run: pnpm install
 
       - name: Build API sidecar (Unix)
-        if: matrix.platform != 'windows'
+        if: steps.check.outputs.skip != 'true' && matrix.platform != 'windows'
         shell: bash
         run: |
           cd src-api
@@ -136,7 +147,7 @@ jobs:
           bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}
 
       - name: Build API sidecar (Windows)
-        if: matrix.platform == 'windows'
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
         shell: bash
         run: |
           cd src-api
@@ -144,21 +155,22 @@ jobs:
           bun build src/index.ts --compile --target=${{ matrix.bun_target }} --outfile dist/workany-api-${{ matrix.rust_target }}.exe
 
       - name: Build Tauri app
+        if: steps.check.outputs.skip != 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing and notarization (only when secrets are configured)
-          APPLE_CERTIFICATE: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
+          # macOS signing and notarization
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target ${{ matrix.tauri_target }}
 
       - name: Upload artifacts (Linux)
-        if: matrix.platform == 'linux'
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
           name: WorkAny-${{ matrix.name }}
@@ -169,7 +181,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload artifacts (Windows)
-        if: matrix.platform == 'windows'
+        if: steps.check.outputs.skip != 'true' && matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: WorkAny-${{ matrix.name }}
@@ -179,7 +191,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload artifacts (macOS)
-        if: startsWith(matrix.platform, 'macos')
+        if: steps.check.outputs.skip != 'true' && startsWith(matrix.platform, 'macos')
         uses: actions/upload-artifact@v4
         with:
           name: WorkAny-${{ matrix.name }}
