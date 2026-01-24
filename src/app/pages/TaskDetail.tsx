@@ -878,28 +878,31 @@ function TaskDetailContent() {
           )}
 
           {/* Divider between preview/chat and sidebar */}
-          {isRightSidebarVisible && (
-            <div className="bg-border/50 w-px shrink-0" />
-          )}
+          <div
+            className={cn(
+              'bg-border/50 shrink-0 transition-all duration-300',
+              isRightSidebarVisible ? 'w-px' : 'w-0'
+            )}
+          />
 
           {/* Right Panel - Progress, Artifacts, Context (fixed width) */}
-          {isRightSidebarVisible && (
-            <div
-              className="bg-background flex shrink-0 flex-col overflow-hidden rounded-r-2xl"
-              style={{ width: '280px', minWidth: '240px', maxWidth: '320px' }}
-            >
-              <RightSidebar
-                messages={messages}
-                isRunning={isRunning}
-                artifacts={artifacts}
-                selectedArtifact={selectedArtifact}
-                onSelectArtifact={handleSelectArtifact}
-                workingDir={workingDir}
-                sessionFolder={sessionFolder || undefined}
-                filesVersion={filesVersion}
-              />
-            </div>
-          )}
+          <div
+            className={cn(
+              'bg-background flex shrink-0 flex-col overflow-hidden rounded-r-2xl transition-all duration-300',
+              isRightSidebarVisible ? 'w-[280px]' : 'w-0'
+            )}
+          >
+            <RightSidebar
+              messages={messages}
+              isRunning={isRunning}
+              artifacts={artifacts}
+              selectedArtifact={selectedArtifact}
+              onSelectArtifact={handleSelectArtifact}
+              workingDir={workingDir}
+              sessionFolder={sessionFolder || undefined}
+              filesVersion={filesVersion}
+            />
+          </div>
         </div>
       </div>
     </ToolSelectionContext.Provider>
