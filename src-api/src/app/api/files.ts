@@ -197,10 +197,10 @@ files.post('/readdir', async (c) => {
     try {
       const stat = await fs.stat(dirPath);
       if (!stat.isDirectory()) {
-        return c.json({ error: 'Path is not a directory' }, 400);
+        return c.json({ success: false, error: 'Path is not a directory', files: [] }, 400);
       }
     } catch {
-      return c.json({ error: 'Directory does not exist', files: [] }, 200);
+      return c.json({ success: false, error: 'Directory does not exist', files: [] }, 200);
     }
 
     const files = await readDirRecursive(dirPath, 0, maxDepth);

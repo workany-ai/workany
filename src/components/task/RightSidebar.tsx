@@ -1011,6 +1011,7 @@ export function RightSidebar({
   // Read directory via API (uses Node.js fs on backend)
   async function readDirViaApi(dirPath: string): Promise<WorkingFile[]> {
     try {
+      console.log('[RightSidebar] readDirViaApi called with:', dirPath);
       const response = await fetch(`${API_URL}/files/readdir`, {
         method: 'POST',
         headers: {
@@ -1019,14 +1020,23 @@ export function RightSidebar({
         body: JSON.stringify({ path: dirPath, maxDepth: 3 }),
       });
 
+      console.log('[RightSidebar] readDirViaApi response status:', response.status);
+
       if (!response.ok) {
+        console.error('[RightSidebar] readDirViaApi response not ok');
         return [];
       }
 
       const data = await response.json();
+      console.log('[RightSidebar] readDirViaApi data:', data);
 
-      if (!data.success || !data.files) {
+      if (!data.files || !Array.isArray(data.files)) {
+        console.error('[RightSidebar] readDirViaApi: no files array in response');
         return [];
+      }
+
+      if (data.error) {
+        console.warn('[RightSidebar] readDirViaApi: API returned error:', data.error);
       }
 
       // Convert API response to WorkingFile format with isExpanded
@@ -1060,7 +1070,9 @@ export function RightSidebar({
     let cancelled = false;
 
     async function loadWorkingFiles() {
+      console.log('[RightSidebar] loadWorkingFiles called with workingDir:', workingDir);
       if (!workingDir || !workingDir.startsWith('/')) {
+        console.log('[RightSidebar] workingDir is empty or invalid');
         setWorkingFiles([]);
         setLoadingFiles(false);
         return;
@@ -1188,6 +1200,7 @@ export function RightSidebar({
 
   // Open folder in system
   const handleOpenFolder = async (folderPath: string) => {
+    console.log('[RightSidebar] handleOpenFolder called with:', folderPath);
     try {
       // Handle ~ paths - let backend resolve it
       const response = await fetch(`${API_URL}/files/open`, {
@@ -1196,6 +1209,7 @@ export function RightSidebar({
         body: JSON.stringify({ path: folderPath, expandHome: true }),
       });
       const data = await response.json();
+      console.log('[RightSidebar] handleOpenFolder response:', data);
       if (!data.success) {
         console.error('[RightSidebar] Failed to open folder:', data.error);
       }
