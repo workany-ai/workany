@@ -231,12 +231,14 @@ jobs:
           cd ..
 
           # Create claude launcher script using base64 decode (avoids escape issues)
-          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiICIkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvY2xpLWJ1bmRsZSI7IGRvCiAgICBpZiBbIC1mICIkRElSL25vZGUiIF0gJiYgWyAtZCAiJERJUi9ub2RlX21vZHVsZXMiIF07IHRoZW4KICAgICAgICBCVU5ETEVfRElSPSIkRElSIgogICAgICAgIGJyZWFrCiAgICBmaQpkb25lCmlmIFsgLXogIiRCVU5ETEVfRElSIiBdOyB0aGVuCiAgICBlY2hvICJFcnJvcjogY2xpLWJ1bmRsZSBub3QgZm91bmQiID4mMgogICAgZXhpdCAxCmZpCmV4ZWMgIiRCVU5ETEVfRElSL25vZGUiICIkQlVORExFX0RJUi9ub2RlX21vZHVsZXMvQGFudGhyb3BpYy1haS9jbGF1ZGUtY29kZS9jbGkuanMiICIkQCIK" | base64 -d > claude
+          # Supports: macOS (Resources), Linux (/usr/lib/WorkAny/)
+          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiBcCiAgICAgICAgICAgIiRTQ1JJUFRfRElSL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vbGliL1dvcmtBbnkvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgXAogICAgICAgICAgICIkU0NSSVBUX0RJUi8uLi9saWIvd29ya2FueS9fdXBfL3NyYy1hcGkvZGlzdC9jbGktYnVuZGxlIjsgZG8KICAgIGlmIFsgLWYgIiRESVIvbm9kZSIgXSAmJiBbIC1kICIkRElSL25vZGVfbW9kdWxlcyIgXTsgdGhlbgogICAgICAgIEJVTkRMRV9ESVI9IiRESVIiCiAgICAgICAgYnJlYWsKICAgIGZpCmRvbmUKaWYgWyAteiAiJEJVTkRMRV9ESVIiIF07IHRoZW4KICAgIGVjaG8gIkVycm9yOiBjbGktYnVuZGxlIG5vdCBmb3VuZC4gU2VhcmNoZWQgcGF0aHM6IiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi9fdXBfL3NyYy1hcGkvZGlzdC9jbGktYnVuZGxlIiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgPiYyCiAgICBlY2hvICIgIC0gJFNDUklQVF9ESVIvLi4vbGliL1dvcmtBbnkvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgPiYyCiAgICBleGl0IDEKZmkKZXhlYyAiJEJVTkRMRV9ESVIvbm9kZSIgIiRCVU5ETEVfRElSL25vZGVfbW9kdWxlcy9AYW50aHJvcGljLWFpL2NsYXVkZS1jb2RlL2NsaS5qcyIgIiRAIgo=" | base64 -d > claude
           chmod +x claude
           cp claude "claude-${{ matrix.rust_target }}"
 
           # Create codex launcher script using base64 decode
-          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiICIkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvY2xpLWJ1bmRsZSI7IGRvCiAgICBpZiBbIC1mICIkRElSL25vZGUiIF0gJiYgWyAtZCAiJERJUi9ub2RlX21vZHVsZXMiIF07IHRoZW4KICAgICAgICBCVU5ETEVfRElSPSIkRElSIgogICAgICAgIGJyZWFrCiAgICBmaQpkb25lCmlmIFsgLXogIiRCVU5ETEVfRElSIiBdOyB0aGVuCiAgICBlY2hvICJFcnJvcjogY2xpLWJ1bmRsZSBub3QgZm91bmQiID4mMgogICAgZXhpdCAxCmZpCmV4ZWMgIiRCVU5ETEVfRElSL25vZGUiICIkQlVORExFX0RJUi9ub2RlX21vZHVsZXMvQG9wZW5haS9jb2RleC9iaW4vY29kZXguanMiICIkQCIK" | base64 -d > codex
+          # Supports: macOS (Resources), Linux (/usr/lib/WorkAny/)
+          echo "IyEvYmluL2Jhc2gKU0NSSVBUX0RJUj0iJChjZCAiJChkaXJuYW1lICIkMCIpIiAmJiBwd2QpIgpmb3IgRElSIGluICIkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiBcCiAgICAgICAgICAgIiRTQ1JJUFRfRElSL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL191cF8vc3JjLWFwaS9kaXN0L2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vUmVzb3VyY2VzL2NsaS1idW5kbGUiIFwKICAgICAgICAgICAiJFNDUklQVF9ESVIvLi4vbGliL1dvcmtBbnkvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgXAogICAgICAgICAgICIkU0NSSVBUX0RJUi8uLi9saWIvd29ya2FueS9fdXBfL3NyYy1hcGkvZGlzdC9jbGktYnVuZGxlIjsgZG8KICAgIGlmIFsgLWYgIiRESVIvbm9kZSIgXSAmJiBbIC1kICIkRElSL25vZGVfbW9kdWxlcyIgXTsgdGhlbgogICAgICAgIEJVTkRMRV9ESVI9IiRESVIiCiAgICAgICAgYnJlYWsKICAgIGZpCmRvbmUKaWYgWyAteiAiJEJVTkRMRV9ESVIiIF07IHRoZW4KICAgIGVjaG8gIkVycm9yOiBjbGktYnVuZGxlIG5vdCBmb3VuZC4gU2VhcmNoZWQgcGF0aHM6IiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi9jbGktYnVuZGxlIiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi9fdXBfL3NyYy1hcGkvZGlzdC9jbGktYnVuZGxlIiA+JjIKICAgIGVjaG8gIiAgLSAkU0NSSVBUX0RJUi8uLi9SZXNvdXJjZXMvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgPiYyCiAgICBlY2hvICIgIC0gJFNDUklQVF9ESVIvLi4vbGliL1dvcmtBbnkvX3VwXy9zcmMtYXBpL2Rpc3QvY2xpLWJ1bmRsZSIgPiYyCiAgICBleGl0IDEKZmkKZXhlYyAiJEJVTkRMRV9ESVIvbm9kZSIgIiRCVU5ETEVfRElSL25vZGVfbW9kdWxlcy9Ab3BlbmFpL2NvZGV4L2Jpbi9jb2RleC5qcyIgIiRAIgo=" | base64 -d > codex
           chmod +x codex
           cp codex "codex-${{ matrix.rust_target }}"
 
@@ -434,7 +436,7 @@ jobs:
             );
           }
 
-          // Add cli-bundle as resource (backend will call node directly)
+          // Add cli-bundle as resource
           const cliResource = '../src-api/dist/cli-bundle/**/*';
           if (!config.bundle.resources.includes(cliResource)) {
             config.bundle.resources = config.bundle.resources.filter(r =>
@@ -442,6 +444,10 @@ jobs:
             );
             config.bundle.resources.push(cliResource);
           }
+
+          // Also add .cmd launcher files as resources for Windows
+          config.bundle.resources.push('../src-api/dist/claude.cmd');
+          config.bundle.resources.push('../src-api/dist/codex.cmd');
 
           fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(config, null, 2));
           console.log('Updated tauri.conf.json with CLI bundle config (Windows - resources only)');

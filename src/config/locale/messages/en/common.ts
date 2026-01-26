@@ -45,6 +45,7 @@ export default {
     requestFailed: 'Request failed: {message}',
     retrying: 'Retrying ({attempt}/{max})...',
     internalError: 'Internal server error. Please check log file: {logPath}',
+    openLogFile: 'Open Log File',
     claudeCodeNotFound:
       'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
     configureModel: 'Configure Model',

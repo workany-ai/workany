@@ -6,6 +6,7 @@ import {
   Box,
   CheckCircle,
   FileText,
+  FolderOpen,
   Globe,
   Monitor,
   Search,
@@ -146,12 +147,43 @@ function ErrorMessage({ message }: { message: string }) {
   // Check for internal error
   if (message.startsWith('__INTERNAL_ERROR__|')) {
     const logPath = message.replace('__INTERNAL_ERROR__|', '');
+
+    const openLogFile = async () => {
+      try {
+        // Try to open the log file with the system's default application
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(logPath);
+      } catch {
+        // Fallback: try to open the containing folder
+        try {
+          const { openPath } = await import('@tauri-apps/plugin-opener');
+          // Get the directory containing the log file
+          const logDir = logPath.substring(0, logPath.lastIndexOf('/')) ||
+                        logPath.substring(0, logPath.lastIndexOf('\\'));
+          await openPath(logDir);
+        } catch {
+          console.error('Failed to open log file');
+        }
+      }
+    };
+
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-        <AlertCircle className="size-4" />
-        <span>
-          {t.common.errors.internalError.replace('{logPath}', logPath)}
-        </span>
+      <div className="flex flex-col gap-3 rounded-lg bg-red-50 p-4 dark:bg-red-950">
+        <div className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {t.common.errors.internalError.replace('{logPath}', logPath)}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-fit"
+          onClick={openLogFile}
+        >
+          <FolderOpen className="mr-2 size-4" />
+          {t.common.errors.openLogFile || 'Open Log File'}
+        </Button>
       </div>
     );
   }

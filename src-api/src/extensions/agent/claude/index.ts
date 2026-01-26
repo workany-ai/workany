@@ -50,7 +50,7 @@ import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 // ============================================================================
 // Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
 // ============================================================================
-import { createLogger } from '@/shared/utils/logger';
+import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
 
 const logger = createLogger('ClaudeAgent');
 
@@ -176,11 +176,23 @@ function getSidecarClaudeCodePath(): string | undefined {
     join(execDir, 'claude'),
   ];
 
+  // For Windows, also check for .cmd batch files
+  if (os === 'win32') {
+    possibleLauncherPaths.push(join(execDir, 'claude.cmd'));
+    possibleLauncherPaths.push(join(execDir, '_up_', 'src-api', 'dist', 'claude.cmd'));
+  }
+
   // For macOS .app bundles, also check Resources directory
   if (os === 'darwin') {
     const resourcesDir = join(execDir, '..', 'Resources');
     possibleLauncherPaths.push(join(resourcesDir, claudeName));
     possibleLauncherPaths.push(join(resourcesDir, 'claude'));
+  }
+
+  // For Linux deb/rpm packages, launcher is in /usr/bin/
+  if (os === 'linux') {
+    possibleLauncherPaths.push('/usr/bin/claude');
+    possibleLauncherPaths.push(join(execDir, '..', 'bin', 'claude'));
   }
 
   // For pkg bundled apps
@@ -239,6 +251,10 @@ function getSidecarClaudeCodePath(): string | undefined {
     join(execDir, '..', 'Resources', '_up_', 'src-api', 'dist', 'cli-bundle'),
     // Windows: Tauri places resources relative to exe with preserved path structure
     join(execDir, '_up_', 'src-api', 'dist', 'cli-bundle'),
+    // Linux: Tauri deb/rpm places resources in /usr/lib/<AppName>/
+    // execDir is /usr/bin, so ../lib/WorkAny/ -> /usr/lib/WorkAny/
+    join(execDir, '..', 'lib', 'WorkAny', '_up_', 'src-api', 'dist', 'cli-bundle'),
+    join(execDir, '..', 'lib', 'workany', '_up_', 'src-api', 'dist', 'cli-bundle'),
     // Legacy claude-bundle for backward compatibility
     join(execDir, 'claude-bundle'),
     join(execDir, '..', 'Resources', 'claude-bundle'),
@@ -262,23 +278,30 @@ function getSidecarClaudeCodePath(): string | undefined {
       const possibleLauncherDirs = [
         dirname(bundleDir), // Direct parent
         join(dirname(bundleDir), '..', '..', '..'), // For _up_/src-api/dist/cli-bundle structure
+        '/usr/bin', // Linux: launcher is in /usr/bin/
       ];
 
+      // On Windows, look for .cmd files; on Unix, look for shell scripts
+      const launcherNames = os === 'win32'
+        ? ['claude.cmd', claudeName]
+        : [claudeName, 'claude'];
+
       for (const launcherDir of possibleLauncherDirs) {
-        const launcherPath = join(launcherDir, claudeName);
-        if (existsSync(launcherPath)) {
-          console.log(
-            `[Claude] Found bundled Claude Code launcher at: ${launcherPath}`
-          );
-          return launcherPath;
+        for (const launcherName of launcherNames) {
+          const launcherPath = join(launcherDir, launcherName);
+          if (existsSync(launcherPath)) {
+            console.log(
+              `[Claude] Found bundled Claude Code launcher at: ${launcherPath}`
+            );
+            return launcherPath;
+          }
         }
       }
 
-      // If no launcher, we can still return the path to use bundled node directly
-      console.log(`[Claude] Found Claude Code bundle at: ${bundleDir}`);
-      console.log(`[Claude] Will use bundled Node.js to run Claude Code`);
-      // Return a special marker that indicates we need to use bundled node
-      return `BUNDLE:${bundleDir}`;
+      // If no launcher found, return undefined instead of BUNDLE: prefix
+      // The BUNDLE: prefix is not understood by the Claude SDK
+      console.warn(`[Claude] Found Claude Code bundle at: ${bundleDir} but no launcher script found`);
+      return undefined;
     }
   }
 
@@ -1281,6 +1304,11 @@ User's request (answer this AFTER reading the images):
 
       // Check for API key related errors (including Chinese error messages from third-party APIs)
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // If no API key is configured and process exits with error, it's likely an auth issue
+      const noApiKeyConfigured = !this.config.apiKey && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN;
+      const processExitError = errorMessage.includes('exited with code');
+
       const isApiKeyError =
         errorMessage.includes('Invalid API key') ||
         errorMessage.includes('invalid_api_key') ||
@@ -1295,7 +1323,8 @@ User's request (answer this AFTER reading the images):
         errorMessage.includes('鉴权失败') ||
         errorMessage.includes('密钥无效') ||
         errorMessage.includes('token') ||
-        errorMessage.includes('credential');
+        errorMessage.includes('credential') ||
+        (noApiKeyConfigured && processExitError);  // No API key + process exit = likely auth issue
 
       if (isApiKeyError) {
         yield {
@@ -1305,10 +1334,9 @@ User's request (answer this AFTER reading the images):
       } else {
         // Show simple user-friendly error message
         // Detailed error info is already logged to file
-        const logPath = '~/.workany/logs/workany.log';
         yield {
           type: 'error',
-          message: `__INTERNAL_ERROR__|${logPath}`,
+          message: `__INTERNAL_ERROR__|${LOG_FILE_PATH}`,
         };
       }
     } finally {
