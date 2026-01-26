@@ -47,6 +47,8 @@ import {
   DEFAULT_WORK_DIR,
 } from '@/config/constants';
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
+// Skills are loaded directly by Claude SDK from ~/.claude/skills/ via settingSources: ['user']
+// No custom loading needed
 // ============================================================================
 // Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
 // ============================================================================
@@ -935,34 +937,19 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Build settingSources based on skillsConfig
-   * Controls which skill directories are loaded by the Claude Agent SDK
+   * Build settingSources for Claude SDK
+   * Skills are loaded from ~/.claude/skills/ via 'user' source
    */
   private buildSettingSources(skillsConfig?: SkillsConfig): ('user' | 'project')[] {
-    // If skillsConfig is not provided or skills are globally disabled, use minimal sources
-    if (!skillsConfig || !skillsConfig.enabled) {
-      logger.info('[ClaudeAgent] Skills disabled or no config, using project only');
+    // If skills are globally disabled, use project only (no user skills)
+    if (skillsConfig && !skillsConfig.enabled) {
+      logger.info('[ClaudeAgent] Skills disabled, using project only');
       return ['project'];
     }
 
-    const sources: ('user' | 'project')[] = [];
-
-    // 'user' source loads skills from ~/.claude/skills
-    if (skillsConfig.userDirEnabled) {
-      sources.push('user');
-    }
-
-    // 'project' source loads skills from project directory
-    // Always include project for project-specific settings
-    sources.push('project');
-
-    // Note: App directory skills (workspace/skills) are handled separately
-    // as they are not part of the standard Claude SDK settingSources
-    if (skillsConfig.appDirEnabled) {
-      logger.info('[ClaudeAgent] App directory skills enabled (handled via custom skill loading)');
-    }
-
-    return sources.length > 0 ? sources : ['project'];
+    // Always load from user directory (~/.claude/skills/)
+    // This is the only supported skills directory
+    return ['user', 'project'];
   }
 
   /**
@@ -1620,6 +1607,19 @@ If you need to create any files during planning, use this directory.
   }
 
   /**
+   * Sanitize text content to remove internal implementation details
+   * that should not be exposed to users
+   */
+  private sanitizeText(text: string): string {
+    // Replace "Claude Code process exited with code X" with a special marker
+    // The marker will be replaced with localized text on the frontend
+    return text.replace(
+      /Claude Code process exited with code \d+/gi,
+      '__AGENT_PROCESS_ERROR__'
+    );
+  }
+
+  /**
    * Process SDK messages and convert to AgentMessage format
    */
   private *processMessage(
@@ -1639,13 +1639,14 @@ If you need to create any files during planning, use this directory.
     if (msg.type === 'assistant' && msg.message?.content) {
       for (const block of msg.message.content as Record<string, unknown>[]) {
         if ('text' in block) {
-          const textHash = (block.text as string).slice(0, 100);
+          const sanitizedText = this.sanitizeText(block.text as string);
+          const textHash = sanitizedText.slice(0, 100);
           if (!sentTextHashes.has(textHash)) {
             sentTextHashes.add(textHash);
             console.log(
-              `[Claude ${sessionId}] Text: ${(block.text as string).slice(0, 50)}...`
+              `[Claude ${sessionId}] Text: ${sanitizedText.slice(0, 50)}...`
             );
-            yield { type: 'text', content: block.text as string };
+            yield { type: 'text', content: sanitizedText };
           }
         } else if ('name' in block && 'id' in block) {
           const toolId = block.id as string;

@@ -4,6 +4,7 @@ import { useLanguage } from '@/shared/providers/language-provider';
 import { getVersion } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
+  Download,
   ExternalLink,
   Github,
   Globe,
@@ -32,14 +33,27 @@ export function AboutSettings() {
   return (
     <div className="space-y-6">
       {/* Product Info */}
-      <div className="flex items-center gap-4">
-        <img src={ImageLogo} alt="WorkAny" className="size-16 rounded-xl" />
-        <div>
-          <h2 className="text-foreground text-xl font-bold">WorkAny</h2>
-          <p className="text-muted-foreground text-sm">
-            {t.settings.aiPlatform}
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <img src={ImageLogo} alt="WorkAny" className="size-16 rounded-xl" />
+          <div>
+            <h2 className="text-foreground text-xl font-bold">WorkAny</h2>
+            <p className="text-muted-foreground text-sm">
+              {t.settings.aiPlatform}
+            </p>
+          </div>
         </div>
+        <button
+          onClick={() =>
+            openExternalUrl(
+              'https://workany.ai/download?utm_source=workany_desktop'
+            )
+          }
+          className="bg-primary text-primary-foreground hover:bg-primary/90 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+        >
+          <Download className="size-4" />
+          {t.settings.downloadNewVersion}
+        </button>
       </div>
 
       {/* Version & Info */}

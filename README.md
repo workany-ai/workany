@@ -6,22 +6,6 @@ WorkAny is a desktop AI agent application that executes tasks through natural la
 
 ![](./public/imgs/home.png)
 
-## ❤️ Sponsor
-
-<a href='https://302.ai/?utm_source=workany_github' target='_blank'>
-  <img src="https://github.com/user-attachments/assets/a03edf82-2031-4f23-bdb8-bfc0bfd168a4" width="100%" alt="icon"/>
-</a>
-
-[302.AI](https://302.ai/?utm_source=workany_github) is a pay-as-you-go AI application platform that offers the most comprehensive AI APIs and online applications available.
-
-<a href='https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link' target='_blank'>
-  <img src="https://github.com/user-attachments/assets/1f925b1a-0a87-40f8-a82f-ae531181c80d" width="100%" alt="icon"/>
-</a>
-
-[MiniMax-M2.1](https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link) is an open-source SOTA model that excels at coding, navigating digital environments, and handling long, multi-step tasks. Click to get an exclusive 12% off the MiniMax Coding Plan.
-
-> If you want to sponsor this project, please contact us via email: [hello@workany.ai](mailto:hello@workany.ai)
-
 ## Previews
 
 - Organize files
@@ -52,9 +36,21 @@ WorkAny is a desktop AI agent application that executes tasks through natural la
 
 ![](./public/imgs/sandbox.png)
 
-- Configure Agent Skills
+## ❤️ Sponsor
 
-![](./public/imgs/skills.png)
+<a href='https://302.ai/?utm_source=workany_github' target='_blank'>
+  <img src="https://github.com/user-attachments/assets/a03edf82-2031-4f23-bdb8-bfc0bfd168a4" width="100%" alt="icon"/>
+</a>
+
+[302.AI](https://302.ai/?utm_source=workany_github) is a pay-as-you-go AI application platform that offers the most comprehensive AI APIs and online applications available.
+
+<a href='https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link' target='_blank'>
+  <img src="https://github.com/user-attachments/assets/1f925b1a-0a87-40f8-a82f-ae531181c80d" width="100%" alt="icon"/>
+</a>
+
+[MiniMax-M2.1](https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link) is an open-source SOTA model that excels at coding, navigating digital environments, and handling long, multi-step tasks. Click to get an exclusive 12% off the MiniMax Coding Plan.
+
+> If you want to sponsor this project, please contact us via email: [hello@workany.ai](mailto:hello@workany.ai)
 
 ## Features
 

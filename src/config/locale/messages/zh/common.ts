@@ -49,5 +49,6 @@ export default {
     configureModel: '配置模型',
     apiKeyError: 'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
     configureApiKey: '前往配置',
+    agentProcessError: 'Agent 运行遇到错误，请检查模型配置后重试',
   },
 };

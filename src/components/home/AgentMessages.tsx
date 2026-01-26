@@ -79,6 +79,8 @@ function isApiErrorText(content: string): boolean {
     /Unauthorized/i,
     /authentication.*fail/i,
     /process exited with code [1-9]/i,
+    /Claude Code process exited/i,
+    /__AGENT_PROCESS_ERROR__/,
   ];
   return errorPatterns.some((pattern) => pattern.test(content));
 }
@@ -124,6 +126,34 @@ function ErrorMessage({ message }: { message: string }) {
           <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
             <span>{t.common.errors.apiKeyError}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="mr-2 size-4" />
+            {t.common.errors.configureApiKey}
+          </Button>
+        </div>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialCategory="model"
+        />
+      </>
+    );
+  }
+
+  // Check for agent process error (e.g., Claude Code process exited)
+  if (message === '__AGENT_PROCESS_ERROR__' || message.includes('__AGENT_PROCESS_ERROR__')) {
+    return (
+      <>
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{t.common.errors.agentProcessError}</span>
           </div>
           <Button
             variant="outline"

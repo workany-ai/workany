@@ -52,5 +52,7 @@ export default {
     apiKeyError:
       'AI model request failed. Please check your model configuration (API URL, API key, model name, etc.)',
     configureApiKey: 'Go to Settings',
+    agentProcessError:
+      'Agent encountered an error. Please check your model configuration and try again.',
   },
 };

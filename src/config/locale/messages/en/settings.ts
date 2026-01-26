@@ -59,6 +59,9 @@ export default {
   workingDirectoryDescription:
     'All session outputs and files will be saved in this directory. Each conversation creates a subfolder under sessions/.',
   directoryStructure: 'Structure: {path}/sessions/[task-id]/',
+  logFile: 'Log File',
+  logFileDescription: 'Application logs for debugging and troubleshooting.',
+  logFileOpen: 'Open log file',
 
   // Sandbox
   sandbox: 'Sandbox Mode',
@@ -84,8 +87,7 @@ export default {
   providers: 'Providers',
   defaultEnv: 'Default (Environment)',
   useEnvModel: 'Use environment variables',
-  envHint:
-    'Using ANTHROPIC_API_KEY and ANTHROPIC_MODEL from server environment',
+  envHint: 'Load Agent configuration from your local environment',
   apiKey: 'API Key',
   enterApiKey: 'Enter your API key',
   getApiKey: 'Get API Key',
@@ -122,7 +124,7 @@ export default {
   skillsDelete: 'Delete',
   skillsName: 'Skill Name',
   skillsNamePlaceholder: 'my-skill',
-  skillsSource: 'Source Directory',
+  skillsSource: 'Skills Loading Directory',
   skillsFiles: 'Files',
   skillsNoFiles: 'No files in this skill',
   skillsSelect: 'Select a skill to view details',
@@ -144,7 +146,7 @@ export default {
   skillsDeleteTitle: 'Delete Skill',
   skillsDeleteDescription:
     'To delete this skill, please manually remove the folder at the following path:',
-  skillsAddToDirectory: 'Add skills to App directory',
+  skillsAddToDirectory: 'Add Skills',
   skillsAddToDirectoryDesc: 'Open the skills folder to add files',
   skillsImportGitHub: 'Import from GitHub',
   skillsImportGitHubDesc: 'Paste a repository link to get started',
@@ -161,8 +163,9 @@ export default {
   mcpConfigPathDescription: 'Path to mcp.json configuration file',
   mcpServers: 'Servers',
   mcpType: 'Type',
-  mcpTypeStdio: 'Stdio Command',
-  mcpTypeHttp: 'HTTP Request',
+  mcpTypeStdio: 'stdio',
+  mcpTypeHttp: 'http',
+  mcpTypeSse: 'sse',
   mcpName: 'Name',
   mcpNameHint: 'Help identify the tool',
   mcpId: 'ID',
@@ -230,6 +233,7 @@ export default {
   mcpTransportType: 'Transport Type',
   mcpServerUrl: 'Server URL',
   mcpServerUrlPlaceholder: 'https://mcp.yourserver.com/mcp',
+  mcpServerUrlPlaceholderSse: 'https://mcp.yourserver.com/sse',
   mcpCustomHeaders: 'Custom headers',
   mcpCustomHeadersOptional: '(optional)',
   mcpAddCustomHeader: 'Add custom header',
@@ -305,4 +309,5 @@ export default {
   reportIssue: 'Report Issue',
   builtWith: 'Some components built with',
   built: '',
+  downloadNewVersion: 'Upgrade',
 };

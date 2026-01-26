@@ -1,17 +1,12 @@
 /**
  * MCP Config Loader
  *
- * Loads MCP server configuration from multiple sources:
- * - ~/.workany/mcp.json (WorkAny specific)
- * - ~/.claude/settings.json (Claude Code system config)
+ * Loads MCP server configuration from ~/.workany/mcp.json
  */
 
 import fs from 'fs/promises';
 
-import {
-  getAllMcpConfigPaths,
-  getWorkanyMcpConfigPath,
-} from '@/config/constants';
+import { getWorkanyMcpConfigPath } from '@/config/constants';
 
 // MCP Server Config Types (matching SDK types)
 export interface McpStdioServerConfig {
@@ -27,18 +22,26 @@ export interface McpHttpServerConfig {
   headers?: Record<string, string>;
 }
 
-export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
+export interface McpSSEServerConfig {
+  type: 'sse';
+  url: string;
+  headers?: Record<string, string>;
+}
+
+export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig | McpSSEServerConfig;
 
 // WorkAny MCP Config file format
 interface _WorkAnyMcpConfig {
   mcpServers: Record<
     string,
     {
+      // Type field (optional, defaults to 'sse' for URL-based, 'stdio' for command-based)
+      type?: 'stdio' | 'http' | 'sse';
       // Stdio config
       command?: string;
       args?: string[];
       env?: Record<string, string>;
-      // HTTP config
+      // HTTP/SSE config
       url?: string;
       headers?: Record<string, string>;
     }
@@ -46,14 +49,7 @@ interface _WorkAnyMcpConfig {
 }
 
 /**
- * Get all MCP config paths to check
- */
-export function getMcpConfigPaths(): { name: string; path: string }[] {
-  return getAllMcpConfigPaths();
-}
-
-/**
- * Get the primary MCP config path (for backward compatibility)
+ * Get the MCP config path
  */
 export function getMcpConfigPath(): string {
   return getWorkanyMcpConfigPath();
@@ -83,12 +79,25 @@ async function loadMcpServersFromFile(
     for (const [name, serverConfig] of Object.entries(mcpServers)) {
       const cfg = serverConfig as Record<string, unknown>;
       if (cfg.url) {
-        servers[name] = {
-          type: 'http',
-          url: cfg.url as string,
-          headers: cfg.headers as Record<string, string>,
-        };
-        console.log(`[MCP] Loaded HTTP server from ${sourceName}: ${name}`);
+        // Determine type: use explicit type if provided, otherwise default to 'http'
+        // User can specify 'sse' in config if the server uses SSE protocol
+        const urlType = (cfg.type as string) || 'http';
+        if (urlType === 'sse') {
+          servers[name] = {
+            type: 'sse',
+            url: cfg.url as string,
+            headers: cfg.headers as Record<string, string>,
+          };
+          console.log(`[MCP] Loaded SSE server from ${sourceName}: ${name}`);
+        } else {
+          // Default to HTTP for URL-based MCP servers
+          servers[name] = {
+            type: 'http',
+            url: cfg.url as string,
+            headers: cfg.headers as Record<string, string>,
+          };
+          console.log(`[MCP] Loaded HTTP server from ${sourceName}: ${name}`);
+        }
       } else if (cfg.command) {
         servers[name] = {
           type: 'stdio',
@@ -111,56 +120,32 @@ async function loadMcpServersFromFile(
  */
 export interface McpConfig {
   enabled: boolean;
-  userDirEnabled: boolean;
-  appDirEnabled: boolean;
-  mcpConfigPath?: string;
 }
 
 /**
- * Load MCP servers configuration from multiple sources:
- * - ~/.workany/mcp.json (WorkAny specific / App directory)
- * - ~/.claude/settings.json (Claude Code system config / User directory)
+ * Load MCP servers configuration from ~/.workany/mcp.json
  *
- * @param mcpConfig Optional config to filter which sources to load
- * @returns Record of server name to config, merged from all sources
+ * @param mcpConfig Optional config to control loading
+ * @returns Record of server name to config
  */
 export async function loadMcpServers(
   mcpConfig?: McpConfig
 ): Promise<Record<string, McpServerConfig>> {
   // If MCP is globally disabled, return empty
   if (mcpConfig && !mcpConfig.enabled) {
-    console.log('[MCP] MCP disabled globally, skipping server load');
+    console.log('[MCP] MCP disabled, skipping server load');
     return {};
   }
 
-  const configPaths = getMcpConfigPaths();
-  const allServers: Record<string, McpServerConfig> = {};
+  const configPath = getMcpConfigPath();
+  const servers = await loadMcpServersFromFile(configPath, 'workany');
 
-  for (const { name, path: configPath } of configPaths) {
-    // Filter based on mcpConfig settings
-    if (mcpConfig) {
-      // 'workany' = App directory, 'claude' = User directory
-      if (name === 'workany' && mcpConfig.appDirEnabled === false) {
-        console.log('[MCP] App directory MCP disabled, skipping workany config');
-        continue;
-      }
-      if (name === 'claude' && mcpConfig.userDirEnabled === false) {
-        console.log('[MCP] User directory MCP disabled, skipping claude config');
-        continue;
-      }
-    }
-
-    const servers = await loadMcpServersFromFile(configPath, name);
-    // Merge servers, workany config takes precedence over claude
-    Object.assign(allServers, servers);
-  }
-
-  const serverCount = Object.keys(allServers).length;
+  const serverCount = Object.keys(servers).length;
   if (serverCount > 0) {
-    console.log(`[MCP] Loaded ${serverCount} MCP server(s) total`);
+    console.log(`[MCP] Loaded ${serverCount} MCP server(s)`);
   } else {
-    console.log('[MCP] No MCP servers found in any config');
+    console.log('[MCP] No MCP servers found');
   }
 
-  return allServers;
+  return servers;
 }

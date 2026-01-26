@@ -6,15 +6,12 @@ import {
   ChevronDown,
   FileJson,
   FolderOpen,
-  Layers,
   Loader2,
   MoreHorizontal,
-  Package,
   Plus,
   Search,
   Settings2,
   Trash2,
-  User,
   X,
 } from 'lucide-react';
 
@@ -40,39 +37,23 @@ function MCPCard({
   const { t } = useLanguage();
   const [showMenu, setShowMenu] = useState(false);
 
-  const isConfigured =
-    server.type === 'stdio' ? !!server.command : !!server.url;
-
   return (
     <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2">
         <span className="text-foreground text-sm font-medium">
           {server.name}
         </span>
-        {isConfigured && (
-          <span className="size-2 rounded-full bg-emerald-500" />
-        )}
       </div>
 
       <p className="text-muted-foreground mb-4 flex-1 text-xs">
         {server.type === 'stdio'
           ? t.settings.mcpTypeStdio
-          : t.settings.mcpTypeHttp}
+          : server.type === 'sse'
+            ? t.settings.mcpTypeSse || 'SSE'
+            : t.settings.mcpTypeHttp}
       </p>
 
-      <div className="border-border flex items-center justify-between border-t pt-3">
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          {server.source === 'claude' ? (
-            <User className="size-3" />
-          ) : (
-            <Package className="size-3" />
-          )}
-          <span>
-            {server.source === 'claude'
-              ? t.settings.mcpSourceUser
-              : t.settings.mcpSourceApp}
-          </span>
-        </div>
+      <div className="border-border flex items-center justify-end border-t pt-3">
         <div className="flex items-center gap-1">
           <button
             onClick={onConfigure}
@@ -81,36 +62,34 @@ function MCPCard({
           >
             <Settings2 className="size-4" />
           </button>
-          {server.source !== 'claude' && (
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-              {showMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowMenu(false)}
-                  />
-                  <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
-                    <button
-                      onClick={() => {
-                        onDelete();
-                        setShowMenu(false);
-                      }}
-                      className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
-                    >
-                      <Trash2 className="size-3.5 shrink-0" />
-                      {t.settings.mcpDeleteServer}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+            {showMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowMenu(false)}
+                />
+                <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                  <button
+                    onClick={() => {
+                      onDelete();
+                      setShowMenu(false);
+                    }}
+                    className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                  >
+                    <Trash2 className="size-3.5 shrink-0" />
+                    {t.settings.mcpDeleteServer}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -129,7 +108,7 @@ interface ConfigDialogState {
   open: boolean;
   mode: 'add' | 'edit';
   serverName: string;
-  transportType: 'stdio' | 'http';
+  transportType: 'stdio' | 'http' | 'sse';
   command: string;
   args: string[];
   env: KeyValuePair[];
@@ -156,8 +135,6 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'user' | 'app'>('all');
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [mcpDirs, setMcpDirs] = useState<{ user: string; app: string }>({
     user: '',
@@ -183,8 +160,6 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
       ) {
         return false;
       }
-      if (filterType === 'user' && server.source !== 'claude') return false;
-      if (filterType === 'app' && server.source !== 'workany') return false;
       return true;
     })
     .sort((a, b) => {
@@ -230,20 +205,28 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           if (!configInfo.exists) continue;
 
           for (const [id, serverConfig] of Object.entries(configInfo.servers)) {
-            const isHttp = 'url' in serverConfig;
+            const hasUrl = 'url' in serverConfig;
+            const cfg = serverConfig as {
+              type?: 'http' | 'sse';
+              url?: string;
+              headers?: Record<string, string>;
+            };
+            // Determine type: use explicit type if provided, otherwise default based on config
+            let serverType: 'stdio' | 'http' | 'sse' = 'stdio';
+            if (hasUrl) {
+              serverType = cfg.type || 'http';
+            }
             serverList.push({
               id: `${configInfo.name}-${id}`,
               name: id,
-              type: isHttp ? 'http' : 'stdio',
+              type: serverType,
               enabled: true,
-              command: isHttp
+              command: hasUrl
                 ? undefined
                 : (serverConfig as MCPServerStdio).command,
-              args: isHttp ? undefined : (serverConfig as MCPServerStdio).args,
-              url: isHttp ? (serverConfig as { url: string }).url : undefined,
-              headers: isHttp
-                ? (serverConfig as { headers?: Record<string, string> }).headers
-                : undefined,
+              args: hasUrl ? undefined : (serverConfig as MCPServerStdio).args,
+              url: hasUrl ? cfg.url : undefined,
+              headers: hasUrl ? cfg.headers : undefined,
               autoExecute: true,
               source: configInfo.name as 'workany' | 'claude',
             });
@@ -270,11 +253,18 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
       const mcpServers: Record<string, unknown> = {};
       for (const server of serverList) {
         if (server.source === 'claude') continue;
-        if (server.type === 'http') {
-          mcpServers[server.name] = {
+        if (server.type === 'http' || server.type === 'sse') {
+          const serverConfig: Record<string, unknown> = {
             url: server.url || '',
-            headers: server.headers,
           };
+          // Only add type field for sse (http is default)
+          if (server.type === 'sse') {
+            serverConfig.type = 'sse';
+          }
+          if (server.headers && Object.keys(server.headers).length > 0) {
+            serverConfig.headers = server.headers;
+          }
+          mcpServers[server.name] = serverConfig;
         } else {
           const serverConfig: Record<string, unknown> = {
             command: server.command || '',
@@ -341,10 +331,16 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           (s) => s.name === name && s.source === 'workany'
         );
 
+        // Determine type: use explicit type if provided, otherwise default based on config
+        let serverType: 'stdio' | 'http' | 'sse' = 'stdio';
+        if (cfg.url) {
+          serverType = (cfg.type as 'http' | 'sse') || 'http';
+        }
+
         const serverData: MCPServerUI = {
           id: `workany-${name}`,
           name,
-          type: cfg.url ? 'http' : 'stdio',
+          type: serverType,
           enabled: true,
           command: cfg.command as string | undefined,
           args: cfg.args as string[] | undefined,
@@ -419,6 +415,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
     const headersObj = keyValuePairsToObject(configDialog.headers);
     const hasHeaders = Object.keys(headersObj).length > 0;
 
+    const isUrlType = configDialog.transportType !== 'stdio';
+
     if (configDialog.mode === 'edit' && configDialog.editServerId) {
       const index = newServers.findIndex(
         (s) => s.id === configDialog.editServerId
@@ -436,14 +434,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
             configDialog.transportType === 'stdio'
               ? configDialog.args
               : undefined,
-          url:
-            configDialog.transportType === 'http'
-              ? configDialog.url
-              : undefined,
-          headers:
-            configDialog.transportType === 'http' && hasHeaders
-              ? headersObj
-              : undefined,
+          url: isUrlType ? configDialog.url : undefined,
+          headers: isUrlType && hasHeaders ? headersObj : undefined,
         };
       }
     } else {
@@ -470,12 +462,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           configDialog.transportType === 'stdio'
             ? configDialog.args
             : undefined,
-        url:
-          configDialog.transportType === 'http' ? configDialog.url : undefined,
-        headers:
-          configDialog.transportType === 'http' && hasHeaders
-            ? headersObj
-            : undefined,
+        url: isUrlType ? configDialog.url : undefined,
+        headers: isUrlType && hasHeaders ? headersObj : undefined,
         autoExecute: true,
         source: 'workany',
       });
@@ -620,70 +608,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           {mainTab === 'installed' ? (
             <div className="flex h-full flex-col">
               {/* Filter Bar */}
-              <div className="flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-0">
+              <div className="bg-background sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-4">
                 <div className="flex items-center gap-3">
-                  {/* Filter Dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className="border-input bg-background hover:bg-accent flex h-9 items-center gap-2 rounded-lg border px-3 text-sm transition-colors"
-                    >
-                      {filterType === 'user' ? (
-                        <User className="size-4" />
-                      ) : filterType === 'app' ? (
-                        <Package className="size-4" />
-                      ) : (
-                        <Layers className="size-4" />
-                      )}
-                      <span>
-                        {filterType === 'all'
-                          ? t.settings.skillsFilterAll
-                          : filterType === 'user'
-                            ? t.settings.skillsFilterUser
-                            : t.settings.skillsFilterApp}
-                      </span>
-                      <ChevronDown className="size-3.5" />
-                    </button>
-                    {showFilterMenu && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setShowFilterMenu(false)}
-                        />
-                        <div className="border-border bg-popover absolute top-full left-0 z-20 mt-1 min-w-max rounded-lg border py-1 shadow-lg">
-                          {(['all', 'user', 'app'] as const).map((type) => (
-                            <button
-                              key={type}
-                              onClick={() => {
-                                setFilterType(type);
-                                setShowFilterMenu(false);
-                              }}
-                              className={cn(
-                                'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
-                                filterType === type
-                                  ? 'bg-accent text-accent-foreground'
-                                  : 'hover:bg-accent'
-                              )}
-                            >
-                              {type === 'user' ? (
-                                <User className="size-4" />
-                              ) : type === 'app' ? (
-                                <Package className="size-4" />
-                              ) : (
-                                <Layers className="size-4" />
-                              )}
-                              {type === 'all'
-                                ? t.settings.skillsFilterAll
-                                : type === 'user'
-                                  ? t.settings.skillsFilterUser
-                                  : t.settings.skillsFilterApp}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
                   {/* Search Input */}
                   <div className="relative">
                     <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
@@ -747,28 +673,6 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                 </div>
               </div>
 
-              {/* Directory Info */}
-              {filterType !== 'all' && (
-                <div className="border-border flex shrink-0 items-center gap-3 border-b px-6 py-3">
-                  <span className="text-muted-foreground shrink-0 text-sm">
-                    {t.settings.mcpLoadFrom}
-                  </span>
-                  <code className="bg-muted text-foreground truncate rounded px-2 py-1 text-xs">
-                    {filterType === 'user' ? mcpDirs.user : mcpDirs.app}
-                  </code>
-                  <button
-                    onClick={() =>
-                      openFolderInSystem(
-                        filterType === 'user' ? mcpDirs.user : mcpDirs.app
-                      )
-                    }
-                    className="text-muted-foreground hover:text-foreground hover:bg-accent shrink-0 rounded p-1.5 transition-colors"
-                  >
-                    <FolderOpen className="size-4" />
-                  </button>
-                </div>
-              )}
-
               {/* MCP Grid */}
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 {error ? (
@@ -818,7 +722,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                 </div>
               </div>
 
-              {/* User Directory */}
+              {/* MCP Config File */}
               <div
                 className={cn(
                   'border-border bg-background rounded-xl border p-4 transition-opacity',
@@ -828,47 +732,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <h3 className="text-foreground text-sm font-medium">
-                      {t.settings.mcpLoadFromUser}
-                    </h3>
-                    <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                      {mcpDirs.user || '~/.claude/settings.json'}
-                    </code>
-                  </div>
-                  <div className="ml-4 flex shrink-0 items-center gap-2">
-                    <button
-                      onClick={() => openFolderInSystem(mcpDirs.user)}
-                      className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
-                    >
-                      <FolderOpen className="size-4" />
-                    </button>
-                    <Switch
-                      checked={
-                        settings.mcpEnabled !== false &&
-                        settings.mcpUserDirEnabled !== false
-                      }
-                      onChange={(checked) =>
-                        onSettingsChange({
-                          ...settings,
-                          mcpUserDirEnabled: checked,
-                        })
-                      }
-                      disabled={settings.mcpEnabled === false}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* App Directory */}
-              <div
-                className={cn(
-                  'border-border bg-background rounded-xl border p-4 transition-opacity',
-                  settings.mcpEnabled === false && 'opacity-50'
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-foreground text-sm font-medium">
-                      {t.settings.mcpLoadFromApp}
+                      {t.settings.mcpConfigPath}
                     </h3>
                     <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
                       {mcpDirs.app || '~/.workany/mcp.json'}
@@ -879,21 +743,8 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                       onClick={() => openFolderInSystem(mcpDirs.app)}
                       className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
                     >
-                      <FolderOpen className="size-4" />
+                      <FileJson className="size-4" />
                     </button>
-                    <Switch
-                      checked={
-                        settings.mcpEnabled !== false &&
-                        settings.mcpAppDirEnabled !== false
-                      }
-                      onChange={(checked) =>
-                        onSettingsChange({
-                          ...settings,
-                          mcpAppDirEnabled: checked,
-                        })
-                      }
-                      disabled={settings.mcpEnabled === false}
-                    />
                   </div>
                 </div>
               </div>
@@ -991,17 +842,19 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                     onChange={(e) =>
                       setConfigDialog({
                         ...configDialog,
-                        transportType: e.target.value as 'stdio' | 'http',
+                        transportType: e.target.value as 'stdio' | 'http' | 'sse',
                       })
                     }
                     className="border-input bg-background text-foreground focus:ring-ring h-10 w-full cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   >
                     <option value="stdio">stdio</option>
                     <option value="http">http</option>
+                    <option value="sse">sse</option>
                   </select>
                 </div>
 
                 {configDialog.transportType === 'stdio' ? (
+                  /* Stdio config fields */
                   <>
                     {/* Command */}
                     <div>
@@ -1129,7 +982,7 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                             url: e.target.value,
                           })
                         }
-                        placeholder={t.settings.mcpServerUrlPlaceholder}
+                        placeholder={configDialog.transportType === 'sse' ? t.settings.mcpServerUrlPlaceholderSse : t.settings.mcpServerUrlPlaceholder}
                         className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                       />
                     </div>

@@ -6,14 +6,11 @@ import {
   ChevronDown,
   FolderOpen,
   Github,
-  Layers,
   Loader2,
   MoreHorizontal,
-  Package,
   Plus,
   Search,
   Trash2,
-  User,
   X,
 } from 'lucide-react';
 
@@ -87,19 +84,7 @@ function SkillCard({
         {skill.description || t.settings.skillsNoDescription}
       </p>
 
-      <div className="border-border flex items-center justify-between border-t pt-3">
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          {skill.source === 'claude' ? (
-            <User className="size-3" />
-          ) : (
-            <Package className="size-3" />
-          )}
-          <span>
-            {skill.source === 'claude'
-              ? t.settings.skillsSourceUser
-              : t.settings.skillsSourceApp}
-          </span>
-        </div>
+      <div className="border-border flex items-center justify-end border-t pt-3">
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
@@ -153,8 +138,6 @@ export function SkillsSettings({
   const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'user' | 'app'>('all');
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [skillsDirs, setSkillsDirs] = useState<{
     user: string;
     app: string;
@@ -179,11 +162,6 @@ export function SkillsSettings({
       ) {
         return false;
       }
-      // Filter by directory type
-      // user = ~/.claude/skills (source: 'claude')
-      // app = workspace/skills (source: 'workany')
-      if (filterType === 'user' && skill.source !== 'claude') return false;
-      if (filterType === 'app' && skill.source !== 'workany') return false;
       return true;
     })
     .sort((a, b) => {
@@ -222,14 +200,15 @@ export function SkillsSettings({
       }
       setSkillsDirs(dirs);
 
-      // Load skills from all available directories
+      // Load skills from user directory only (claude)
       if (dirsData.directories) {
         for (const dir of dirsData.directories as {
           name: string;
           path: string;
           exists: boolean;
         }[]) {
-          if (!dir.exists) continue;
+          // Only load from user directory (claude), skip app directory (workany)
+          if (dir.name !== 'claude' || !dir.exists) continue;
 
           try {
             const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
@@ -441,87 +420,8 @@ export function SkillsSettings({
           /* Installed Tab Content */
           <div className="flex h-full flex-col">
             {/* Filter Bar */}
-            <div className="flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-0">
+            <div className="bg-background sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-4">
               <div className="flex items-center gap-3">
-                {/* Filter Dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowFilterMenu(!showFilterMenu)}
-                    className="border-input bg-background hover:bg-accent flex h-9 items-center gap-2 rounded-lg border px-3 text-sm transition-colors"
-                  >
-                    {filterType === 'user' ? (
-                      <User className="size-4" />
-                    ) : filterType === 'app' ? (
-                      <Package className="size-4" />
-                    ) : (
-                      <Layers className="size-4" />
-                    )}
-                    <span>
-                      {filterType === 'all'
-                        ? t.settings.skillsFilterAll
-                        : filterType === 'user'
-                          ? t.settings.skillsFilterUser
-                          : t.settings.skillsFilterApp}
-                    </span>
-                    <ChevronDown className="size-3.5" />
-                  </button>
-                  {showFilterMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setShowFilterMenu(false)}
-                      />
-                      <div className="border-border bg-popover absolute top-full left-0 z-20 mt-1 min-w-max rounded-lg border py-1 shadow-lg">
-                        <button
-                          onClick={() => {
-                            setFilterType('all');
-                            setShowFilterMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
-                            filterType === 'all'
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-accent'
-                          )}
-                        >
-                          <Layers className="size-4" />
-                          {t.settings.skillsFilterAll}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setFilterType('user');
-                            setShowFilterMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
-                            filterType === 'user'
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-accent'
-                          )}
-                        >
-                          <User className="size-4" />
-                          {t.settings.skillsFilterUser}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setFilterType('app');
-                            setShowFilterMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
-                            filterType === 'app'
-                              ? 'bg-accent text-accent-foreground'
-                              : 'hover:bg-accent'
-                          )}
-                        >
-                          <Package className="size-4" />
-                          {t.settings.skillsFilterApp}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-
                 {/* Search Input */}
                 <div className="relative">
                   <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
@@ -555,7 +455,7 @@ export function SkillsSettings({
                       <div className="border-border bg-popover absolute top-full right-0 z-50 mt-1 min-w-[180px] rounded-xl border py-1 shadow-lg">
                         <button
                           onClick={() => {
-                            openFolderInSystem(skillsDirs.app);
+                            openFolderInSystem(skillsDirs.user);
                             setShowAddMenu(false);
                           }}
                           className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
@@ -585,29 +485,6 @@ export function SkillsSettings({
                 </div>
               </div>
             </div>
-
-            {/* Directory Info */}
-            {filterType !== 'all' && (
-              <div className="border-border flex shrink-0 items-center gap-3 border-b px-6 py-3">
-                <span className="text-muted-foreground shrink-0 text-sm">
-                  {t.settings.skillsLoadFrom}
-                </span>
-                <code className="bg-muted text-foreground truncate rounded px-2 py-1 text-xs">
-                  {filterType === 'user' ? skillsDirs.user : skillsDirs.app}
-                </code>
-                <button
-                  onClick={() =>
-                    openFolderInSystem(
-                      filterType === 'user' ? skillsDirs.user : skillsDirs.app
-                    )
-                  }
-                  className="text-muted-foreground hover:text-foreground hover:bg-accent shrink-0 rounded p-1.5 transition-colors"
-                  title={t.settings.skillsOpenFolder}
-                >
-                  <FolderOpen className="size-4" />
-                </button>
-              </div>
-            )}
 
             {/* Skills Grid */}
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -653,7 +530,7 @@ export function SkillsSettings({
               </div>
             </div>
 
-            {/* User Directory */}
+            {/* Skills Directory */}
             <div
               className={cn(
                 'border-border bg-background rounded-xl border p-4 transition-opacity',
@@ -663,7 +540,7 @@ export function SkillsSettings({
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-foreground text-sm font-medium">
-                    {t.settings.skillsLoadFromUser}
+                    {t.settings.skillsSource}
                   </h3>
                   <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
                     {skillsDirs.user || '~/.claude/skills'}
@@ -677,60 +554,6 @@ export function SkillsSettings({
                   >
                     <FolderOpen className="size-4" />
                   </button>
-                  <Switch
-                    checked={
-                      settings.skillsEnabled !== false &&
-                      settings.skillsUserDirEnabled !== false
-                    }
-                    onChange={(checked) =>
-                      onSettingsChange({
-                        ...settings,
-                        skillsUserDirEnabled: checked,
-                      })
-                    }
-                    disabled={settings.skillsEnabled === false}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* App Directory */}
-            <div
-              className={cn(
-                'border-border bg-background rounded-xl border p-4 transition-opacity',
-                settings.skillsEnabled === false && 'opacity-50'
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-foreground text-sm font-medium">
-                    {t.settings.skillsLoadFromApp}
-                  </h3>
-                  <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                    {skillsDirs.app || 'workspace/skills'}
-                  </code>
-                </div>
-                <div className="ml-4 flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => openFolderInSystem(skillsDirs.app)}
-                    className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
-                    title={t.settings.skillsOpenFolder}
-                  >
-                    <FolderOpen className="size-4" />
-                  </button>
-                  <Switch
-                    checked={
-                      settings.skillsEnabled !== false &&
-                      settings.skillsAppDirEnabled !== false
-                    }
-                    onChange={(checked) =>
-                      onSettingsChange({
-                        ...settings,
-                        skillsAppDirEnabled: checked,
-                      })
-                    }
-                    disabled={settings.skillsEnabled === false}
-                  />
                 </div>
               </div>
             </div>
@@ -840,7 +663,7 @@ export function SkillsSettings({
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         url: githubUrl,
-                        targetDir: skillsDirs.app,
+                        targetDir: skillsDirs.user,
                       }),
                     }
                   );

@@ -63,7 +63,7 @@ export interface MCPConfig {
 export interface MCPServerUI {
   id: string;
   name: string;
-  type: 'stdio' | 'http';
+  type: 'stdio' | 'http' | 'sse';
   enabled: boolean;
   command?: string;
   args?: string[];
