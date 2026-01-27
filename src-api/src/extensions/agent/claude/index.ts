@@ -1782,17 +1782,26 @@ If you need to create any files during planning, use this directory.
     if (msg.type === 'user' && msg.message?.content) {
       for (const block of msg.message.content as Record<string, unknown>[]) {
         if ('type' in block && block.type === 'tool_result') {
+          const toolUseIdSnake = (block as { tool_use_id?: unknown })
+            .tool_use_id;
+          const toolUseIdCamel = (block as { toolUseId?: unknown }).toolUseId;
+          const isErrorSnake = (block as { is_error?: unknown }).is_error;
+          const isErrorCamel = (block as { isError?: unknown }).isError;
+          const toolUseId = toolUseIdSnake ?? toolUseIdCamel;
+          const rawIsError = isErrorSnake ?? isErrorCamel;
+          const isError = typeof rawIsError === 'boolean' ? rawIsError : false;
+
           console.log(
-            `[Claude ${sessionId}] Tool result for: ${block.tool_use_id}`
+            `[Claude ${sessionId}] Tool result for: ${String(toolUseId)}`
           );
           yield {
             type: 'tool_result',
-            toolUseId: block.tool_use_id as string,
+            toolUseId: (toolUseId ?? '') as string,
             output:
               typeof block.content === 'string'
                 ? block.content
                 : JSON.stringify(block.content),
-            isError: (block.is_error as boolean) || false,
+            isError,
           };
         }
       }

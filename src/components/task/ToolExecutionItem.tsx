@@ -130,10 +130,7 @@ function getResultInfo(
     output = toolUseErrorMatch[1].trim();
   }
 
-  const isError =
-    result.isError ||
-    output.toLowerCase().includes('error') ||
-    toolUseErrorMatch;
+  const isError = !!result.isError;
   const isWarning = isExpectedWarning(toolName, output);
 
   if (isError) {
@@ -373,9 +370,7 @@ export function ToolExecutionItem({
 
   // Check status
   const isRunning = isLast && !result;
-  const hasError =
-    result?.isError ||
-    (result?.output || result?.content || '').toLowerCase().includes('error');
+  const hasError = !!result?.isError;
   // If it's a warning (expected non-fatal), don't treat as error
   const isActualError = hasError && !isWarning;
   const isCompleted = !isRunning && !isActualError && result;
