@@ -5,7 +5,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
 import { arch, homedir, platform } from 'os';
 import { dirname, join } from 'path';
@@ -342,6 +342,136 @@ function getExtendedPath(): string {
 }
 
 /**
+ * Find the actual JavaScript entry file for npm global @anthropic-ai/claude-code package
+ */
+function findClaudeCodeJsEntry(): string | undefined {
+  try {
+    const npmPrefix = execSync('npm config get prefix', {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    }).trim();
+    if (!npmPrefix) {
+      return undefined;
+    }
+
+    const packageDir = join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code');
+    if (!existsSync(packageDir)) {
+      return undefined;
+    }
+
+    // Try to read package.json to find the bin entry
+    try {
+      const packageJsonPath = join(packageDir, 'package.json');
+      if (existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+        const binEntry = packageJson.bin?.claude || packageJson.bin?.claudeCode || packageJson.bin?.['claude-code'];
+        if (binEntry) {
+          const jsEntryPath = join(packageDir, binEntry);
+          if (existsSync(jsEntryPath)) {
+            return jsEntryPath;
+          }
+        }
+      }
+    } catch {
+      // Failed to read package.json
+    }
+
+    // Fallback: try common locations for the JavaScript entry file
+    const possibleJsPaths = [
+      join(packageDir, 'bin', 'claude.js'),
+      join(packageDir, 'bin', 'claude'),
+      join(packageDir, 'dist', 'claude.js'),
+      join(packageDir, 'dist', 'index.js'),
+      join(packageDir, 'index.js'),
+      join(packageDir, 'cli.js'),
+    ];
+    for (const possiblePath of possibleJsPaths) {
+      if (existsSync(possiblePath)) {
+        return possiblePath;
+      }
+    }
+  } catch {
+    // npm not available or error
+  }
+  return undefined;
+}
+
+/**
+ * Normalize Windows path for spawn compatibility.
+ * On Windows, .cmd files cannot be directly spawned, so we try to find the corresponding .exe file
+ * or find the actual JavaScript entry file and use node to execute it.
+ */
+function normalizeWindowsPath(path: string): string {
+  const os = platform();
+  if (os !== 'win32') {
+    return path;
+  }
+
+  // If it's a .cmd file, try to find the corresponding .exe file
+  if (path.toLowerCase().endsWith('.cmd')) {
+    const exePath = path.slice(0, -4) + '.exe';
+    if (existsSync(exePath)) {
+      console.log(`[Claude] Using .exe file instead of .cmd: ${exePath}`);
+      return exePath;
+    }
+    
+    // Try to find the actual executable in node_modules
+    const dir = dirname(path);
+    const nodeModulesExe = join(dir, 'node_modules', '.bin', 'claude.exe');
+    if (existsSync(nodeModulesExe)) {
+      console.log(`[Claude] Using node_modules executable: ${nodeModulesExe}`);
+      return nodeModulesExe;
+    }
+    
+    // Try to find claude.exe in the parent directory
+    const parentDir = dirname(dir);
+    const parentExe = join(parentDir, 'claude.exe');
+    if (existsSync(parentExe)) {
+      console.log(`[Claude] Using parent directory executable: ${parentExe}`);
+      return parentExe;
+    }
+    
+    // If no .exe found, try to find the actual JavaScript entry file
+    // Since SDK's ProcessTransport cannot directly execute .bat files on Windows,
+    // we need to use cmd.exe /c to execute the .bat file, or use node.exe directly
+    const jsEntryPath = findClaudeCodeJsEntry();
+    if (jsEntryPath) {
+      console.log(`[Claude] Found JavaScript entry file: ${jsEntryPath}`);
+      // Try to find node executable
+      try {
+        const nodePath = execSync('where.exe node', {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        }).trim().split('\n')[0];
+        if (nodePath && existsSync(nodePath)) {
+          console.log(`[Claude] Node.js found at: ${nodePath}`);
+          
+          // SDK's ProcessTransport automatically uses node.exe to execute JavaScript files
+          // According to SDK source code, if pathToClaudeCodeExecutable is not a native binary,
+          // SDK will use the executable (default: node) to execute the JavaScript file
+          // So we can directly return the JavaScript entry file path!
+          console.log(`[Claude] SDK will use node.exe to execute JavaScript file: ${jsEntryPath}`);
+          return jsEntryPath;
+        }
+      } catch {
+        // node not found - this is a problem
+        console.error(`[Claude] Node.js not found! Cannot execute JavaScript entry file.`);
+      }
+    }
+    
+    // If we can't find a solution, return the original path
+    // SDK will need to handle .cmd files properly or we'll get an error
+    console.warn(
+      `[Claude] Warning: .cmd file found but no corresponding .exe or JS entry: ${path}. ` +
+      `SDK may not be able to spawn .cmd files directly on Windows.`
+    );
+    return path;
+  }
+
+  return path;
+}
+
+/**
  * Get the path to the claude-code executable.
  * Priority order:
  * 1. User-installed Claude Code (via which/where, npm global, common paths, nvm, etc.)
@@ -353,18 +483,76 @@ function getClaudeCodePath(): string | undefined {
 
   // Priority 1: Check for user-installed Claude Code via 'which'/'where' with extended PATH
   try {
+    console.log(`[Claude] Checking for user-installed Claude Code...`);
+    console.log(`[Claude] os: ${os}`);
     if (os === 'win32') {
-      const whereResult = execSync('where claude', {
-        encoding: 'utf-8',
-        stdio: 'pipe',
-        env: extendedEnv,
-      }).trim();
-      const firstPath = whereResult.split('\n')[0];
-      if (firstPath && existsSync(firstPath)) {
-        console.log(
-          `[Claude] Found user-installed Claude Code at: ${firstPath}`
-        );
-        return firstPath;
+      let whereResult: string;
+      try {
+        // Prefer where.exe (for Powershell compatibility)
+        whereResult = execSync('where.exe claude', {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+          env: extendedEnv,
+        }).trim();
+      } catch {
+        // Fallback to plain where (legacy/cmd environments)
+        whereResult = execSync('where claude', {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+          env: extendedEnv,
+        }).trim();
+      }
+      console.log(`[Claude] whereResult: ${whereResult}`);
+      const paths = whereResult.split('\n').map(p => p.trim()).filter(p => p);
+      // On Windows, prefer .exe files over .cmd files for spawn compatibility
+      // But we need to check if files actually exist
+      let preferredPath: string | undefined;
+      
+      // First, try to find .exe file
+      preferredPath = paths.find(p => p.toLowerCase().endsWith('.exe') && existsSync(p));
+      
+      // If no .exe, try to find .cmd file
+      if (!preferredPath) {
+        preferredPath = paths.find(p => p.toLowerCase().endsWith('.cmd') && existsSync(p));
+      }
+      
+      // If still no match, try to find any existing file
+      if (!preferredPath) {
+        preferredPath = paths.find(p => existsSync(p));
+      }
+      
+      // Fallback to first path if all else fails (will be normalized and checked later)
+      if (!preferredPath && paths.length > 0) {
+        preferredPath = paths[0];
+      }
+      
+      if (preferredPath) {
+        // Verify the path exists before normalizing
+        if (!existsSync(preferredPath)) {
+          console.warn(`[Claude] Path does not exist: ${preferredPath}, trying other paths...`);
+          // Try other paths
+          for (const p of paths) {
+            if (existsSync(p)) {
+              preferredPath = p;
+              console.log(`[Claude] Found existing path: ${preferredPath}`);
+              break;
+            }
+          }
+        }
+        
+        if (preferredPath && existsSync(preferredPath)) {
+          // Always normalize the path (this will handle .cmd files by creating wrapper if needed)
+          const normalizedPath = normalizeWindowsPath(preferredPath);
+          // Verify the normalized path exists (or is a wrapper we created)
+          if (existsSync(normalizedPath) || normalizedPath !== preferredPath) {
+            console.log(
+              `[Claude] Found user-installed Claude Code at: ${normalizedPath}`
+            );
+            return normalizedPath;
+          } else {
+            console.warn(`[Claude] Normalized path does not exist: ${normalizedPath}`);
+          }
+        }
       }
     } else {
       // Try with login shell to get user's PATH
@@ -375,10 +563,11 @@ function getClaudeCodePath(): string | undefined {
           env: extendedEnv,
         }).trim();
         if (shellWhichResult && existsSync(shellWhichResult)) {
+          const normalizedPath = normalizeWindowsPath(shellWhichResult);
           console.log(
-            `[Claude] Found user-installed Claude Code at: ${shellWhichResult}`
+            `[Claude] Found user-installed Claude Code at: ${normalizedPath}`
           );
-          return shellWhichResult;
+          return normalizedPath;
         }
       } catch {
         // Try zsh if bash fails
@@ -389,10 +578,11 @@ function getClaudeCodePath(): string | undefined {
             env: extendedEnv,
           }).trim();
           if (zshWhichResult && existsSync(zshWhichResult)) {
+            const normalizedPath = normalizeWindowsPath(zshWhichResult);
             console.log(
-              `[Claude] Found user-installed Claude Code at: ${zshWhichResult}`
+              `[Claude] Found user-installed Claude Code at: ${normalizedPath}`
             );
-            return zshWhichResult;
+            return normalizedPath;
           }
         } catch {
           // Fall through to other checks
@@ -406,10 +596,11 @@ function getClaudeCodePath(): string | undefined {
         env: extendedEnv,
       }).trim();
       if (whichResult && existsSync(whichResult)) {
+        const normalizedPath = normalizeWindowsPath(whichResult);
         console.log(
-          `[Claude] Found user-installed Claude Code at: ${whichResult}`
+          `[Claude] Found user-installed Claude Code at: ${normalizedPath}`
         );
-        return whichResult;
+        return normalizedPath;
       }
     }
   } catch {
@@ -423,11 +614,21 @@ function getClaudeCodePath(): string | undefined {
       stdio: 'pipe',
       env: extendedEnv,
     }).trim();
+    console.log(`[Claude] npmPrefix: ${npmPrefix}`);
     if (npmPrefix) {
-      const npmBinPath = join(npmPrefix, 'bin', 'claude');
-      if (existsSync(npmBinPath)) {
-        console.log(`[Claude] Found Claude Code at npm global: ${npmBinPath}`);
-        return npmBinPath;
+      // On Windows, prefer .exe files over .cmd files for spawn compatibility
+      const possiblePaths = [
+        join(npmPrefix, 'bin', 'claude.exe'),
+        join(npmPrefix, 'claude.exe'),
+        join(npmPrefix, 'bin', 'claude.cmd'),
+        join(npmPrefix, 'claude.cmd'),
+      ];
+      for (const possiblePath of possiblePaths) {
+        if (existsSync(possiblePath)) {
+          const normalizedPath = normalizeWindowsPath(possiblePath);
+          console.log(`[Claude] Found Claude Code at npm global: ${normalizedPath}`);
+          return normalizedPath;
+        }
       }
     }
   } catch {
@@ -459,8 +660,9 @@ function getClaudeCodePath(): string | undefined {
       for (const version of versions) {
         const nvmPath = join(nvmDir, version, 'bin', 'claude');
         if (existsSync(nvmPath)) {
-          console.log(`[Claude] Found Claude Code at nvm path: ${nvmPath}`);
-          return nvmPath;
+          const normalizedPath = normalizeWindowsPath(nvmPath);
+          console.log(`[Claude] Found Claude Code at nvm path: ${normalizedPath}`);
+          return normalizedPath;
         }
       }
     } catch {
@@ -470,8 +672,9 @@ function getClaudeCodePath(): string | undefined {
 
   for (const p of commonPaths) {
     if (existsSync(p)) {
-      console.log(`[Claude] Found Claude Code at: ${p}`);
-      return p;
+      const normalizedPath = normalizeWindowsPath(p);
+      console.log(`[Claude] Found Claude Code at: ${normalizedPath}`);
+      return normalizedPath;
     }
   }
 
@@ -480,17 +683,19 @@ function getClaudeCodePath(): string | undefined {
     process.env.CLAUDE_CODE_PATH &&
     existsSync(process.env.CLAUDE_CODE_PATH)
   ) {
+    const normalizedPath = normalizeWindowsPath(process.env.CLAUDE_CODE_PATH);
     console.log(
-      `[Claude] Using CLAUDE_CODE_PATH: ${process.env.CLAUDE_CODE_PATH}`
+      `[Claude] Using CLAUDE_CODE_PATH: ${normalizedPath}`
     );
-    return process.env.CLAUDE_CODE_PATH;
+    return normalizedPath;
   }
 
   // Priority 5: Check for bundled sidecar Claude Code (if built with --with-claude)
   const sidecarPath = getSidecarClaudeCodePath();
   if (sidecarPath) {
-    console.log(`[Claude] Using bundled sidecar Claude Code: ${sidecarPath}`);
-    return sidecarPath;
+    const normalizedPath = normalizeWindowsPath(sidecarPath);
+    console.log(`[Claude] Using bundled sidecar Claude Code: ${normalizedPath}`);
+    return normalizedPath;
   }
 
   console.warn(
