@@ -348,6 +348,63 @@ export function ModelSettings({
                 )}
               </div>
 
+              {/* Conversation History Settings */}
+              <div className="space-y-4">
+                <h4 className="text-foreground text-sm font-medium">
+                  Conversation History Limits
+                </h4>
+
+                {/* Max Conversation Turns */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-foreground block text-sm font-medium">
+                    Maximum Conversation Turns
+                  </label>
+                  <p className="text-muted-foreground text-xs">
+                    Number of conversation turns to keep in history (0 =
+                    unlimited)
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={settings.maxConversationTurns}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 0;
+                      onSettingsChange({
+                        ...settings,
+                        maxConversationTurns: Math.max(0, Math.min(100, value)),
+                      });
+                    }}
+                    className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                  />
+                </div>
+
+                {/* Max History Tokens */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-foreground block text-sm font-medium">
+                    Maximum History Tokens
+                  </label>
+                  <p className="text-muted-foreground text-xs">
+                    Maximum tokens for conversation history (0 = unlimited)
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="100"
+                    value={settings.maxHistoryTokens}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 0;
+                      onSettingsChange({
+                        ...settings,
+                        maxHistoryTokens: Math.max(0, Math.min(10000, value)),
+                      });
+                    }}
+                    className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                  />
+                </div>
+              </div>
+
               {/* Add Custom Model Button */}
               <button
                 onClick={() => setShowAddProvider(true)}

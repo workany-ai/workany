@@ -1067,7 +1067,15 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Format conversation history for inclusion in prompt
+   * Estimate token count for a text string (rough approximation)
+   * This is a simple estimation: 1 token ≈ 4 characters for English text
+   */
+  private estimateTokenCount(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Format conversation history for inclusion in prompt with token length limits
    */
   private formatConversationHistory(
     conversation?: ConversationMessage[]
@@ -1076,31 +1084,75 @@ export class ClaudeAgent extends BaseAgent {
       return '';
     }
 
-    const formattedMessages = conversation
-      .map((msg) => {
-        const role = msg.role === 'user' ? 'User' : 'Assistant';
-        let messageContent = `${role}: ${msg.content}`;
+    // Get token limits from agent config, fallback to defaults
+    const maxHistoryTokens = this.config.providerConfig?.maxHistoryTokens as number || 2000;
+    const minMessagesToKeep = 3; // Always keep at least 3 most recent messages
+    
+    // Format all messages first
+    const allFormattedMessages = conversation.map((msg) => {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      let messageContent = `${role}: ${msg.content}`;
 
-        // Include image references if present
-        if (msg.imagePaths && msg.imagePaths.length > 0) {
-          const imageRefs = msg.imagePaths
-            .map((p, i) => `  - Image ${i + 1}: ${p}`)
-            .join('\n');
-          messageContent += `\n[Attached images in this message:\n${imageRefs}\nUse Read tool to view these images if needed]`;
-        }
+      // Include image references if present
+      if (msg.imagePaths && msg.imagePaths.length > 0) {
+        const imageRefs = msg.imagePaths
+          .map((p, i) => `  - Image ${i + 1}: ${p}`)
+          .join('\n');
+        messageContent += `\n[Attached images in this message:\n${imageRefs}\nUse Read tool to view these images if needed]`;
+      }
 
-        return messageContent;
-      })
-      .join('\n\n');
+      return messageContent;
+    });
+
+    // Calculate tokens for each message
+    const messageTokens = allFormattedMessages.map(msg => ({
+      content: msg,
+      tokens: this.estimateTokenCount(msg)
+    }));
+
+    // Start with the most recent messages and work backwards
+    let totalTokens = 0;
+    const selectedMessages: string[] = [];
+    
+    // Always keep at least minMessagesToKeep messages
+    const startIndex = Math.max(0, messageTokens.length - minMessagesToKeep);
+    
+    for (let i = messageTokens.length - 1; i >= startIndex; i--) {
+      const message = messageTokens[i];
+      if (totalTokens + message.tokens <= maxHistoryTokens) {
+        selectedMessages.unshift(message.content);
+        totalTokens += message.tokens;
+      } else {
+        break;
+      }
+    }
+
+    // If we have room for more messages, try to add older ones
+    for (let i = startIndex - 1; i >= 0; i--) {
+      const message = messageTokens[i];
+      if (totalTokens + message.tokens <= maxHistoryTokens) {
+        selectedMessages.unshift(message.content);
+        totalTokens += message.tokens;
+      } else {
+        break;
+      }
+    }
+
+    if (selectedMessages.length === 0) {
+      return '';
+    }
+
+    const formattedMessages = selectedMessages.join('\n\n');
+    const truncationNotice = conversation.length > selectedMessages.length 
+      ? `\n\n[Note: Conversation history truncated. Showing ${selectedMessages.length} of ${conversation.length} messages to stay within token limits.]`
+      : '';
+
+    logger.info(`[formatConversationHistory] Selected ${selectedMessages.length} of ${conversation.length} messages, estimated ${totalTokens} tokens (limit: ${maxHistoryTokens})`);
 
     return `## Previous Conversation Context
 The following is the conversation history. Use this context to understand and respond to the current message appropriately.
 
-${formattedMessages}
-
----
-## Current Request
-`;
+${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
   }
 
   /**

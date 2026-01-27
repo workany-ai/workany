@@ -246,12 +246,14 @@ function getSandboxConfig():
 }
 
 // Helper to get skills configuration from settings
-function getSkillsConfig(): {
-  enabled: boolean;
-  userDirEnabled: boolean;
-  appDirEnabled: boolean;
-  skillsPath?: string;
-} | undefined {
+function getSkillsConfig():
+  | {
+      enabled: boolean;
+      userDirEnabled: boolean;
+      appDirEnabled: boolean;
+      skillsPath?: string;
+    }
+  | undefined {
   try {
     const settings = getSettings();
 
@@ -276,12 +278,14 @@ function getSkillsConfig(): {
 }
 
 // Helper to get MCP configuration from settings
-function getMcpConfig(): {
-  enabled: boolean;
-  userDirEnabled: boolean;
-  appDirEnabled: boolean;
-  mcpConfigPath?: string;
-} | undefined {
+function getMcpConfig():
+  | {
+      enabled: boolean;
+      userDirEnabled: boolean;
+      appDirEnabled: boolean;
+      mcpConfigPath?: string;
+    }
+  | undefined {
   try {
     const settings = getSettings();
 
@@ -802,6 +806,19 @@ function buildConversationHistory(
       role: 'assistant',
       content: currentAssistantContent.trim(),
     });
+  }
+
+  // Apply history length limit - keep only the most recent messages
+  // Get max conversation turns from settings, fallback to default
+  const settings = getSettings();
+  const maxTurns = settings.maxConversationTurns || 20;
+  const maxMessages = maxTurns * 2; // 2 messages per turn (user + assistant)
+
+  if (history.length > maxMessages) {
+    console.log(
+      `[buildConversationHistory] Truncating history from ${history.length} to ${maxMessages} messages (max turns: ${maxTurns})`
+    );
+    return history.slice(-maxMessages);
   }
 
   return history;
