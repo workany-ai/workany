@@ -225,6 +225,10 @@ export interface Settings {
   agentRuntimes: AgentRuntimeSetting[]; // Available agent runtimes
   defaultAgentRuntime: string; // Default agent runtime ID
 
+  // Conversation History settings
+  maxConversationTurns: number; // Maximum conversation turns to keep in history (default: 20)
+  maxHistoryTokens: number; // Maximum tokens for conversation history (default: 2000)
+
   // General settings
   theme: 'light' | 'dark' | 'system';
   accentColor: AccentColor;
@@ -366,6 +370,8 @@ export const defaultSettings: Settings = {
   defaultSandboxProvider: 'codex', // Default to Codex sandbox, fallback to native
   agentRuntimes: defaultAgentRuntimes,
   defaultAgentRuntime: 'claude', // Default to Claude Code
+  maxConversationTurns: 20, // Default: 20 conversation turns
+  maxHistoryTokens: 2000, // Default: 2000 tokens for history
   theme: 'system',
   accentColor: 'orange',
   backgroundStyle: 'default',
