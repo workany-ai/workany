@@ -1650,22 +1650,10 @@ export function useAgent(): UseAgentReturn {
       try {
         const modelConfig = getModelConfig();
 
-        // Check if model is configured - if using default provider without API key, prompt user to configure
-        if (!modelConfig) {
-          const settings = getSettings();
-          if (settings.defaultProvider === 'default') {
-            console.log('[useAgent] No model configured, prompting user to configure');
-            setMessages([
-              {
-                type: 'error',
-                message: '__MODEL_NOT_CONFIGURED__',
-              },
-            ]);
-            setIsRunning(false);
-            setPhase('idle');
-            return currentTaskId;
-          }
-        }
+        // Note: We no longer check if model is configured here.
+        // The backend will check if Claude Code is available locally.
+        // If Claude Code is available, it will use it even without explicit model configuration.
+        // If Claude Code is not available and no model is configured, the backend will return an error.
 
         // If images are attached, use direct execution (skip planning)
         // because images need to be processed during execution, not planning
