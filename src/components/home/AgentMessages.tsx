@@ -187,6 +187,34 @@ function ErrorMessage({ message }: { message: string }) {
     );
   }
 
+  // Check for Kimi CLI not found error
+  if (message === '__KIMI_CLI_NOT_FOUND__') {
+    return (
+      <>
+        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{t.common.errors.kimiCliNotFound}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="mr-2 size-4" />
+            {t.common.errors.configureModel}
+          </Button>
+        </div>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          initialCategory="model"
+        />
+      </>
+    );
+  }
+
   // Check for API key error
   if (message === '__API_KEY_ERROR__') {
     return (

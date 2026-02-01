@@ -77,7 +77,7 @@ export const defaultSandboxProviders: SandboxProviderSetting[] = [
 // Agent Runtime Settings
 // ============================================================================
 
-export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'custom';
+export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'custom';
 
 export interface AgentRuntimeSetting {
   id: string;
@@ -110,6 +110,15 @@ export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
     enabled: false,
     config: {
       model: 'codex',
+    },
+  },
+  {
+    id: 'kimi',
+    type: 'kimi',
+    name: 'Kimi Code (Moonshot)',
+    enabled: true,
+    config: {
+      model: 'kimi-for-coding',
     },
   },
 ];
@@ -318,6 +327,17 @@ export const defaultProviders: AIProvider[] = [
     models: ['MiniMaxAI/MiniMax-M2.1', 'zai-org/GLM-4.7'],
     icon: 'S',
     apiKeyUrl: 'https://cloud.siliconflow.com/me/account/ak',
+    canDelete: true,
+  },
+  {
+    id: 'kimi',
+    name: 'Kimi (Moonshot)',
+    apiKey: '',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+    enabled: true,
+    models: ['kimi-for-coding'],
+    icon: 'K',
+    apiKeyUrl: 'https://www.kimi.com/code/docs/en/',
     canDelete: true,
   },
 ];

@@ -79,6 +79,8 @@ export const DEFAULT_AGENT_PROVIDER = 'claude';
 /** Default agent model */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-20250514';
 
+export const DEFAULT_KIMI_MODEL = 'kimi-for-coding';
+
 // ============================================================================
 // Timeouts and Limits
 // ============================================================================
