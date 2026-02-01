@@ -6,7 +6,7 @@
  */
 
 import type { AgentConfig, IAgent } from '@/core/agent/types';
-import { DEFAULT_AGENT_MODEL, DEFAULT_WORK_DIR } from '@/config/constants';
+import { DEFAULT_AGENT_MODEL, DEFAULT_WORK_DIR, DEFAULT_KIMI_MODEL } from '@/config/constants';
 import type { ProviderMetadata } from '@/shared/provider/types';
 
 // ============================================================================
@@ -178,6 +178,31 @@ export const DEEPAGENTS_CONFIG_SCHEMA = {
   },
 };
 
+export const KIMI_CONFIG_SCHEMA = {
+  type: 'object',
+  properties: {
+    apiKey: {
+      type: 'string',
+      description: 'Kimi Code API key (optional if using OAuth)',
+    },
+    baseUrl: {
+      type: 'string',
+      description: 'Kimi Code API base URL',
+      default: 'https://api.kimi.com/coding/v1',
+    },
+    model: {
+      type: 'string',
+      default: DEFAULT_KIMI_MODEL,
+      description: 'Kimi model to use',
+    },
+    workDir: {
+      type: 'string',
+      default: DEFAULT_WORK_DIR,
+      description: 'Working directory for file operations',
+    },
+  },
+};
+
 // ============================================================================
 // Built-in Plugin Metadata
 // ============================================================================
@@ -240,4 +265,21 @@ export const DEEPAGENTS_METADATA: AgentProviderMetadata = {
   supportsStreaming: true,
   supportsSandbox: false,
   tags: ['langgraph', 'deepagents', 'multi-provider'],
+};
+ 
+
+/**   
+ * Metadata for built-in Kimi agent
+ */
+export const KIMI_METADATA: AgentProviderMetadata = {
+  type: 'kimi',
+  name: 'Kimi Agent',
+  version: '1.0.0',
+  description:
+    'Kimi Agent SDK integration. Uses Kimi models through the kimi command-line tool.',
+  configSchema: KIMI_CONFIG_SCHEMA,
+  builtin: true,
+  supportsPlan: true,
+  supportsStreaming: true,
+  supportsSandbox: true,
 };

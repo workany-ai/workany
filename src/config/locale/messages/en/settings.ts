@@ -34,8 +34,12 @@ export default {
   agentRuntimeDescription: 'The AI agent that executes tasks',
   runtimeClaudeCode: 'Claude Code',
   runtimeClaudeCodeDescription: 'Powered by Claude Code to orchestrate tasks',
+  runtimeKimiCode: 'Kimi Code',
+  runtimeKimiCodeDescription: 'Powered by Kimi CLI to orchestrate tasks',
   installClaudeCode: 'Claude Code not installed',
   installClaudeCodeHint: 'Run: npm install -g @anthropic-ai/claude-code',
+  installKimiCode: 'Kimi CLI not installed',
+  installKimiCodeHint: 'Run: curl -L code.kimi.com/install.sh | bash',
 
   // Code Environment
   codeEnvironment: 'Code Environment',

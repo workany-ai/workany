@@ -50,6 +50,8 @@ export default {
       '尚未配置 AI 模型。请先配置自定义模型（API 地址、密钥、模型名称）后再开始对话。',
     claudeCodeNotFound:
       'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
+    kimiCliNotFound:
+      'Kimi CLI 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Kimi CLI（curl -L code.kimi.com/install.sh | bash）',
     configureModel: '配置模型',
     apiKeyError: 'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
     configureApiKey: '前往配置',
