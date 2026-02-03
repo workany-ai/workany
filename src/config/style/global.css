@@ -30,6 +30,37 @@
   scrollbar-width: none; /* Firefox */
 }
 
+/* Blend scrollbars into background (transparent track) */
+.scrollbar-blend {
+  scrollbar-color: var(--muted-foreground) transparent; /* Firefox */
+}
+.scrollbar-blend::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Soft, light scrollbars (transparent track + subtle thumb) */
+.scrollbar-soft {
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent; /* Firefox */
+}
+.dark .scrollbar-soft {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent; /* Firefox */
+}
+.scrollbar-soft::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-soft::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-soft::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.dark .scrollbar-soft::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
 input,
 select,
 textarea {
