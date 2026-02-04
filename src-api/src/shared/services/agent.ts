@@ -148,13 +148,15 @@ export function deletePlan(planId: string): boolean {
 export async function* runPlanningPhase(
   prompt: string,
   session: AgentSession,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  language?: string
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
 
   for await (const message of agent.plan(prompt, {
     sessionId: session.id,
     abortController: session.abortController,
+    language,
   })) {
     // Intercept plan messages and save to global store
     if (message.type === 'plan' && message.plan) {
@@ -176,7 +178,8 @@ export async function* runExecutionPhase(
   modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
   sandboxConfig?: SandboxConfig,
   skillsConfig?: SkillsConfig,
-  mcpConfig?: McpConfig
+  mcpConfig?: McpConfig,
+  language?: string
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
 
@@ -211,6 +214,7 @@ export async function* runExecutionPhase(
     sandbox: sandboxConfig,
     skillsConfig,
     mcpConfig,
+    language,
   })) {
     yield message;
   }
@@ -229,7 +233,8 @@ export async function* runAgent(
   sandboxConfig?: SandboxConfig,
   images?: ImageAttachment[],
   skillsConfig?: SkillsConfig,
-  mcpConfig?: McpConfig
+  mcpConfig?: McpConfig,
+  language?: string
 ): AsyncGenerator<AgentMessage> {
   const agent = getAgent(modelConfig);
 
@@ -253,6 +258,7 @@ export async function* runAgent(
     images,
     skillsConfig,
     mcpConfig,
+    language,
   })) {
     yield message;
   }
