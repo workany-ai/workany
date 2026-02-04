@@ -8,7 +8,11 @@
  * the implementation according to the actual DeepAgents.js API.
  */
 
-import { BaseAgent, parsePlanFromResponse } from '@/core/agent/base';
+import {
+  BaseAgent,
+  parsePlanFromResponse,
+  resolveLanguage,
+} from '@/core/agent/base';
 // Import plugin definition helpers
 import { DEEPAGENTS_METADATA, defineAgentPlugin } from '@/core/agent/plugin';
 import type { AgentPlugin } from '@/core/agent/plugin';
@@ -189,7 +193,7 @@ export class DeepAgentsAdapter extends BaseAgent {
    */
   async *plan(
     prompt: string,
-    _options?: PlanOptions
+    options?: PlanOptions
   ): AsyncGenerator<AgentMessage> {
     const session = this.createSession('planning');
     yield { type: 'session', sessionId: session.id };
@@ -203,23 +207,38 @@ export class DeepAgentsAdapter extends BaseAgent {
 
       if (!agent) {
         // Fallback: create a simple plan without LLM
+        const resolvedLanguage = resolveLanguage(options?.language, prompt);
+        const planText =
+          resolvedLanguage === 'zh-CN'
+            ? {
+                goal: '完成用户请求',
+                steps: ['分析需求', '执行必要操作', '验证并汇报结果'],
+              }
+            : {
+                goal: 'Complete the user request',
+                steps: [
+                  'Analyze the request',
+                  'Execute required actions',
+                  'Verify and report results',
+                ],
+              };
         const simplePlan: TaskPlan = {
           id: `plan-${Date.now()}`,
-          goal: prompt.slice(0, 100),
+          goal: planText.goal,
           steps: [
             {
               id: '1',
-              description: 'Analyze the request',
+              description: planText.steps[0],
               status: 'pending',
             },
             {
               id: '2',
-              description: 'Execute the required actions',
+              description: planText.steps[1],
               status: 'pending',
             },
             {
               id: '3',
-              description: 'Verify and report results',
+              description: planText.steps[2],
               status: 'pending',
             },
           ],

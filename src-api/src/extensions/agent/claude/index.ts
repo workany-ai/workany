@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import {
   BaseAgent,
+  buildLanguageInstruction,
   formatPlanForExecution,
   getWorkspaceInstruction,
   parsePlanFromResponse,
@@ -1286,17 +1287,23 @@ User's request (answer this AFTER reading the images):
     const conversationContext = this.formatConversationHistory(
       options?.conversation
     );
+    const languageInstruction = buildLanguageInstruction(
+      options?.language,
+      prompt
+    );
 
     // Add workspace instruction to prompt so skills know where to save files
     // If images are attached, put image instruction FIRST (highest priority)
     const enhancedPrompt = imageInstruction
       ? imageInstruction +
+        languageInstruction +
         prompt +
         '\n\n' +
         getWorkspaceInstruction(sessionCwd, sandboxOpts) +
         conversationContext
       : getWorkspaceInstruction(sessionCwd, sandboxOpts) +
         conversationContext +
+        languageInstruction +
         prompt;
 
     // Ensure Claude Code is installed
@@ -1516,7 +1523,12 @@ User's request (answer this AFTER reading the images):
 **ALL files must be saved to: ${sessionCwd}**
 If you need to create any files during planning, use this directory.
 `;
-    const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + prompt;
+    const languageInstruction = buildLanguageInstruction(
+      options?.language,
+      prompt
+    );
+    const planningPrompt =
+      workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
 
@@ -1662,7 +1674,13 @@ If you need to create any files during planning, use this directory.
 
     // Pass workDir and sandbox to formatPlanForExecution so skills know where to save files
     const executionPrompt =
-      formatPlanForExecution(plan, sessionCwd, sandboxOpts) +
+      formatPlanForExecution(
+        plan,
+        sessionCwd,
+        sandboxOpts,
+        options.language,
+        options.originalPrompt
+      ) +
       '\n\nOriginal request: ' +
       options.originalPrompt;
     logger.info(

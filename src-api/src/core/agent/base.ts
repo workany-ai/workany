@@ -511,13 +511,66 @@ sandbox_run_script:
   return instruction;
 }
 
+export type ResolvedLanguage = 'en-US' | 'zh-CN';
+
+const LANGUAGE_ALIASES: Record<string, ResolvedLanguage> = {
+  'en': 'en-US',
+  'en-us': 'en-US',
+  'english': 'en-US',
+  'zh': 'zh-CN',
+  'zh-cn': 'zh-CN',
+  'zh-hans': 'zh-CN',
+  'chinese': 'zh-CN',
+  'cn': 'zh-CN',
+};
+
+export function detectLanguageFromText(text?: string): ResolvedLanguage {
+  if (!text) return 'en-US';
+  const hasCjk = /[\u3400-\u9FFF]/.test(text);
+  return hasCjk ? 'zh-CN' : 'en-US';
+}
+
+export function resolveLanguage(
+  language?: string,
+  prompt?: string
+): ResolvedLanguage {
+  const normalized = language?.trim().toLowerCase();
+  if (normalized) {
+    const mapped = LANGUAGE_ALIASES[normalized];
+    if (mapped) return mapped;
+    if (normalized.startsWith('zh')) return 'zh-CN';
+    if (normalized.startsWith('en')) return 'en-US';
+  }
+  return detectLanguageFromText(prompt);
+}
+
+export function buildLanguageInstruction(
+  language?: string,
+  prompt?: string
+): string {
+  const resolved = resolveLanguage(language, prompt);
+  const label =
+    resolved === 'zh-CN' ? 'Chinese (Simplified)' : 'English';
+  const rule =
+    resolved === 'zh-CN'
+      ? '请仅使用简体中文回答，不要夹杂英文或其他语言。'
+      : 'Respond only in English. Do not use Chinese or any other language.';
+  return `
+## LANGUAGE REQUIREMENT
+- Output language: ${label}
+- ${rule}
+`;
+}
+
 /**
  * Format a plan for execution phase
  */
 export function formatPlanForExecution(
   plan: TaskPlan,
   workDir?: string,
-  sandbox?: SandboxOptions
+  sandbox?: SandboxOptions,
+  language?: string,
+  originalPrompt?: string
 ): string {
   const stepsText = plan.steps
     .map((step, index) => `${index + 1}. ${step.description}`)
@@ -526,9 +579,10 @@ export function formatPlanForExecution(
   const workspaceNote = workDir
     ? getWorkspaceInstruction(workDir, sandbox)
     : '';
+  const languageNote = buildLanguageInstruction(language, originalPrompt);
 
   return `You are executing a pre-approved plan. Follow these steps in order:
-${workspaceNote}
+${workspaceNote}${languageNote}
 Goal: ${plan.goal}
 
 Steps:
