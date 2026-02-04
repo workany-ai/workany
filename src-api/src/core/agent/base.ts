@@ -60,13 +60,16 @@ export abstract class BaseAgent implements IAgent {
   /**
    * Create a new session
    */
-  protected createSession(phase: AgentSession['phase'] = 'idle'): AgentSession {
+  protected createSession(
+    phase: AgentSession['phase'] = 'idle',
+    overrides?: { id?: string; abortController?: AbortController }
+  ): AgentSession {
     const session: AgentSession = {
-      id: nanoid(),
+      id: overrides?.id || nanoid(),
       createdAt: new Date(),
       phase,
       isAborted: false,
-      abortController: new AbortController(),
+      abortController: overrides?.abortController || new AbortController(),
       config: this.config,
     };
     this.sessions.set(session.id, session);

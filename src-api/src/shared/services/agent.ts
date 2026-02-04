@@ -19,6 +19,7 @@ import {
   type SkillsConfig,
   type TaskPlan,
 } from '@/core/agent';
+import { nanoid } from 'nanoid';
 // ============================================================================
 // Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
 // ============================================================================
@@ -75,7 +76,7 @@ export function createSession(
   phase: 'plan' | 'execute' = 'plan'
 ): AgentSession {
   const session: AgentSession = {
-    id: Date.now().toString(),
+    id: nanoid(),
     createdAt: new Date(),
     phase: phase === 'plan' ? 'planning' : 'executing',
     isAborted: false,

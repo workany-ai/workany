@@ -1192,7 +1192,10 @@ ${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
     prompt: string,
     options?: AgentOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     const sessionCwd = getSessionWorkDir(
@@ -1496,7 +1499,10 @@ User's request (answer this AFTER reading the images):
     prompt: string,
     options?: PlanOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('planning');
+    const session = this.createSession('planning', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     // Get session working directory
@@ -1615,7 +1621,10 @@ If you need to create any files during planning, use this directory.
    * Execute an approved plan
    */
   async *execute(options: ExecuteOptions): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options.sessionId,
+      abortController: options.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     // Use the plan passed in options, or fall back to local lookup
