@@ -299,7 +299,10 @@ export class CodexAgent extends BaseAgent {
     prompt: string,
     options?: AgentOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     const sessionCwd = await getSessionWorkDir(
@@ -382,7 +385,10 @@ export class CodexAgent extends BaseAgent {
     prompt: string,
     options?: PlanOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('planning');
+    const session = this.createSession('planning', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     const sessionCwd = await getSessionWorkDir(
@@ -483,7 +489,10 @@ Please respond ONLY with JSON in this exact format, no other text:
    * Execute an approved plan
    */
   async *execute(options: ExecuteOptions): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options.sessionId,
+      abortController: options.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     // Use the plan passed in options, or fall back to local lookup
