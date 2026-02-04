@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   accentColors,
   getSettings,
@@ -12,6 +13,17 @@ import {
   type AccentColor,
   type BackgroundStyle,
 } from '@/shared/db/settings';
+
+async function syncTauriTheme(theme: 'light' | 'dark' | 'system') {
+  if (!isTauri()) return;
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    // Pass null to follow system theme
+    await getCurrentWindow().setTheme(theme === 'system' ? null : theme);
+  } catch (e) {
+    console.warn('[Theme] Failed to sync Tauri window theme:', e);
+  }
+}
 
 type Theme = 'light' | 'dark' | 'system';
 type ResolvedTheme = 'light' | 'dark';
@@ -111,6 +123,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     applyAccentColor(accentColor, resolved);
     applyBackgroundStyle(backgroundStyle);
   }, [theme, accentColor, backgroundStyle]);
+
+  useEffect(() => {
+    void syncTauriTheme(theme);
+  }, [theme]);
 
   // Listen for system theme changes
   useEffect(() => {
