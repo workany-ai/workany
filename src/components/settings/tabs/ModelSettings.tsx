@@ -1,8 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  ExternalLink,
+  Plus,
+  RefreshCw,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Switch } from '../components/Switch';
 import {
@@ -58,6 +67,130 @@ export function ModelSettings({
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
   const { t } = useLanguage();
+
+  // Detect connection states for "Add Provider" form
+  const [detectStatus, setDetectStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [detectMessage, setDetectMessage] = useState('');
+
+  // Detect connection states for "Edit Provider" panel
+  const [editDetectStatus, setEditDetectStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [editDetectMessage, setEditDetectMessage] = useState('');
+
+  // Function to detect if API configuration is valid (for Add Provider form)
+  const handleDetectConnection = async () => {
+    if (!newProvider.baseUrl || !newProvider.apiKey) {
+      setDetectStatus('error');
+      setDetectMessage('请先填写 Base URL 和 API Key');
+      setTimeout(() => setDetectStatus('idle'), 3000);
+      return;
+    }
+
+    setDetectStatus('loading');
+    setDetectMessage('');
+
+    try {
+      const testModel =
+        newProvider.models
+          .split(',')
+          .map((m) => m.trim())
+          .filter((m) => m)[0] || 'gpt-3.5-turbo';
+
+      const response = await fetch(`${API_BASE_URL}/providers/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseUrl: newProvider.baseUrl,
+          apiKey: newProvider.apiKey,
+          model: testModel,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      if (data.success) {
+        setDetectStatus('success');
+        setDetectMessage(data.message || '连接成功！配置有效');
+        setTimeout(() => setDetectStatus('idle'), 3000);
+      } else {
+        setDetectStatus('error');
+        setDetectMessage(data.error || '连接失败');
+        setTimeout(() => setDetectStatus('idle'), 5000);
+      }
+    } catch (error) {
+      setDetectStatus('error');
+      setDetectMessage(
+        `连接失败: ${error instanceof Error ? error.message : '网络错误'}`
+      );
+      setTimeout(() => setDetectStatus('idle'), 5000);
+    }
+  };
+
+  // Function to detect if API configuration is valid (for Edit Provider panel)
+  const handleEditDetectConnection = async () => {
+    if (!selectedProvider?.baseUrl || !selectedProvider?.apiKey) {
+      setEditDetectStatus('error');
+      setEditDetectMessage('请先填写 Base URL 和 API Key');
+      setTimeout(() => setEditDetectStatus('idle'), 3000);
+      return;
+    }
+
+    setEditDetectStatus('loading');
+    setEditDetectMessage('');
+
+    try {
+      const testModel = selectedProvider.models?.[0] || 'gpt-3.5-turbo';
+
+      const response = await fetch(`${API_BASE_URL}/providers/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseUrl: selectedProvider.baseUrl,
+          apiKey: selectedProvider.apiKey,
+          model: testModel,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      if (data.success) {
+        setEditDetectStatus('success');
+        setEditDetectMessage(data.message || '连接成功！配置有效');
+        setTimeout(() => setEditDetectStatus('idle'), 3000);
+      } else {
+        setEditDetectStatus('error');
+        setEditDetectMessage(data.error || '连接失败');
+        setTimeout(() => setEditDetectStatus('idle'), 5000);
+      }
+    } catch (error) {
+      setEditDetectStatus('error');
+      setEditDetectMessage(
+        `连接失败: ${error instanceof Error ? error.message : '网络错误'}`
+      );
+      setTimeout(() => setEditDetectStatus('idle'), 5000);
+    }
+  };
+
+  // Reset edit detect status when switching providers
+  useEffect(() => {
+    setEditDetectStatus('idle');
+    setEditDetectMessage('');
+  }, [activeSubTab]);
 
   // Get all available models from enabled providers
   const availableModels = settings.providers
@@ -254,9 +387,14 @@ export function ModelSettings({
                 <input
                   type="password"
                   value={newProvider.apiKey}
-                  onChange={(e) =>
-                    setNewProvider({ ...newProvider, apiKey: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setNewProvider({
+                      ...newProvider,
+                      apiKey: e.target.value,
+                    });
+                    setDetectStatus('idle');
+                    setDetectMessage('');
+                  }}
                   placeholder={t.settings.enterApiKey}
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
@@ -291,6 +429,46 @@ export function ModelSettings({
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
               </div>
+
+              {/* Detect Button */}
+              <button
+                type="button"
+                onClick={handleDetectConnection}
+                disabled={detectStatus === 'loading'}
+                className={cn(
+                  'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                  detectStatus === 'success' &&
+                    'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
+                  detectStatus === 'error' &&
+                    'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
+                )}
+              >
+                <RefreshCw
+                  className={cn(
+                    'size-4',
+                    detectStatus === 'loading' && 'animate-spin'
+                  )}
+                />
+                {detectStatus === 'loading'
+                  ? '检测中...'
+                  : detectStatus === 'success'
+                    ? '成功'
+                    : detectStatus === 'error'
+                      ? '失败'
+                      : '检测配置'}
+              </button>
+              {detectMessage && (
+                <p
+                  className={cn(
+                    'text-xs font-medium',
+                    detectStatus === 'success'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-red-600 dark:text-red-400'
+                  )}
+                >
+                  {detectMessage}
+                </p>
+              )}
 
               <button
                 onClick={handleAddProvider}
@@ -467,11 +645,13 @@ export function ModelSettings({
                   <input
                     type={showApiKey ? 'text' : 'password'}
                     value={selectedProvider.apiKey}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       handleProviderUpdate(selectedProvider.id, {
                         apiKey: e.target.value,
-                      })
-                    }
+                      });
+                      setEditDetectStatus('idle');
+                      setEditDetectMessage('');
+                    }}
                     placeholder={t.settings.enterApiKey}
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border pr-10 pl-3 text-sm focus:ring-2 focus:outline-none"
                   />
@@ -684,6 +864,46 @@ export function ModelSettings({
                       </div>
                     )}
                 </div>
+
+                {/* Detect Button */}
+                <button
+                  type="button"
+                  onClick={handleEditDetectConnection}
+                  disabled={editDetectStatus === 'loading'}
+                  className={cn(
+                    'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    editDetectStatus === 'success' &&
+                      'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
+                    editDetectStatus === 'error' &&
+                      'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
+                  )}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'size-4',
+                      editDetectStatus === 'loading' && 'animate-spin'
+                    )}
+                  />
+                  {editDetectStatus === 'loading'
+                    ? '检测中...'
+                    : editDetectStatus === 'success'
+                      ? '成功'
+                      : editDetectStatus === 'error'
+                        ? '失败'
+                        : '检测配置'}
+                </button>
+                {editDetectMessage && (
+                  <p
+                    className={cn(
+                      'text-xs font-medium',
+                      editDetectStatus === 'success'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    )}
+                  >
+                    {editDetectMessage}
+                  </p>
+                )}
               </div>
             </div>
           </div>
