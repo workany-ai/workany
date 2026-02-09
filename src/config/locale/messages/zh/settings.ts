@@ -114,6 +114,18 @@ export default {
   maxHistoryTokens: '最大历史 Token 数',
   maxHistoryTokensDescription: '对话历史的最大 Token 数量（0 = 不限制）',
 
+  // Provider Detection
+  detectConfig: '检测配置',
+  detecting: '检测中...',
+  success: '成功',
+  failed: '失败',
+  connectionSuccess: '连接成功！配置有效',
+  connectionFailed: '连接失败',
+  connectionTimeout: '连接超时（60秒）',
+  networkError: '网络错误',
+  fillBaseUrlAndApiKey: '请先填写 Base URL 和 API Key',
+  connectionError: '连接失败: {error}',
+
   // Skills
   skills: 'Skills',
   skillsInstalled: '已安装',

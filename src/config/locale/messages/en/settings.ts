@@ -112,9 +112,23 @@ export default {
   selectProvider: 'Select a provider to configure',
   conversationHistoryLimits: 'Conversation History Limits',
   maxConversationTurns: 'Maximum Conversation Turns',
-  maxConversationTurnsDescription: 'Number of conversation turns to keep in history (0 = unlimited)',
+  maxConversationTurnsDescription:
+    'Number of conversation turns to keep in history (0 = unlimited)',
   maxHistoryTokens: 'Maximum History Tokens',
-  maxHistoryTokensDescription: 'Maximum tokens for conversation history (0 = unlimited)',
+  maxHistoryTokensDescription:
+    'Maximum tokens for conversation history (0 = unlimited)',
+
+  // Provider Detection
+  detectConfig: 'Detect Configuration',
+  detecting: 'Detecting...',
+  success: 'Success',
+  failed: 'Failed',
+  connectionSuccess: 'Connection successful! Configuration valid',
+  connectionFailed: 'Connection failed',
+  connectionTimeout: 'Connection timeout (60s)',
+  networkError: 'Network error',
+  fillBaseUrlAndApiKey: 'Please fill in Base URL and API Key first',
+  connectionError: 'Connection failed: {error}',
 
   // Skills
   skills: 'Skills',
@@ -144,7 +158,8 @@ export default {
   skillsLoadFromUser: 'Load skills from User directory',
   skillsLoadFromApp: 'Load skills from App directory',
   skillsAddCustom: 'Add custom Skills',
-  skillsAddCustomDescription: 'Add a skill to unlock new capabilities for yourself or your team.',
+  skillsAddCustomDescription:
+    'Add a skill to unlock new capabilities for yourself or your team.',
   skillsCreate: 'Create',
   skillsNoResults: 'No skills match your search',
   skillsNoDescription: 'No description available',
@@ -155,7 +170,8 @@ export default {
   skillsAddToDirectoryDesc: 'Open the skills folder to add files',
   skillsImportGitHub: 'Import from GitHub',
   skillsImportGitHubDesc: 'Paste a repository link to get started',
-  skillsImportGitHubDialogDesc: 'Import a skill directly from a public GitHub repository.',
+  skillsImportGitHubDialogDesc:
+    'Import a skill directly from a public GitHub repository.',
   skillsImport: 'Import',
   skillsImporting: 'Importing...',
 
@@ -183,7 +199,8 @@ export default {
   mcpAddHeader: 'Add Header',
   mcpVerify: 'Verify (View Tools)',
   mcpAddServer: 'Add Server',
-  mcpAddServerDescription: 'Add a custom MCP server to extend agent capabilities',
+  mcpAddServerDescription:
+    'Add a custom MCP server to extend agent capabilities',
   mcpDeleteServer: 'Delete Server',
   mcpSelectServer: 'Select a server to configure',
   mcpNoServers: 'No MCP servers configured',

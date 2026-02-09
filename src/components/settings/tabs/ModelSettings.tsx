@@ -66,7 +66,7 @@ export function ModelSettings({
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
-  const { t } = useLanguage();
+  const { t, tt } = useLanguage();
 
   // Detect connection states for "Add Provider" form
   const [detectStatus, setDetectStatus] = useState<
@@ -84,7 +84,7 @@ export function ModelSettings({
   const handleDetectConnection = async () => {
     if (!newProvider.baseUrl || !newProvider.apiKey) {
       setDetectStatus('error');
-      setDetectMessage('请先填写 Base URL 和 API Key');
+      setDetectMessage(t.settings.fillBaseUrlAndApiKey);
       setTimeout(() => setDetectStatus('idle'), 3000);
       return;
     }
@@ -119,17 +119,22 @@ export function ModelSettings({
 
       if (data.success) {
         setDetectStatus('success');
-        setDetectMessage(data.message || '连接成功！配置有效');
+        setDetectMessage(t.settings.connectionSuccess);
         setTimeout(() => setDetectStatus('idle'), 3000);
       } else {
         setDetectStatus('error');
-        setDetectMessage(data.error || '连接失败');
+        // Use local translation for common errors, otherwise use API message
+        const errorMessage = data.error || t.settings.connectionFailed;
+        setDetectMessage(errorMessage);
         setTimeout(() => setDetectStatus('idle'), 5000);
       }
     } catch (error) {
       setDetectStatus('error');
       setDetectMessage(
-        `连接失败: ${error instanceof Error ? error.message : '网络错误'}`
+        tt('settings.connectionError', {
+          error:
+            error instanceof Error ? error.message : t.settings.networkError,
+        })
       );
       setTimeout(() => setDetectStatus('idle'), 5000);
     }
@@ -139,7 +144,7 @@ export function ModelSettings({
   const handleEditDetectConnection = async () => {
     if (!selectedProvider?.baseUrl || !selectedProvider?.apiKey) {
       setEditDetectStatus('error');
-      setEditDetectMessage('请先填写 Base URL 和 API Key');
+      setEditDetectMessage(t.settings.fillBaseUrlAndApiKey);
       setTimeout(() => setEditDetectStatus('idle'), 3000);
       return;
     }
@@ -170,17 +175,22 @@ export function ModelSettings({
 
       if (data.success) {
         setEditDetectStatus('success');
-        setEditDetectMessage(data.message || '连接成功！配置有效');
+        setEditDetectMessage(t.settings.connectionSuccess);
         setTimeout(() => setEditDetectStatus('idle'), 3000);
       } else {
         setEditDetectStatus('error');
-        setEditDetectMessage(data.error || '连接失败');
+        // Use API error message or fallback
+        const errorMessage = data.error || t.settings.connectionFailed;
+        setEditDetectMessage(errorMessage);
         setTimeout(() => setEditDetectStatus('idle'), 5000);
       }
     } catch (error) {
       setEditDetectStatus('error');
       setEditDetectMessage(
-        `连接失败: ${error instanceof Error ? error.message : '网络错误'}`
+        tt('settings.connectionError', {
+          error:
+            error instanceof Error ? error.message : t.settings.networkError,
+        })
       );
       setTimeout(() => setEditDetectStatus('idle'), 5000);
     }
@@ -402,7 +412,7 @@ export function ModelSettings({
 
               <div className="flex flex-col gap-2">
                 <label className="text-foreground block text-sm font-medium">
-                  API Base URL
+                  {t.settings.apiBaseUrl}
                 </label>
                 <input
                   type="text"
@@ -450,12 +460,12 @@ export function ModelSettings({
                   )}
                 />
                 {detectStatus === 'loading'
-                  ? '检测中...'
+                  ? t.settings.detecting
                   : detectStatus === 'success'
-                    ? '成功'
+                    ? t.settings.success
                     : detectStatus === 'error'
-                      ? '失败'
-                      : '检测配置'}
+                      ? t.settings.failed
+                      : t.settings.detectConfig}
               </button>
               {detectMessage && (
                 <p
@@ -709,7 +719,7 @@ export function ModelSettings({
               {/* API Base URL */}
               <div className="flex flex-col gap-2">
                 <label className="text-foreground block text-sm font-medium">
-                  API Base URL
+                  {t.settings.apiBaseUrl}
                 </label>
                 <input
                   type="text"
@@ -885,12 +895,12 @@ export function ModelSettings({
                     )}
                   />
                   {editDetectStatus === 'loading'
-                    ? '检测中...'
+                    ? t.settings.detecting
                     : editDetectStatus === 'success'
-                      ? '成功'
+                      ? t.settings.success
                       : editDetectStatus === 'error'
-                        ? '失败'
-                        : '检测配置'}
+                        ? t.settings.failed
+                        : t.settings.detectConfig}
                 </button>
                 {editDetectMessage && (
                   <p

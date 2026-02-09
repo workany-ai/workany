@@ -379,7 +379,7 @@ providersRoutes.post('/detect', async (c) => {
       const data = await response.json();
       const successResponse: DetectSuccessResponse = {
         success: true,
-        message: '连接成功！配置有效',
+        message: 'Connection successful! Configuration valid',
         model: testModel,
         response: data,
       };
@@ -404,14 +404,14 @@ providersRoutes.post('/detect', async (c) => {
     if (error instanceof Error && error.name === 'AbortError') {
       const timeoutResponse: DetectErrorResponse = {
         success: false,
-        error: '连接超时（60秒）',
+        error: 'Connection timeout (60s)',
       };
       return c.json(timeoutResponse, 200);
     }
 
     const errorResponse: DetectErrorResponse = {
       success: false,
-      error: error instanceof Error ? error.message : '网络错误',
+      error: error instanceof Error ? error.message : 'Network error',
     };
     return c.json(errorResponse, 200);
   }
