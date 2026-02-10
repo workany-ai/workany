@@ -8,6 +8,7 @@ import {
   filesRoutes,
   healthRoutes,
   mcpRoutes,
+  openclawRoutes,
   previewRoutes,
   providersRoutes,
   sandboxRoutes,
@@ -34,6 +35,7 @@ app.route('/preview', previewRoutes);
 app.route('/providers', providersRoutes);
 app.route('/files', filesRoutes);
 app.route('/mcp', mcpRoutes);
+app.route('/openclaw', openclawRoutes);
 
 // Root endpoint
 app.get('/', (c) => {
@@ -48,6 +50,7 @@ app.get('/', (c) => {
       providers: '/providers',
       files: '/files',
       mcp: '/mcp',
+      openclaw: '/openclaw',
     },
   });
 });

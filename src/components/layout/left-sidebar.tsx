@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ImageLogo from '@/assets/logo.png';
 import type { Task } from '@/shared/db';
 import { getSettings, type UserProfile } from '@/shared/db/settings';
+import type { BotChatSession } from '@/shared/hooks/useBotChats';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -12,9 +13,9 @@ import {
   Globe,
   ListTodo,
   Loader2,
+  MessageSquare,
   MoreHorizontal,
   PanelLeft,
-  PanelLeftOpen,
   Settings,
   Smartphone,
   Sparkles,
@@ -22,6 +23,7 @@ import {
   Star,
   Trash2,
   User,
+  Zap,
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
@@ -49,6 +51,9 @@ interface LeftSidebarProps {
   onDeleteTask?: (taskId: string) => void;
   onToggleFavorite?: (taskId: string, favorite: boolean) => void;
   runningTaskIds?: string[]; // Tasks running in background
+  botChats?: BotChatSession[]; // Bot chat sessions
+  currentBotChatKey?: string; // Current bot chat session key
+  onSelectBotChat?: (chatKey: string) => void;
 }
 
 // Delete confirmation dialog component
@@ -124,6 +129,9 @@ export function LeftSidebar({
   onDeleteTask,
   onToggleFavorite,
   runningTaskIds = [],
+  botChats = [],
+  currentBotChatKey,
+  onSelectBotChat,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
@@ -181,6 +189,20 @@ export function LeftSidebar({
 
   const handleNewTask = () => {
     navigate('/');
+  };
+
+  const handleNewBot = () => {
+    // Check if OpenClaw is configured
+    const openClawConfig = localStorage.getItem('openclaw_config');
+    if (!openClawConfig) {
+      // Open settings modal with OpenClaw tab
+      setSettingsOpen(true);
+      // TODO: Navigate to OpenClaw settings tab after modal opens
+      return;
+    }
+
+    // Navigate to bot chat with new session
+    navigate('/bot');
   };
 
   const handleSelectTask = (taskId: string) => {
@@ -248,119 +270,116 @@ export function LeftSidebar({
                 collapsed={false}
                 onClick={handleNewTask}
               />
+              <NavItem
+                icon={Zap}
+                label={t.nav.newBot}
+                collapsed={false}
+                onClick={handleNewBot}
+              />
             </nav>
 
             {/* Tasks Section */}
-            <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden px-3">
-              <div className="flex shrink-0 items-center justify-between px-2 py-1.5">
-                <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                  {t.nav.allTasks}
-                </span>
+            <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
+              {/* Tasks */}
+              <div className="mb-4">
+                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                    {t.nav.allTasks}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {tasks.slice(0, 5).map((task) => {
+                    const TaskIcon = getTaskIcon(task.prompt);
+                    const isRunningInBackground = runningTaskIds.includes(
+                      task.id
+                    );
+                    const isLoading = loadingTaskId === task.id;
+                    return (
+                      <div
+                        key={task.id}
+                        className={cn(
+                          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                          currentTaskId === task.id || isLoading
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                          isLoading && 'opacity-70'
+                        )}
+                        onClick={() => handleSelectTask(task.id)}
+                      >
+                        <div className="relative shrink-0">
+                          {isLoading ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <TaskIcon className="size-4" />
+                          )}
+                          {/* Running indicator */}
+                          {isRunningInBackground && !isLoading && (
+                            <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                              <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                            </span>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {task.prompt}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {tasks.length > 5 && (
+                    <button
+                      onClick={() => navigate('/library')}
+                      className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                    >
+                      <span className="text-sm">{t.common.more}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="scrollbar-hide mt-1 flex-1 space-y-0.5 overflow-y-auto">
-                {tasks.slice(0, 10).map((task) => {
-                  const TaskIcon = getTaskIcon(task.prompt);
-                  const isRunningInBackground = runningTaskIds.includes(
-                    task.id
-                  );
-                  const isLoading = loadingTaskId === task.id;
-                  return (
-                    <div
-                      key={task.id}
-                      className={cn(
-                        'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                        currentTaskId === task.id || isLoading
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-                        isLoading && 'opacity-70'
-                      )}
-                      onClick={() => handleSelectTask(task.id)}
-                    >
-                      <div className="relative shrink-0">
-                        {isLoading ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <TaskIcon className="size-4" />
+              {/* Bot Chats */}
+              <div className="flex shrink-0 flex-col overflow-hidden">
+                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                    {t.nav.allChats}
+                  </span>
+                </div>
+                <div className="flex-1 space-y-0.5 overflow-y-auto">
+                  {botChats && botChats.length > 0 ? (
+                    botChats.slice(0, 5).map((chat) => (
+                      <div
+                        key={chat.sessionKey}
+                        className={cn(
+                          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                          currentBotChatKey === chat.sessionKey
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                         )}
-                        {/* Running indicator */}
-                        {isRunningInBackground && !isLoading && (
-                          <span className="absolute -top-0.5 -right-0.5 flex size-2">
-                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
-                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-                          </span>
-                        )}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {task.prompt}
-                      </span>
-                      {/* Running indicator for running tasks, dropdown menu for completed tasks */}
-                      {isRunningInBackground ? (
-                        <div className="flex size-6 shrink-0 items-center justify-center">
-                          <Loader2 className="text-primary size-4 animate-spin" />
+                        onClick={() =>
+                          onSelectBotChat && onSelectBotChat(chat.sessionKey)
+                        }
+                      >
+                        <div className="relative shrink-0">
+                          <MessageSquare className="size-4" />
                         </div>
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
-                            >
-                              {/* Show star when favorited (hide on hover), show menu icon on hover */}
-                              {task.favorite ? (
-                                <>
-                                  <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
-                                  <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground hidden size-4 group-hover:block" />
-                                </>
-                              ) : (
-                                <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground size-4 opacity-0 group-hover:opacity-100" />
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            sideOffset={4}
-                            className="min-w-[140px]"
-                          >
-                            <DropdownMenuItem
-                              className="cursor-pointer"
-                              onClick={(e) => handleToggleFavorite(task, e)}
-                            >
-                              <Star
-                                className={cn(
-                                  'size-4',
-                                  task.favorite &&
-                                    'fill-amber-400 text-amber-400'
-                                )}
-                              />
-                              <span>
-                                {task.favorite
-                                  ? t.common.unfavorite
-                                  : t.common.favorite}
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="cursor-pointer text-red-500 focus:text-red-500"
-                              onClick={(e) => handleDeleteClick(task.id, e)}
-                            >
-                              <Trash2 className="size-4" />
-                              <span>{t.common.delete}</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm">
+                            {chat.label || chat.friendlyId || '新对话'}
+                          </p>
+                          <p className="text-sidebar-foreground/40 truncate text-xs">
+                            {chat.lastMessage || `${chat.messageCount} 条消息`}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-4 text-center">
+                      <p className="text-sidebar-foreground/40 text-xs">
+                        {t.nav.noChatsYet || '暂无聊天'}
+                      </p>
                     </div>
-                  );
-                })}
-                {tasks.length > 10 && (
-                  <button
-                    onClick={() => navigate('/library')}
-                    className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                  >
-                    <span className="text-sm">{t.common.more}</span>
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
@@ -461,6 +480,19 @@ export function LeftSidebar({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">{t.nav.newTask}</TooltipContent>
+              </Tooltip>
+
+              {/* New Bot */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleNewBot}
+                    className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground flex size-10 cursor-pointer items-center justify-center rounded-xl transition-colors duration-200"
+                  >
+                    <Zap className="size-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{t.nav.newBot}</TooltipContent>
               </Tooltip>
 
               {/* Tasks - With hover popup */}

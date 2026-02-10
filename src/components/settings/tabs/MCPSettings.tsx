@@ -6,7 +6,6 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   ChevronDown,
   FileJson,
-  FolderOpen,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -854,7 +853,10 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                     onChange={(e) =>
                       setConfigDialog({
                         ...configDialog,
-                        transportType: e.target.value as 'stdio' | 'http' | 'sse',
+                        transportType: e.target.value as
+                          | 'stdio'
+                          | 'http'
+                          | 'sse',
                       })
                     }
                     className="border-input bg-background text-foreground focus:ring-ring h-10 w-full cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
@@ -994,7 +996,11 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
                             url: e.target.value,
                           })
                         }
-                        placeholder={configDialog.transportType === 'sse' ? t.settings.mcpServerUrlPlaceholderSse : t.settings.mcpServerUrlPlaceholder}
+                        placeholder={
+                          configDialog.transportType === 'sse'
+                            ? t.settings.mcpServerUrlPlaceholderSse
+                            : t.settings.mcpServerUrlPlaceholder
+                        }
                         className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                       />
                     </div>

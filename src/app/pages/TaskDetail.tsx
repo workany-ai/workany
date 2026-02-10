@@ -21,6 +21,7 @@ import {
   type AgentMessage,
   type MessageAttachment,
 } from '@/shared/hooks/useAgent';
+import { useBotChats } from '@/shared/hooks/useBotChats';
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -114,6 +115,7 @@ function TaskDetailContent() {
     filesVersion,
     backgroundTasks,
   } = useAgent();
+  const { sessions: botChats } = useBotChats();
   const { toggleLeft, setLeftOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
@@ -313,6 +315,14 @@ function TaskDetailContent() {
       titleInputRef.current.select();
     }
   }, [isEditingTitle]);
+
+  // Handle bot chat selection - navigate to home with selected bot chat
+  const handleSelectBotChat = useCallback(
+    (sessionKey: string) => {
+      navigate('/', { state: { selectedBotChatKey: sessionKey } });
+    },
+    [navigate]
+  );
 
   // Handle artifact selection - opens preview
   const handleSelectArtifact = useCallback((artifact: Artifact) => {
@@ -850,6 +860,9 @@ function TaskDetailContent() {
             // Include current task if it's running
             ...(isRunning && taskId ? [taskId] : []),
           ]}
+          botChats={botChats}
+          currentBotChatKey={undefined}
+          onSelectBotChat={handleSelectBotChat}
         />
 
         {/* Main Content Area with Responsive Layout */}
@@ -1550,13 +1563,12 @@ function MessageItem({
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pre: ({ children }: any) => (
                 <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
                   {children}
                 </pre>
               ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
               code: ({ className, children, ...props }: any) => {
                 const isInline = !className;
                 if (isInline) {
@@ -1575,7 +1587,7 @@ function MessageItem({
                   </code>
                 );
               },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
               a: ({ children, href }: any) => (
                 <a
                   href={href}
@@ -1596,7 +1608,7 @@ function MessageItem({
                   {children}
                 </a>
               ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
               table: ({ children }: any) => (
                 <div className="overflow-x-auto">
                   <table className="border-border border-collapse border">
@@ -1604,13 +1616,13 @@ function MessageItem({
                   </table>
                 </div>
               ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
               th: ({ children }: any) => (
                 <th className="border-border bg-muted border px-3 py-2 text-left">
                   {children}
                 </th>
               ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
               td: ({ children }: any) => (
                 <td className="border-border border px-3 py-2">{children}</td>
               ),
@@ -1753,7 +1765,9 @@ function ErrorMessage({ message }: { message: string }) {
     const errorMessage = (
       t.common.errors.customApiError ||
       'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
-    ).replace('{baseUrl}', baseUrl).replace('{logPath}', logPath);
+    )
+      .replace('{baseUrl}', baseUrl)
+      .replace('{logPath}', logPath);
 
     return (
       <div className="flex items-start gap-3 py-2">

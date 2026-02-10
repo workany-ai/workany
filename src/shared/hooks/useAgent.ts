@@ -1076,7 +1076,9 @@ export function useAgent(): UseAgentReturn {
                   type: msg.type as AgentMessage['type'],
                   content: msg.content || undefined,
                   name: msg.tool_name || undefined,
-                  input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+                  input: msg.tool_input
+                    ? JSON.parse(msg.tool_input)
+                    : undefined,
                   output: msg.tool_output || undefined,
                   toolUseId: msg.tool_use_id || undefined,
                   subtype: msg.subtype as AgentMessage['subtype'],
@@ -1293,7 +1295,11 @@ export function useAgent(): UseAgentReturn {
         const lastPlanMessage = [...agentMessages]
           .reverse()
           .find((m) => m.type === 'plan' && m.plan);
-        if (lastPlanMessage && lastPlanMessage.type === 'plan' && lastPlanMessage.plan) {
+        if (
+          lastPlanMessage &&
+          lastPlanMessage.type === 'plan' &&
+          lastPlanMessage.plan
+        ) {
           const planSteps = lastPlanMessage.plan.steps || [];
           // Check if plan has incomplete steps (pending or no status)
           const hasIncompleteSteps = planSteps.some(
@@ -1302,9 +1308,16 @@ export function useAgent(): UseAgentReturn {
 
           // Restore plan if task is not completed/stopped and has incomplete steps
           if (hasIncompleteSteps && !taskIsCompleted && !taskIsStopped) {
-            console.log('[useAgent] Restoring plan awaiting approval for task:', id, {
-              planSteps: planSteps.map((s) => ({ title: s.title, status: s.status })),
-            });
+            console.log(
+              '[useAgent] Restoring plan awaiting approval for task:',
+              id,
+              {
+                planSteps: planSteps.map((s) => ({
+                  title: s.title,
+                  status: s.status,
+                })),
+              }
+            );
             setPlan(lastPlanMessage.plan);
             setPhase('awaiting_approval');
           }

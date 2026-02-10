@@ -32,6 +32,15 @@ export default {
   deleteTask: '删除任务',
   deleteTaskConfirm: '确定要删除这个任务吗？',
   deleteTaskDescription: '此操作无法撤销，任务中的所有消息将被永久删除。',
+  noChatsYet: '暂无聊天',
+
+  // Bot Chat
+  botChatTitle: 'Bot 聊天',
+  botChatDescription: '与 OpenClaw Bot 对话',
+  botChatWelcome: '开始与 Bot 对话',
+  botChatWelcomeHint: '输入消息开始与 OpenClaw Bot 聊天',
+  botChatInputPlaceholder: '输入消息...',
+  botChatError: '抱歉，发生了错误。请确保 OpenClaw Gateway 正在运行。',
 
   // API 错误提示
   errors: {
@@ -51,7 +60,8 @@ export default {
     claudeCodeNotFound:
       'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
     configureModel: '配置模型',
-    apiKeyError: 'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
+    apiKeyError:
+      'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
     configureApiKey: '前往配置',
     agentProcessError: 'Agent 运行遇到错误，请检查模型配置后重试',
   },

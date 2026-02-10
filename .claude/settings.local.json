@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm tauri dev:*)",
+      "Bash(pnpm run build:binary:mac-arm:*)",
+      "Bash(ln:*)",
+      "Skill(superpowers:systematic-debugging)",
+      "Bash(chmod:*)",
+      "Bash(xargs -I {} sh -c \"echo \"\"=== {} ===\"\" && head -5 {}\")",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm lint:fix:*)",
+      "Bash(pnpm install)",
+      "Bash(npx tsc:*)",
+      "Bash(node -c:*)",
+      "Bash(lsof:*)",
+      "Bash(ps:*)",
+      "Bash(node --import tsx:*)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm exec prettier:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n✨ feat\\(settings\\): add API connection detection for custom providers\n\nAdd detection button to validate custom API provider configuration\nbefore using it for AI agent tasks.\n\nFeatures:\n- Detection button in both \"Add Provider\" form and \"Edit Provider\" panel\n- Validates baseUrl and apiKey by calling /v1/messages endpoint\n- Visual feedback: green \\(success\\) or red \\(failure\\) button styling\n- 60-second timeout for slow local models\n- Error messages displayed below button for troubleshooting\n\nBackend changes:\n- POST /providers/detect endpoint for API validation\n- Refactored providers routes with extracted constants and helper functions\n- Added type definitions for all request/response bodies\n- Global error handler for consistent error responses\n- Extracted formatProviderMetadata\\(\\) to reduce duplication\n\nThe detection uses minimal request payload \\(1 token, \"OK\" message\\)\nto quickly verify API connectivity without consuming credits.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(pnpm build:api:*)",
+      "Bash(pnpm run --filter workany-api build:*)",
+      "Bash(pnpm build:*)",
+      "Bash(xargs kill:*)",
+      "Bash(pnpm run --filter workany-app build:*)",
+      "Bash(grep:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n✨ i18n\\(settings\\): add translations for provider detection feature\n\nAdd internationalization support for the API connection detection\nfeature introduced in the previous commit. This ensures proper\nlocalization for both Chinese and English users.\n\nFrontend changes:\n- Added tt\\(\\) interpolation support for dynamic error messages\n- Replaced hardcoded Chinese text with translation keys\n- Updated detect button labels \\(Detecting, Success, Failed\\)\n- Localized validation messages and connection status\n\nBackend changes:\n- Standardized API error messages to English\n- Changed response messages from Chinese to English\n\nTranslation keys added:\n- detectConfig, detecting, success, failed\n- connectionSuccess, connectionFailed\n- connectionTimeout, networkError\n- fillBaseUrlAndApiKey, connectionError\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm --filter workany-api add:*)",
+      "Bash(pkill:*)",
+      "Bash(pnpm --filter workany-api lint:fix:*)",
+      "Bash(pnpm --filter workany-api lint:*)",
+      "Bash(pnpm --filter workany-api build:*)",
+      "Bash(vite build:*)",
+      "Bash(pnpm run build:*)",
+      "Bash(npx vite build)"
+    ]
+  }
+}

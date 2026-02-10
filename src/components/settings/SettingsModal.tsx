@@ -24,6 +24,7 @@ import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
 import { ModelSettings } from './tabs/ModelSettings';
+import { OpenClawSettings } from './tabs/OpenClawSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import { WorkplaceSettings } from './tabs/WorkplaceSettings';
 import type { SettingsCategory } from './types';
@@ -65,6 +66,7 @@ export function SettingsModal({
     'model',
     'mcp',
     'skills',
+    'openclaw',
     'data',
     'about',
   ];
@@ -193,6 +195,13 @@ export function SettingsModal({
 
               {activeCategory === 'skills' && (
                 <SkillsSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'openclaw' && (
+                <OpenClawSettings
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />

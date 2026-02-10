@@ -1,5 +1,11 @@
 import { createBrowserRouter } from 'react-router-dom';
-import { HomePage, LibraryPage, SetupPage, TaskDetailPage } from '@/app/pages';
+import {
+  BotChatPage,
+  HomePage,
+  LibraryPage,
+  SetupPage,
+  TaskDetailPage,
+} from '@/app/pages';
 
 import { SetupGuard } from '@/components/setup-guard';
 
@@ -9,6 +15,14 @@ export const router = createBrowserRouter([
     element: (
       <SetupGuard>
         <HomePage />
+      </SetupGuard>
+    ),
+  },
+  {
+    path: '/bot',
+    element: (
+      <SetupGuard>
+        <BotChatPage />
       </SetupGuard>
     ),
   },
