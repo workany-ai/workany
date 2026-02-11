@@ -57,6 +57,9 @@ function BotChatContent() {
   const [sessionKey, setSessionKey] = useState<string>('');
   const loadedSessionKeysRef = useRef<Set<string>>(new Set());
   const initialPromptHandledRef = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageCountRef = useRef(0);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sidebar state
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -195,6 +198,23 @@ function BotChatContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ]);
 
+  // Auto-scroll
+  useEffect(() => {
+    if (messages.length > lastMessageCountRef.current || isLoading) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      lastMessageCountRef.current = messages.length;
+    }
+  }, [messages.length, isLoading]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   const handleSubmit = async (
     text: string,
     _attachments?: MessageAttachment[]
@@ -211,6 +231,12 @@ function BotChatContent() {
     setMessages(newMessages);
     saveBotMessages(newMessages);
     setIsLoading(true);
+
+    // Start polling history
+    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+    pollingIntervalRef.current = setInterval(() => {
+      loadChatHistory();
+    }, 1000);
 
     try {
       const openclawConfig = getOpenClawConfig();
@@ -229,21 +255,9 @@ function BotChatContent() {
         throw new Error('Failed to send message');
       }
 
-      const data = await response.json();
-
-      if (data.reply) {
-        const assistantMessage: BotMessage = {
-          id: `assistant_${Date.now()}`,
-          role: 'assistant',
-          content: data.reply,
-          timestamp: new Date(),
-        };
-        const updatedMessages = [...newMessages, assistantMessage];
-        setMessages(updatedMessages);
-        saveBotMessages(updatedMessages);
-      } else if (data.error) {
-        throw new Error(data.error);
-      }
+      await response.json();
+      // We rely on polling/history load for the assistant message
+      await loadChatHistory();
     } catch (error) {
       console.error('[BotChat] Error:', error);
       const errorMessage: BotMessage = {
@@ -254,11 +268,13 @@ function BotChatContent() {
           '抱歉，发生了错误。请确保 OpenClaw Gateway 正在运行。',
         timestamp: new Date(),
       };
-      const updatedMessages = [...newMessages, errorMessage];
-      setMessages(updatedMessages);
-      saveBotMessages(updatedMessages);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     }
   };
 
@@ -320,6 +336,7 @@ function BotChatContent() {
             <BotMessageList
               messages={convertToBotChatMessages(messages)}
               isLoading={isLoading}
+              messagesEndRef={messagesEndRef}
             />
           )}
         </div>
