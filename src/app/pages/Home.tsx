@@ -494,40 +494,6 @@ function HomeContent() {
               {t.home.welcomeSubtitle}
             </p>
 
-            {/* Task Mode Toggle */}
-            <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
-              <button
-                onClick={() => setTaskMode('local')}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  taskMode === 'local'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <SquarePen className="size-3.5" />
-                {t.nav.localTask}
-              </button>
-              <button
-                onClick={() => {
-                  const openClawConfig =
-                    localStorage.getItem('openclaw_config');
-                  if (!openClawConfig) {
-                    // Not configured - don't allow switching
-                    return;
-                  }
-                  setTaskMode('bot');
-                }}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  taskMode === 'bot'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Zap className="size-3.5" />
-                {t.nav.botTask}
-              </button>
-            </div>
-
             {/* Input Box - Using shared ChatInput component */}
             <ChatInput
               variant="home"
@@ -539,6 +505,39 @@ function HomeContent() {
               onSubmit={handleSubmit}
               className="w-full"
               autoFocus
+              bottomContent={
+                <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
+                  <button
+                    onClick={() => setTaskMode('local')}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                      taskMode === 'local'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <SquarePen className="size-3.5" />
+                    {t.nav.localTask}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const openClawConfig =
+                        localStorage.getItem('openclaw_config');
+                      if (!openClawConfig) {
+                        return;
+                      }
+                      setTaskMode('bot');
+                    }}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                      taskMode === 'bot'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Zap className="size-3.5" />
+                    {t.nav.botTask}
+                  </button>
+                </div>
+              }
             />
           </div>
         </div>

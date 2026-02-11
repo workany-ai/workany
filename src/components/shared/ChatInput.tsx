@@ -51,6 +51,8 @@ export interface ChatInputProps {
   disabled?: boolean;
   /** Auto focus on mount */
   autoFocus?: boolean;
+  /** Content to render in the center of the bottom actions bar */
+  bottomContent?: React.ReactNode;
 }
 
 // Generate unique ID for attachments
@@ -95,7 +97,9 @@ export function ChatInput({
   variant = 'reply',
   className,
   disabled = false,
+
   autoFocus = false,
+  bottomContent,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -422,6 +426,13 @@ export function ChatInput({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Center Content */}
+        {bottomContent && (
+          <div className="flex flex-1 items-center justify-center px-2">
+            {bottomContent}
+          </div>
+        )}
 
         {/* Submit/Stop Button */}
         <div className="flex items-center gap-1">
