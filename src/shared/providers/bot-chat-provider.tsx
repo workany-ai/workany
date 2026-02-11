@@ -44,17 +44,35 @@ interface OpenClawMessage {
   isError?: boolean;
 }
 
-// 检查是否是纯用户消息（不包含系统上下文标记）
-function isPureUserMessage(content: string): boolean {
-  const contextMarkers = [
-    'Conversation info (untrusted metadata)',
-    'untrusted metadata',
-    'Sender (untrusted metadata)',
-    'Thread starter (untrusted, for context)',
-    'Replied message (untrusted, for context)',
-    'Forwarded message context (untrusted metadata)',
-  ];
-  return !contextMarkers.some((marker) => content.includes(marker));
+// 从可能包含系统上下文标记的文本中提取真实用户内容
+function extractRealUserContent(content: string): string {
+  if (!content) return '';
+
+  let result = content;
+
+  // 移除所有 "xxx (untrusted xxx)" 后跟 ```json ... ``` 的块
+  // 匹配模式：
+  // 1. 以 "xxx (untrusted xxx)" 开头
+  // 2. 后跟可选的冒号和换行
+  // 3. 后跟 ```json ... ``` 代码块
+  // 4. 后跟可选的换行
+  const untrustedBlockPattern =
+    /[^\n]*\(untrusted[^)]*\):\s*\n```json\s*```[\s\n]*/gi;
+  result = result.replace(untrustedBlockPattern, '');
+
+  // 移除所有 ```json ... ``` 代码块（单独的，可能被遗漏的）
+  const jsonBlockPattern = /```json\s*```[\s\n]*/gi;
+  result = result.replace(jsonBlockPattern, '');
+
+  // 移除 "Conversation info (untrusted metadata):" 这类标题行（如果没有被上面的模式匹配到）
+  const titlePattern = /^[^\n]*\(untrusted[^)]*\):\s*\n/gim;
+  result = result.replace(titlePattern, '');
+
+  // 移除可能残留的 JSON 块（更宽松的匹配）
+  const looseJsonPattern = /```json[^`]*```/gi;
+  result = result.replace(looseJsonPattern, '');
+
+  return result.trim();
 }
 
 interface OpenClawSession {
@@ -75,7 +93,7 @@ interface OpenClawHistoryResponse {
 }
 
 function convertMessage(message: OpenClawMessage): BotChatMessage {
-  // 提取纯文本内容（过滤掉系统上下文标记）
+  // 提取并清理文本内容（移除系统上下文标记）
   const extractCleanContent = (): string => {
     if (!message.content) return '';
 
@@ -84,8 +102,8 @@ function convertMessage(message: OpenClawMessage): BotChatMessage {
       .map((c) => c.text || '')
       .filter((text) => text.trim());
 
-    // 过滤掉包含系统上下文标记的内容块
-    const cleanParts = textParts.filter((text) => isPureUserMessage(text));
+    // 从每个文本块中提取真实用户内容（移除系统上下文标记）
+    const cleanParts = textParts.map((text) => extractRealUserContent(text));
     return cleanParts.join('\n');
   };
 
