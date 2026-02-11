@@ -44,6 +44,19 @@ interface OpenClawMessage {
   isError?: boolean;
 }
 
+// 检查是否是纯用户消息（不包含系统上下文标记）
+function isPureUserMessage(content: string): boolean {
+  const contextMarkers = [
+    'Conversation info (untrusted metadata)',
+    'untrusted metadata',
+    'Sender (untrusted metadata)',
+    'Thread starter (untrusted, for context)',
+    'Replied message (untrusted, for context)',
+    'Forwarded message context (untrusted metadata)',
+  ];
+  return !contextMarkers.some((marker) => content.includes(marker));
+}
+
 interface OpenClawSession {
   key: string;
   friendlyId?: string;
@@ -62,20 +75,23 @@ interface OpenClawHistoryResponse {
 }
 
 function convertMessage(message: OpenClawMessage): BotChatMessage {
-  // Filter out debug/metadata text content
-  const isDebugText = (text: string): boolean => {
-    const debugMarkers = ['Conversation info', 'untrusted metadata', '```json'];
-    return debugMarkers.some((marker) => text.includes(marker));
+  // 提取纯文本内容（过滤掉系统上下文标记）
+  const extractCleanContent = (): string => {
+    if (!message.content) return '';
+
+    const textParts = message.content
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text || '')
+      .filter((text) => text.trim());
+
+    // 过滤掉包含系统上下文标记的内容块
+    const cleanParts = textParts.filter((text) => isPureUserMessage(text));
+    return cleanParts.join('\n');
   };
 
   return {
     role: message.role as BotChatMessage['role'],
-    content:
-      message.content
-        ?.filter((c) => c.type === 'text')
-        .map((c) => c.text || '')
-        .filter((text) => text.trim() && !isDebugText(text))
-        .join('\n') || '',
+    content: extractCleanContent(),
     timestamp: message.timestamp,
     rawContent: (message.content || []) as any,
     toolCallId: message.toolCallId,
