@@ -174,9 +174,8 @@ function BotChatContent() {
     if (!sessionKey || loadedSessionKeysRef.current.has(sessionKey)) {
       return;
     }
-    loadChatHistory();
     loadedSessionKeysRef.current.add(sessionKey);
-  }, [sessionKey, loadChatHistory]);
+  }, [sessionKey]);
 
   useEffect(() => {
     const initialPrompt = (location.state as any)?.initialPrompt;
