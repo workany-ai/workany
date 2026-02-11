@@ -1,6 +1,8 @@
 export default {
   newTask: '新建任务',
   newBot: '连接 Bot',
+  localTask: '本地任务',
+  botTask: 'Bot 任务',
   allTasks: '所有任务',
   allChats: '所有聊天',
   noTasksYet: '暂无任务',

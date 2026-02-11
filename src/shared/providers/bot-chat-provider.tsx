@@ -20,7 +20,10 @@ interface BotChatContextType {
 
 const BotChatContext = createContext<BotChatContextType | undefined>(undefined);
 
-function getOpenClawConfig(): { gatewayUrl?: string; authToken?: string } | null {
+function getOpenClawConfig(): {
+  gatewayUrl?: string;
+  authToken?: string;
+} | null {
   const stored = localStorage.getItem('openclaw_config');
   if (!stored) return null;
 
@@ -59,15 +62,22 @@ interface OpenClawHistoryResponse {
 }
 
 function convertMessage(message: OpenClawMessage): BotChatMessage {
+  // Filter out debug/metadata text content
+  const isDebugText = (text: string): boolean => {
+    const debugMarkers = ['Conversation info', 'untrusted metadata', '```json'];
+    return debugMarkers.some((marker) => text.includes(marker));
+  };
+
   return {
     role: message.role as BotChatMessage['role'],
     content:
       message.content
         ?.filter((c) => c.type === 'text')
         .map((c) => c.text || '')
+        .filter((text) => text.trim() && !isDebugText(text))
         .join('\n') || '',
     timestamp: message.timestamp,
-    rawContent: message.content || [],
+    rawContent: (message.content || []) as any,
     toolCallId: message.toolCallId,
     toolName: message.toolName,
     details: message.details,
@@ -146,21 +156,25 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const sessionsResponse = await fetch(`${API_BASE_URL}/openclaw/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gatewayUrl: config.gatewayUrl,
-          authToken: config.authToken,
-        }),
-      });
+      const sessionsResponse = await fetch(
+        `${API_BASE_URL}/openclaw/sessions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gatewayUrl: config.gatewayUrl,
+            authToken: config.authToken,
+          }),
+        }
+      );
 
       if (!sessionsResponse.ok) {
         setSessions([]);
         return;
       }
 
-      const sessionsData = (await sessionsResponse.json()) as OpenClawSessionsResponse;
+      const sessionsData =
+        (await sessionsResponse.json()) as OpenClawSessionsResponse;
       if (!sessionsData.success || !sessionsData.sessions) {
         setSessions([]);
         return;

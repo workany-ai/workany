@@ -16,6 +16,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   PanelLeft,
+  RefreshCw,
   Settings,
   Smartphone,
   Sparkles,
@@ -23,10 +24,10 @@ import {
   Star,
   Trash2,
   User,
-  Zap,
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
+import type { SettingsCategory } from '@/components/settings/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,13 +51,14 @@ interface LeftSidebarProps {
   currentTaskId?: string;
   onDeleteTask?: (taskId: string) => void;
   onToggleFavorite?: (taskId: string, favorite: boolean) => void;
-  runningTaskIds?: string[]; // Tasks running in background
-  botChats?: BotChatSession[]; // Bot chat sessions
-  currentBotChatKey?: string; // Current bot chat session key
+  runningTaskIds?: string[];
+  botChats?: BotChatSession[];
+  currentBotChatKey?: string;
   onSelectBotChat?: (chatKey: string) => void;
+  onRefreshBotChats?: () => void;
+  onNewTask?: () => void;
 }
 
-// Delete confirmation dialog component
 function DeleteConfirmDialog({
   open,
   onOpenChange,
@@ -105,7 +107,29 @@ function DeleteConfirmDialog({
   );
 }
 
-// Get icon for task based on prompt content
+function ChatSettingsButton({
+  hasConfig,
+  onRefresh,
+  onOpenSettings,
+}: {
+  hasConfig: boolean;
+  onRefresh?: () => void;
+  onOpenSettings: () => void;
+}) {
+  const baseClassName =
+    'text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex size-5 cursor-pointer items-center justify-center rounded transition-colors';
+
+  return hasConfig ? (
+    <button onClick={onRefresh} className={baseClassName} title="Refresh chats">
+      <RefreshCw className="size-3" />
+    </button>
+  ) : (
+    <button onClick={onOpenSettings} className={baseClassName} title="Settings">
+      <Settings className="size-3" />
+    </button>
+  );
+}
+
 function getTaskIcon(prompt: string) {
   const lowerPrompt = prompt.toLowerCase();
   if (lowerPrompt.includes('网站') || lowerPrompt.includes('website')) {
@@ -132,10 +156,15 @@ export function LeftSidebar({
   botChats = [],
   currentBotChatKey,
   onSelectBotChat,
+  onRefreshBotChats,
+  onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialCategory, setSettingsInitialCategory] = useState<
+    SettingsCategory | undefined
+  >(undefined);
   const [profile, setProfile] = useState<UserProfile>({
     nickname: 'Guest User',
     avatar: '',
@@ -188,21 +217,11 @@ export function LeftSidebar({
   }, [settingsOpen]);
 
   const handleNewTask = () => {
-    navigate('/');
-  };
-
-  const handleNewBot = () => {
-    // Check if OpenClaw is configured
-    const openClawConfig = localStorage.getItem('openclaw_config');
-    if (!openClawConfig) {
-      // Open settings modal with OpenClaw tab
-      setSettingsOpen(true);
-      // TODO: Navigate to OpenClaw settings tab after modal opens
-      return;
+    if (onNewTask) {
+      onNewTask();
+    } else {
+      navigate('/');
     }
-
-    // Navigate to bot chat with new session
-    navigate('/bot');
   };
 
   const handleSelectTask = (taskId: string) => {
@@ -269,12 +288,6 @@ export function LeftSidebar({
                 label={t.nav.newTask}
                 collapsed={false}
                 onClick={handleNewTask}
-              />
-              <NavItem
-                icon={Zap}
-                label={t.nav.newBot}
-                collapsed={false}
-                onClick={handleNewBot}
               />
             </nav>
 
@@ -343,6 +356,14 @@ export function LeftSidebar({
                   <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
                     {t.nav.allChats}
                   </span>
+                  <ChatSettingsButton
+                    hasConfig={!!localStorage.getItem('openclaw_config')}
+                    onRefresh={onRefreshBotChats}
+                    onOpenSettings={() => {
+                      setSettingsInitialCategory('openclaw');
+                      setSettingsOpen(true);
+                    }}
+                  />
                 </div>
                 <div className="flex-1 space-y-0.5 overflow-y-auto">
                   {botChats && botChats.length > 0 ? (
@@ -480,19 +501,6 @@ export function LeftSidebar({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">{t.nav.newTask}</TooltipContent>
-              </Tooltip>
-
-              {/* New Bot */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleNewBot}
-                    className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground flex size-10 cursor-pointer items-center justify-center rounded-xl transition-colors duration-200"
-                  >
-                    <Zap className="size-5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{t.nav.newBot}</TooltipContent>
               </Tooltip>
 
               {/* Tasks - With hover popup */}
@@ -713,7 +721,14 @@ export function LeftSidebar({
       </aside>
 
       {/* Settings Modal */}
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) setSettingsInitialCategory(undefined);
+        }}
+        initialCategory={settingsInitialCategory}
+      />
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog

@@ -38,6 +38,5 @@ export interface BotChatSession {
 }
 
 export function useBotChats() {
-  const { sessions, isLoading } = useBotChatContext();
-  return { sessions, isLoading };
+  return useBotChatContext();
 }

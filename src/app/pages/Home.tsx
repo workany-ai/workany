@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '@/config';
 import {
@@ -20,219 +20,11 @@ import {
 } from '@/shared/lib/background-tasks';
 import { generateSessionId } from '@/shared/lib/session';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { MessageSquare } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MessageSquare, SquarePen, Zap } from 'lucide-react';
 
-import { Logo } from '@/components/common/logo';
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
+import { BotMessageList } from '@/components/shared/BotMessageList';
 import { ChatInput } from '@/components/shared/ChatInput';
-import { ThinkingBlock } from '@/components/shared/ThinkingBlock';
-import {
-  ToolCallBlock,
-  type ToolCallPart,
-} from '@/components/shared/ToolCallBlock';
-
-// ============================================================================
-// BotMessageList — shared message rendering for bot chat
-// ============================================================================
-
-function BotMessageList({
-  messages,
-  isSendingBotMessage,
-  messagesEndRef,
-}: {
-  messages: BotChatMessage[];
-  isSendingBotMessage: boolean;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  // Build toolResult lookup by toolCallId
-  const toolResultsByCallId = useMemo(() => {
-    const map = new Map<string, BotChatMessage>();
-    for (const msg of messages) {
-      if (msg.role === 'toolResult' && msg.toolCallId) {
-        map.set(msg.toolCallId, msg);
-      }
-    }
-    return map;
-  }, [messages]);
-
-  return (
-    <div className="space-y-4">
-      {messages.map((message, index) => {
-        // Skip toolResult messages — they're rendered as part of tool calls
-        if (message.role === 'toolResult') return null;
-
-        const isUser = message.role === 'user';
-
-        // Extract thinking content from rawContent
-        const thinkingContent =
-          !isUser && message.rawContent
-            ? message.rawContent
-                .filter((p) => p.type === 'thinking' && p.thinking)
-                .map((p) => p.thinking!)
-                .join('\n')
-            : '';
-
-        // Extract tool calls from rawContent
-        const toolCalls =
-          !isUser && message.rawContent
-            ? message.rawContent.filter((p) => p.type === 'toolCall')
-            : [];
-
-        if (isUser) {
-          // User message — right-aligned, matching TaskDetail's UserMessage style
-          return (
-            <div key={index} className="flex min-w-0 gap-3">
-              <div className="min-w-0 flex-1" />
-              <div className="bg-accent/50 max-w-[85%] min-w-0 rounded-xl px-4 py-3">
-                <p className="text-foreground text-sm break-words whitespace-pre-wrap">
-                  {message.content}
-                </p>
-              </div>
-            </div>
-          );
-        }
-
-        // Assistant message
-        return (
-          <div key={index} className="flex flex-col gap-2">
-            {/* Thinking block */}
-            {thinkingContent && <ThinkingBlock content={thinkingContent} />}
-
-            {/* Text content — rendered with Markdown + Logo, matching TaskDetail */}
-            {message.content && (
-              <div className="flex min-w-0 flex-col gap-3">
-                <Logo />
-                <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      pre: ({ children }: any) => (
-                        <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
-                          {children}
-                        </pre>
-                      ),
-                      code: ({ className, children, ...props }: any) => {
-                        const isInline = !className;
-                        if (isInline) {
-                          return (
-                            <code
-                              className="bg-muted rounded px-1.5 py-0.5 text-sm"
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          );
-                        }
-                        return (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        );
-                      },
-                      a: ({ children, href }: any) => (
-                        <a
-                          href={href}
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            if (href) {
-                              try {
-                                const { openUrl } =
-                                  await import('@tauri-apps/plugin-opener');
-                                await openUrl(href);
-                              } catch {
-                                window.open(href, '_blank');
-                              }
-                            }
-                          }}
-                          className="text-primary cursor-pointer hover:underline"
-                        >
-                          {children}
-                        </a>
-                      ),
-                      table: ({ children }: any) => (
-                        <div className="overflow-x-auto">
-                          <table className="border-border border-collapse border">
-                            {children}
-                          </table>
-                        </div>
-                      ),
-                      th: ({ children }: any) => (
-                        <th className="border-border bg-muted border px-3 py-2 text-left">
-                          {children}
-                        </th>
-                      ),
-                      td: ({ children }: any) => (
-                        <td className="border-border border px-3 py-2">
-                          {children}
-                        </td>
-                      ),
-                    }}
-                  >
-                    {message.content}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
-
-            {/* Tool calls */}
-            {toolCalls.length > 0 && (
-              <div className="mt-1 flex flex-col gap-2">
-                {toolCalls.map((toolCall) => {
-                  const resultMsg = toolCall.id
-                    ? toolResultsByCallId.get(toolCall.id)
-                    : undefined;
-
-                  const hasResult = resultMsg !== undefined;
-                  const isError = resultMsg?.isError ?? false;
-
-                  let state: ToolCallPart['state'] = 'running';
-                  if (hasResult) {
-                    state = isError ? 'error' : 'done';
-                  }
-
-                  let errorText: string | undefined;
-                  if (isError && resultMsg?.rawContent?.[0]?.type === 'text') {
-                    errorText = resultMsg.rawContent[0].text || 'Unknown error';
-                  }
-
-                  const tool: ToolCallPart = {
-                    name: toolCall.name || 'unknown',
-                    state,
-                    input: toolCall.arguments,
-                    output: resultMsg?.details,
-                    toolCallId: toolCall.id,
-                    errorText,
-                  };
-
-                  return (
-                    <ToolCallBlock
-                      key={toolCall.id || toolCall.name}
-                      tool={tool}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {isSendingBotMessage && (
-        <div className="flex items-center gap-3 py-2">
-          <Logo />
-          <div className="flex gap-1">
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full" />
-          </div>
-        </div>
-      )}
-      {/* Scroll anchor */}
-      <div ref={messagesEndRef} />
-    </div>
-  );
-}
 
 export function HomePage() {
   return (
@@ -246,7 +38,7 @@ function HomeContent() {
   const { t } = useLanguage();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
-  const { sessions: botChats } = useBotChats();
+  const { sessions: botChats, refreshSessions } = useBotChats();
 
   // Bot chat state
   const [selectedBotChat, setSelectedBotChat] = useState<BotChatSession | null>(
@@ -256,23 +48,22 @@ function HomeContent() {
   const [isLoadingBotMessages, setIsLoadingBotMessages] = useState(false);
   const [isSendingBotMessage, setIsSendingBotMessage] = useState(false);
 
-  // Refs for tracking state and scrolling
+  const [taskMode, setTaskMode] = useState<'local' | 'bot'>('local');
+
   const isSendingMessageRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageCountRef = useRef(0);
   const selectedBotChatKeyRef = useRef<string | null>(null);
-  const pendingMessageRef = useRef<string | null>(null); // Track pending message to prevent duplicates
+  const pendingMessageRef = useRef<string | null>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Subscribe to background tasks
   useEffect(() => {
     const unsubscribe = subscribeToBackgroundTasks(setBackgroundTasks);
     return unsubscribe;
   }, []);
 
-  // Load tasks for sidebar
   useEffect(() => {
     async function loadTasks() {
       try {
@@ -285,7 +76,6 @@ function HomeContent() {
     loadTasks();
   }, []);
 
-  // Handle task deletion
   const handleDeleteTask = async (taskId: string) => {
     try {
       await deleteTask(taskId);
@@ -295,7 +85,6 @@ function HomeContent() {
     }
   };
 
-  // Handle favorite toggle
   const handleToggleFavorite = async (taskId: string, favorite: boolean) => {
     try {
       await updateTask(taskId, { favorite });
@@ -307,7 +96,6 @@ function HomeContent() {
     }
   };
 
-  // Handle bot chat selection - load chat directly on home page
   const handleSelectBotChat = useCallback(
     async (chatKey: string) => {
       console.log(
@@ -393,6 +181,10 @@ function HomeContent() {
             );
             setBotMessages(messages);
             lastMessageCountRef.current = messages.length;
+            // Scroll to bottom after loading messages
+            setTimeout(() => {
+              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
           }
         }
       } catch (error) {
@@ -404,7 +196,6 @@ function HomeContent() {
     [botChats]
   );
 
-  // Handle sending bot message
   const handleSendBotMessage = useCallback(
     async (text: string) => {
       const trimmedText = text.trim();
@@ -508,7 +299,15 @@ function HomeContent() {
     [selectedBotChat]
   );
 
-  // Check for selected bot chat in navigation state
+  const handleNewTask = useCallback(() => {
+    setSelectedBotChat(null);
+    setBotMessages([]);
+    selectedBotChatKeyRef.current = null;
+    pendingMessageRef.current = null;
+    lastMessageCountRef.current = 0;
+    navigate('/');
+  }, [navigate]);
+
   useEffect(() => {
     if (
       location.state &&
@@ -525,7 +324,6 @@ function HomeContent() {
     }
   }, [location.state, botChats, handleSelectBotChat]);
 
-  // Auto-scroll to bottom when messages change or loading starts
   useEffect(() => {
     if (
       botMessages.length > 0 &&
@@ -549,7 +347,19 @@ function HomeContent() {
       return;
     }
 
-    // Otherwise create a new task
+    // Bot mode: navigate to /bot with the prompt
+    if (taskMode === 'bot') {
+      const openClawConfig = localStorage.getItem('openclaw_config');
+      if (!openClawConfig) {
+        // Not configured, switch back to local and alert
+        setTaskMode('local');
+        return;
+      }
+      navigate('/bot', { state: { initialPrompt: text.trim() } });
+      return;
+    }
+
+    // Otherwise create a new local task
     const prompt = text.trim();
 
     // Create a new session
@@ -593,6 +403,8 @@ function HomeContent() {
           botChats={botChats}
           currentBotChatKey={selectedBotChat.sessionKey}
           onSelectBotChat={handleSelectBotChat}
+          onRefreshBotChats={refreshSessions}
+          onNewTask={handleNewTask}
         />
 
         {/* Main Content - Bot Chat View */}
@@ -625,13 +437,11 @@ function HomeContent() {
                   </div>
                 </div>
               ) : (
-                <div className="max-w-full min-w-0 space-y-4">
-                  <BotMessageList
-                    messages={botMessages}
-                    isSendingBotMessage={isSendingBotMessage}
-                    messagesEndRef={messagesEndRef}
-                  />
-                </div>
+                <BotMessageList
+                  messages={botMessages}
+                  isLoading={isSendingBotMessage}
+                  messagesEndRef={messagesEndRef}
+                />
               )}
             </div>
           </div>
@@ -666,6 +476,7 @@ function HomeContent() {
           .map((t) => t.taskId)}
         botChats={botChats}
         onSelectBotChat={handleSelectBotChat}
+        onRefreshBotChats={refreshSessions}
       />
 
       {/* Main Content */}
@@ -683,10 +494,48 @@ function HomeContent() {
               {t.home.welcomeSubtitle}
             </p>
 
+            {/* Task Mode Toggle */}
+            <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
+              <button
+                onClick={() => setTaskMode('local')}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  taskMode === 'local'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <SquarePen className="size-3.5" />
+                {t.nav.localTask}
+              </button>
+              <button
+                onClick={() => {
+                  const openClawConfig =
+                    localStorage.getItem('openclaw_config');
+                  if (!openClawConfig) {
+                    // Not configured - don't allow switching
+                    return;
+                  }
+                  setTaskMode('bot');
+                }}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  taskMode === 'bot'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Zap className="size-3.5" />
+                {t.nav.botTask}
+              </button>
+            </div>
+
             {/* Input Box - Using shared ChatInput component */}
             <ChatInput
               variant="home"
-              placeholder={t.home.inputPlaceholder}
+              placeholder={
+                taskMode === 'bot'
+                  ? t.home.botInputPlaceholder || 'Ask Bot anything...'
+                  : t.home.inputPlaceholder
+              }
               onSubmit={handleSubmit}
               className="w-full"
               autoFocus
