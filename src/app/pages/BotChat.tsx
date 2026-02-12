@@ -119,10 +119,25 @@ function BotChatContent() {
   }, []);
 
   // Helper to add assistant message with deduplication
-  const addAssistantMessage = useCallback((content: string, source: string = 'unknown') => {
+  // Accepts either a string (for fallback) or full message data (for chat.final)
+  const addAssistantMessage = useCallback((
+    contentOrMessage: string | {
+      content: string;
+      rawContent?: any[];
+      toolCallId?: string;
+      toolName?: string;
+      details?: Record<string, unknown>;
+      isError?: boolean;
+    },
+    source: string = 'unknown'
+  ) => {
     const now = Date.now();
 
-    console.log(`[BotChat] addAssistantMessage called from: ${source}, content length: ${content?.length}`);
+    // Extract content and full message data
+    const isFullMessage = typeof contentOrMessage !== 'string';
+    const content = isFullMessage ? contentOrMessage.content : contentOrMessage;
+
+    console.log(`[BotChat] addAssistantMessage called from: ${source}, content length: ${content?.length}, isFullMessage: ${isFullMessage}`);
 
     // Check for duplicate (same content within 1 second)
     if (
@@ -139,12 +154,23 @@ function BotChatContent() {
       role: 'assistant',
       content,
       timestamp: new Date(),
+      // Include rich content if provided
+      ...(isFullMessage ? {
+        rawContent: contentOrMessage.rawContent,
+        toolCallId: contentOrMessage.toolCallId,
+        toolName: contentOrMessage.toolName,
+        details: contentOrMessage.details,
+        isError: contentOrMessage.isError,
+      } : {}),
     };
 
     // Update deduplication tracker
     lastAssistantMessageRef.current = { content, timestamp: now };
 
-    console.log('[BotChat] Adding assistant message to history');
+    console.log('[BotChat] Adding assistant message to history', {
+      hasRawContent: !!assistantMessage.rawContent,
+      rawContentParts: assistantMessage.rawContent?.map(p => p.type),
+    });
 
     setMessages((prev) => {
       const updated = [...prev, assistantMessage];
@@ -172,8 +198,15 @@ function BotChatContent() {
           // Message complete - add to history
           if (payload.message) {
             const converted = convertOpenClawMessage(payload.message);
-            // Use deduplication helper
-            addAssistantMessage(converted.content, 'chat.final');
+            // Pass full message data including rawContent for thinking/toolCalls
+            addAssistantMessage({
+              content: converted.content,
+              rawContent: converted.rawContent,
+              toolCallId: converted.toolCallId,
+              toolName: converted.toolName,
+              details: converted.details,
+              isError: converted.isError,
+            }, 'chat.final');
           }
 
           setLoadingWithTimeout(false);
@@ -218,26 +251,70 @@ function BotChatContent() {
       );
 
       // Handle lifecycle.end with _useChatStream flag (fallback mode)
+      // This means no chat.final was received, so we need to fetch history
+      // to get the complete message including thinking and toolCalls
       if (
         payload.stream === 'lifecycle' &&
         payload.data?.phase === 'end' &&
         (payload.data as { _useChatStream?: boolean })._useChatStream
       ) {
-        const streamContent = chatStreamRef.current;
+        console.log('[BotChat] lifecycle.end with _useChatStream - fetching history for complete message');
+
+        // Clear chatStream ref
         chatStreamRef.current = null;
 
-        console.log('[BotChat] lifecycle.end with _useChatStream, chatStream:', streamContent?.substring(0, 50));
+        // Fetch history to get the complete message with thinking/toolCalls
+        // Small delay to ensure server has saved the message
+        setTimeout(async () => {
+          try {
+            const openclawConfig = getOpenClawConfig();
+            const response = await fetch(`${API_BASE_URL}/openclaw/history`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionKey,
+                gatewayUrl: openclawConfig.gatewayUrl,
+                authToken: openclawConfig.authToken,
+              }),
+            });
 
-        if (streamContent) {
-          // Use deduplication helper
-          addAssistantMessage(streamContent, 'agent.lifecycle.end');
-        }
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.messages) {
+                // Convert all messages
+                const historyMessages: BotMessage[] = data.messages
+                  .filter(
+                    (m: any) =>
+                      m.role === 'user' ||
+                      m.role === 'assistant' ||
+                      m.role === 'toolResult'
+                  )
+                  .map((m: any, index: number) =>
+                    messageToBotMessage(m, index, sessionKey)
+                  );
+
+                console.log('[BotChat] Fetched history after lifecycle.end, messages:', historyMessages.length);
+
+                // Update messages with complete history
+                setMessages(historyMessages);
+                saveBotMessages(historyMessages);
+              }
+            }
+          } catch (error) {
+            console.error('[BotChat] Failed to fetch history after lifecycle.end:', error);
+            // Fallback: use chatStream if available
+            const streamContent = chatStreamRef.current;
+            if (streamContent) {
+              addAssistantMessage(streamContent, 'agent.lifecycle.end.fallback');
+            }
+          }
+        }, 500); // 500ms delay for server to save
 
         setLoadingWithTimeout(false);
         refreshSessions();
       }
     },
-    [refreshSessions, setLoadingWithTimeout, addAssistantMessage]
+    [refreshSessions, setLoadingWithTimeout, addAssistantMessage, sessionKey]
   );
 
   // WebSocket connection
