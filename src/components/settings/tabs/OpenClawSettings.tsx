@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
   Check,
   Eye,
   EyeOff,
+  ExternalLink,
   Loader2,
   RefreshCw,
   Shield,
@@ -20,6 +22,7 @@ import type {
 } from '../types';
 
 const DEFAULT_GATEWAY_URL = 'ws://127.0.0.1:18789';
+const WORKANY_BOT_URL = 'https://workany.ai/bot';
 
 export function OpenClawSettings({
   settings,
@@ -32,7 +35,13 @@ export function OpenClawSettings({
     const stored = localStorage.getItem('openclaw_config');
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        // If there's stored config with gatewayUrl, consider it enabled
+        return {
+          gatewayUrl: parsed.gatewayUrl || DEFAULT_GATEWAY_URL,
+          authToken: parsed.authToken || '',
+          enabled: !!parsed.gatewayUrl, // Auto-enable if gatewayUrl is set
+        };
       } catch {
         // Ignore parse errors
       }
@@ -158,22 +167,46 @@ export function OpenClawSettings({
     value: string | boolean
   ) => {
     const newConfig = { ...config, [field]: value };
+
+    // Auto-enable when gatewayUrl or authToken is set
+    if ((field === 'gatewayUrl' || field === 'authToken') && value) {
+      newConfig.enabled = true;
+    }
+
     setConfig(newConfig);
     saveConfig(newConfig);
 
     const updatedSettings = updateAgentRuntimes(settings, newConfig);
     onSettingsChange(updatedSettings);
-
-    if (field === 'enabled' && value === true) {
-      onSettingsChange({
-        ...updatedSettings,
-        defaultAgentRuntime: 'openclaw',
-      });
-    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Get OpenClaw Bot Section */}
+      <div className="border-border bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border p-4">
+        <div className="flex items-start gap-4">
+          <div className="bg-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <Zap className="size-5" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-foreground text-sm font-semibold">
+              {t.settings.openclawGetBot || 'Get OpenClaw Bot'}
+            </h4>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {t.settings.openclawGetBotDesc ||
+                'Get your OpenClaw Bot instance from WorkAny and start using AI-powered automation today.'}
+            </p>
+            <button
+              onClick={() => openUrl(WORKANY_BOT_URL)}
+              className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+            >
+              <ExternalLink className="size-4" />
+              {t.settings.openclawVisitWorkany || 'Visit WorkAny Bot'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Header Section */}
       <div className="border-border flex items-center gap-3 border-b pb-4">
         <div className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-lg">
@@ -188,6 +221,57 @@ export function OpenClawSettings({
               'Configure OpenClaw Gateway connection for AI bot capabilities'}
           </p>
         </div>
+      </div>
+
+      {/* Gateway URL Input */}
+      <div className="space-y-2">
+        <label className="text-foreground text-sm font-medium">
+          {t.settings.openclawGatewayUrl || 'Gateway URL'}
+        </label>
+        <input
+          type="text"
+          value={config.gatewayUrl}
+          onChange={(e) => handleConfigChange('gatewayUrl', e.target.value)}
+          placeholder={DEFAULT_GATEWAY_URL}
+          className="border-border bg-background text-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+        />
+        <p className="text-muted-foreground text-xs">
+          {t.settings.openclawGatewayUrlHint ||
+            'WebSocket URL of the OpenClaw Gateway (default: ws://127.0.0.1:18789)'}
+        </p>
+      </div>
+
+      {/* Auth Token Input */}
+      <div className="space-y-2">
+        <label className="text-foreground text-sm font-medium">
+          {t.settings.openclawAuthToken || 'Authentication Token (Optional)'}
+        </label>
+        <div className="relative">
+          <input
+            type={showToken ? 'text' : 'password'}
+            value={config.authToken || ''}
+            onChange={(e) => handleConfigChange('authToken', e.target.value)}
+            placeholder={
+              t.settings.openclawAuthTokenPlaceholder || 'Enter your auth token'
+            }
+            className="border-border bg-background text-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setShowToken(!showToken)}
+            className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+          >
+            {showToken ? (
+              <EyeOff className="size-4" />
+            ) : (
+              <Eye className="size-4" />
+            )}
+          </button>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t.settings.openclawAuthTokenHint ||
+            'Leave empty if your gateway does not require authentication'}
+        </p>
       </div>
 
       {/* Connection Status Card */}
@@ -246,82 +330,6 @@ export function OpenClawSettings({
               'Click "Detect Connection" to verify your OpenClaw Gateway configuration'}
           </div>
         )}
-      </div>
-
-      {/* Gateway URL Input */}
-      <div className="space-y-2">
-        <label className="text-foreground text-sm font-medium">
-          {t.settings.openclawGatewayUrl || 'Gateway URL'}
-        </label>
-        <input
-          type="text"
-          value={config.gatewayUrl}
-          onChange={(e) => handleConfigChange('gatewayUrl', e.target.value)}
-          placeholder={DEFAULT_GATEWAY_URL}
-          className="border-border bg-background text-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-        />
-        <p className="text-muted-foreground text-xs">
-          {t.settings.openclawGatewayUrlHint ||
-            'WebSocket URL of the OpenClaw Gateway (default: ws://127.0.0.1:18789)'}
-        </p>
-      </div>
-
-      {/* Auth Token Input */}
-      <div className="space-y-2">
-        <label className="text-foreground text-sm font-medium">
-          {t.settings.openclawAuthToken || 'Authentication Token (Optional)'}
-        </label>
-        <div className="relative">
-          <input
-            type={showToken ? 'text' : 'password'}
-            value={config.authToken || ''}
-            onChange={(e) => handleConfigChange('authToken', e.target.value)}
-            placeholder={
-              t.settings.openclawAuthTokenPlaceholder || 'Enter your auth token'
-            }
-            className="border-border bg-background text-foreground focus:border-primary focus:ring-primary/20 w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:ring-2 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => setShowToken(!showToken)}
-            className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-          >
-            {showToken ? (
-              <EyeOff className="size-4" />
-            ) : (
-              <Eye className="size-4" />
-            )}
-          </button>
-        </div>
-        <p className="text-muted-foreground text-xs">
-          {t.settings.openclawAuthTokenHint ||
-            'Leave empty if your gateway does not require authentication'}
-        </p>
-      </div>
-
-      {/* Enable Toggle */}
-      <div className="border-border flex items-center justify-between border-t pt-4">
-        <div className="flex items-center gap-2">
-          <Zap className="text-muted-foreground size-4" />
-          <span className="text-foreground text-sm font-medium">
-            {t.settings.openclawEnable || 'Enable OpenClaw Bot'}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => handleConfigChange('enabled', !config.enabled)}
-          className={cn(
-            'focus:ring-primary/50 relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-none',
-            config.enabled ? 'bg-primary' : 'bg-input'
-          )}
-        >
-          <span
-            className={cn(
-              'inline-block size-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out',
-              config.enabled ? 'translate-x-5' : 'translate-x-0'
-            )}
-          />
-        </button>
       </div>
 
       {/* Help Section */}
