@@ -77,7 +77,12 @@ export const defaultSandboxProviders: SandboxProviderSetting[] = [
 // Agent Runtime Settings
 // ============================================================================
 
-export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'custom';
+export type AgentRuntimeType =
+  | 'claude'
+  | 'codex'
+  | 'deepagents'
+  | 'openclaw'
+  | 'custom';
 
 export interface AgentRuntimeSetting {
   id: string;
@@ -110,6 +115,15 @@ export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
     enabled: false,
     config: {
       model: 'codex',
+    },
+  },
+  {
+    id: 'openclaw',
+    type: 'openclaw',
+    name: 'OpenClaw Bot',
+    enabled: false,
+    config: {
+      gatewayUrl: 'ws://127.0.0.1:18789',
     },
   },
 ];

@@ -6,6 +6,7 @@ import { DEFAULT_AGENT_PROVIDER, DEFAULT_WORK_DIR } from '@/config/constants';
 import { claudePlugin } from '@/extensions/agent/claude';
 import { codexPlugin } from '@/extensions/agent/codex';
 import { deepagentsPlugin } from '@/extensions/agent/deepagents';
+import { openclawPlugin } from '@/extensions/agent/openclaw';
 
 /**
  * Agent SDK Abstraction Layer
@@ -88,6 +89,11 @@ export {
   createDeepAgentsAdapter,
   deepagentsPlugin,
 } from '@/extensions/agent/deepagents';
+export {
+  OpenClawAgent,
+  createOpenClawAgent,
+  openclawPlugin,
+} from '@/extensions/agent/openclaw';
 
 /**
  * All built-in agent plugins
@@ -96,6 +102,7 @@ export const builtinAgentPlugins: AgentPlugin[] = [
   claudePlugin,
   codexPlugin,
   deepagentsPlugin,
+  openclawPlugin,
 ];
 
 /**

@@ -161,3 +161,34 @@ export function getAllMcpConfigPaths(): { name: string; path: string }[] {
     { name: 'claude', path: getClaudeSettingsPath() },
   ];
 }
+
+// ============================================================================
+// OpenClaw Configuration
+// ============================================================================
+
+/** Default OpenClaw Gateway URL */
+export const DEFAULT_OPENCLAW_GATEWAY_URL = 'ws://127.0.0.1:18789';
+
+/** OpenClaw polling interval for streaming (ms) */
+export const OPENCLAW_POLL_INTERVAL = 350;
+
+/** OpenClaw idle timeout for detecting stream completion (ms) */
+export const OPENCLAW_IDLE_TIMEOUT = 4000;
+
+/** OpenClaw maximum streaming duration (ms) */
+export const OPENCLAW_MAX_STREAM_DURATION = 300000;
+
+/** Get OpenClaw Gateway URL from environment or default */
+export function getOpenClawGatewayUrl(): string {
+  return process.env.CLAWDBOT_GATEWAY_URL || DEFAULT_OPENCLAW_GATEWAY_URL;
+}
+
+/** Get OpenClaw auth token from environment */
+export function getOpenClawAuthToken(): string | undefined {
+  return process.env.CLAWDBOT_GATEWAY_TOKEN;
+}
+
+/** Get OpenClaw auth password from environment */
+export function getOpenClawAuthPassword(): string | undefined {
+  return process.env.CLAWDBOT_GATEWAY_PASSWORD;
+}

@@ -2,16 +2,19 @@ import { serve } from '@hono/node-server';
 import type { ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
+import WebSocket, { WebSocketServer } from 'ws';
 
 import {
   agentRoutes,
   filesRoutes,
   healthRoutes,
   mcpRoutes,
+  openclawRoutes,
   previewRoutes,
   providersRoutes,
   sandboxRoutes,
 } from '@/app/api';
+import { createOpenClawEventServer } from '@/app/api/openclaw-ws.js';
 import { corsMiddleware } from '@/app/middleware/index.js';
 import { loadConfig } from '@/config/loader.js';
 import {
@@ -34,6 +37,7 @@ app.route('/preview', previewRoutes);
 app.route('/providers', providersRoutes);
 app.route('/files', filesRoutes);
 app.route('/mcp', mcpRoutes);
+app.route('/openclaw', openclawRoutes);
 
 // Root endpoint
 app.get('/', (c) => {
@@ -48,6 +52,8 @@ app.get('/', (c) => {
       providers: '/providers',
       files: '/files',
       mcp: '/mcp',
+      openclaw: '/openclaw',
+      openclawWs: '/openclaw/ws (WebSocket)',
     },
   });
 });
@@ -68,6 +74,10 @@ const port = Number(process.env.PORT) || 2026;
 
 // Store server instance for hot reload cleanup
 let server: ServerType | null = null;
+let wss: WebSocketServer | null = null;
+
+// OpenClaw WebSocket event server
+const openClawEventServer = createOpenClawEventServer();
 
 // Cleanup function
 const cleanup = async () => {
@@ -84,6 +94,12 @@ const cleanup = async () => {
     await shutdownProviderManager();
   } catch (error) {
     console.error('Error shutting down provider manager:', error);
+  }
+
+  // Close WebSocket server
+  if (wss) {
+    wss.close();
+    wss = null;
   }
 
   if (server) {
@@ -113,10 +129,31 @@ async function start() {
 
   console.log(`🚀 Server starting on http://localhost:${port}`);
 
-  server = serve({
+  // Create HTTP server
+  const httpServer = serve({
     fetch: app.fetch,
     port,
   });
+  server = httpServer;
+
+  // Create WebSocket server on the same port
+  wss = new WebSocketServer({ noServer: true });
+
+  // Handle WebSocket upgrade for /openclaw/ws path
+  httpServer.on('upgrade', (request, socket, head) => {
+    const url = request.url || '';
+
+    if (url.startsWith('/openclaw/ws')) {
+      wss!.handleUpgrade(request, socket, head, (ws) => {
+        openClawEventServer.handleConnection(ws);
+      });
+    } else {
+      // Destroy socket for unknown upgrade requests
+      socket.destroy();
+    }
+  });
+
+  console.log(`🔌 WebSocket server ready at ws://localhost:${port}/openclaw/ws`);
 }
 
 start().catch((error) => {

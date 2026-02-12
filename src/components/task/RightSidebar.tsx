@@ -766,10 +766,16 @@ function extractExternalFolders(
     if (!filePath || (!isUnixPath && !isWindowsPath)) return;
 
     // Get folder path (works for both Unix / and Windows \)
-    const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
-    const folderPath = lastSlash > 0
-      ? filePath.substring(0, lastSlash)
-      : (isWindowsPath ? filePath.substring(0, 3) : '/');
+    const lastSlash = Math.max(
+      filePath.lastIndexOf('/'),
+      filePath.lastIndexOf('\\')
+    );
+    const folderPath =
+      lastSlash > 0
+        ? filePath.substring(0, lastSlash)
+        : isWindowsPath
+          ? filePath.substring(0, 3)
+          : '/';
 
     // Only add if it's not within workingDir
     if (folderPath && (!workingDir || !filePath.startsWith(workingDir))) {
@@ -829,7 +835,10 @@ function extractExternalFolders(
       if (path.startsWith('~')) {
         // For ~ paths, add as-is (will be displayed with ~)
         // Support both Unix / and Windows \ separators
-        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        const lastSlash = Math.max(
+          path.lastIndexOf('/'),
+          path.lastIndexOf('\\')
+        );
         const folderPath = lastSlash > 0 ? path.substring(0, lastSlash) : path;
         if (folderPath && folderPath !== '~') {
           foldersSet.add(folderPath);
@@ -1025,7 +1034,10 @@ export function RightSidebar({
         body: JSON.stringify({ path: dirPath, maxDepth: 3 }),
       });
 
-      console.log('[RightSidebar] readDirViaApi response status:', response.status);
+      console.log(
+        '[RightSidebar] readDirViaApi response status:',
+        response.status
+      );
 
       if (!response.ok) {
         console.error('[RightSidebar] readDirViaApi response not ok');
@@ -1036,12 +1048,17 @@ export function RightSidebar({
       console.log('[RightSidebar] readDirViaApi data:', data);
 
       if (!data.files || !Array.isArray(data.files)) {
-        console.error('[RightSidebar] readDirViaApi: no files array in response');
+        console.error(
+          '[RightSidebar] readDirViaApi: no files array in response'
+        );
         return [];
       }
 
       if (data.error) {
-        console.warn('[RightSidebar] readDirViaApi: API returned error:', data.error);
+        console.warn(
+          '[RightSidebar] readDirViaApi: API returned error:',
+          data.error
+        );
       }
 
       // Convert API response to WorkingFile format with isExpanded
@@ -1075,7 +1092,10 @@ export function RightSidebar({
     let cancelled = false;
 
     async function loadWorkingFiles() {
-      console.log('[RightSidebar] loadWorkingFiles called with workingDir:', workingDir);
+      console.log(
+        '[RightSidebar] loadWorkingFiles called with workingDir:',
+        workingDir
+      );
       if (!workingDir || !workingDir.startsWith('/')) {
         console.log('[RightSidebar] workingDir is empty or invalid');
         setWorkingFiles([]);

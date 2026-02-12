@@ -225,7 +225,10 @@ export function getFileName(filePath: string): string {
  */
 export function getDirName(filePath: string): string {
   if (!filePath) return '';
-  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  const lastSlash = Math.max(
+    filePath.lastIndexOf('/'),
+    filePath.lastIndexOf('\\')
+  );
   if (lastSlash <= 0) {
     // Handle root paths
     if (filePath.startsWith('/')) return '/';

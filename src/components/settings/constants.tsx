@@ -15,6 +15,7 @@ import {
   Settings,
   Sparkles,
   User,
+  Zap,
 } from 'lucide-react';
 
 import type { SettingsCategory } from './types';
@@ -31,6 +32,7 @@ export const categoryIcons: Record<
   mcp: Server,
   skills: Sparkles,
   connector: Plug,
+  openclaw: Zap,
   data: Database,
   about: Info,
 };

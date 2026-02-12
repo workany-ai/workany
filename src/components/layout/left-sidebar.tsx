@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ImageLogo from '@/assets/logo.png';
 import type { Task } from '@/shared/db';
 import { getSettings, type UserProfile } from '@/shared/db/settings';
+import type { BotChatSession } from '@/shared/hooks/useBotChats';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
@@ -12,9 +13,10 @@ import {
   Globe,
   ListTodo,
   Loader2,
+  MessageSquare,
   MoreHorizontal,
   PanelLeft,
-  PanelLeftOpen,
+  RefreshCw,
   Settings,
   Smartphone,
   Sparkles,
@@ -25,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
+import type { SettingsCategory } from '@/components/settings/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,10 +51,15 @@ interface LeftSidebarProps {
   currentTaskId?: string;
   onDeleteTask?: (taskId: string) => void;
   onToggleFavorite?: (taskId: string, favorite: boolean) => void;
-  runningTaskIds?: string[]; // Tasks running in background
+  runningTaskIds?: string[];
+  botChats?: BotChatSession[];
+  currentBotChatKey?: string;
+  onSelectBotChat?: (chatKey: string) => void;
+  onRefreshBotChats?: () => void;
+  onShowAllBotChats?: () => void;
+  onNewTask?: () => void;
 }
 
-// Delete confirmation dialog component
 function DeleteConfirmDialog({
   open,
   onOpenChange,
@@ -100,7 +108,29 @@ function DeleteConfirmDialog({
   );
 }
 
-// Get icon for task based on prompt content
+function ChatSettingsButton({
+  hasConfig,
+  onRefresh,
+  onOpenSettings,
+}: {
+  hasConfig: boolean;
+  onRefresh?: () => void;
+  onOpenSettings: () => void;
+}) {
+  const baseClassName =
+    'text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex size-5 cursor-pointer items-center justify-center rounded transition-colors';
+
+  return hasConfig ? (
+    <button onClick={onRefresh} className={baseClassName} title="Refresh chats">
+      <RefreshCw className="size-3" />
+    </button>
+  ) : (
+    <button onClick={onOpenSettings} className={baseClassName} title="Settings">
+      <Settings className="size-3" />
+    </button>
+  );
+}
+
 function getTaskIcon(prompt: string) {
   const lowerPrompt = prompt.toLowerCase();
   if (lowerPrompt.includes('网站') || lowerPrompt.includes('website')) {
@@ -124,10 +154,19 @@ export function LeftSidebar({
   onDeleteTask,
   onToggleFavorite,
   runningTaskIds = [],
+  botChats = [],
+  currentBotChatKey,
+  onSelectBotChat,
+  onRefreshBotChats,
+  onShowAllBotChats,
+  onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialCategory, setSettingsInitialCategory] = useState<
+    SettingsCategory | undefined
+  >(undefined);
   const [profile, setProfile] = useState<UserProfile>({
     nickname: 'Guest User',
     avatar: '',
@@ -180,7 +219,11 @@ export function LeftSidebar({
   }, [settingsOpen]);
 
   const handleNewTask = () => {
-    navigate('/');
+    if (onNewTask) {
+      onNewTask();
+    } else {
+      navigate('/');
+    }
   };
 
   const handleSelectTask = (taskId: string) => {
@@ -251,116 +294,125 @@ export function LeftSidebar({
             </nav>
 
             {/* Tasks Section */}
-            <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden px-3">
-              <div className="flex shrink-0 items-center justify-between px-2 py-1.5">
-                <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                  {t.nav.allTasks}
-                </span>
+            <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
+              {/* Tasks */}
+              <div className="mb-4">
+                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                    {t.nav.allTasks}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {tasks.slice(0, 5).map((task) => {
+                    const TaskIcon = getTaskIcon(task.prompt);
+                    const isRunningInBackground = runningTaskIds.includes(
+                      task.id
+                    );
+                    const isLoading = loadingTaskId === task.id;
+                    return (
+                      <div
+                        key={task.id}
+                        className={cn(
+                          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                          currentTaskId === task.id || isLoading
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                          isLoading && 'opacity-70'
+                        )}
+                        onClick={() => handleSelectTask(task.id)}
+                      >
+                        <div className="relative shrink-0">
+                          {isLoading ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <TaskIcon className="size-4" />
+                          )}
+                          {/* Running indicator */}
+                          {isRunningInBackground && !isLoading && (
+                            <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                              <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                            </span>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {task.prompt}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {tasks.length > 5 && (
+                    <button
+                      onClick={() => navigate('/library')}
+                      className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                    >
+                      <span className="text-sm">{t.common.more}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="scrollbar-hide mt-1 flex-1 space-y-0.5 overflow-y-auto">
-                {tasks.slice(0, 10).map((task) => {
-                  const TaskIcon = getTaskIcon(task.prompt);
-                  const isRunningInBackground = runningTaskIds.includes(
-                    task.id
-                  );
-                  const isLoading = loadingTaskId === task.id;
-                  return (
-                    <div
-                      key={task.id}
-                      className={cn(
-                        'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                        currentTaskId === task.id || isLoading
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-                        isLoading && 'opacity-70'
-                      )}
-                      onClick={() => handleSelectTask(task.id)}
-                    >
-                      <div className="relative shrink-0">
-                        {isLoading ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <TaskIcon className="size-4" />
-                        )}
-                        {/* Running indicator */}
-                        {isRunningInBackground && !isLoading && (
-                          <span className="absolute -top-0.5 -right-0.5 flex size-2">
-                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
-                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-                          </span>
-                        )}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {task.prompt}
-                      </span>
-                      {/* Running indicator for running tasks, dropdown menu for completed tasks */}
-                      {isRunningInBackground ? (
-                        <div className="flex size-6 shrink-0 items-center justify-center">
-                          <Loader2 className="text-primary size-4 animate-spin" />
+              {/* Bot Chats */}
+              <div className="flex shrink-0 flex-col overflow-hidden">
+                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                    {t.nav.allChats}
+                  </span>
+                  <ChatSettingsButton
+                    hasConfig={!!localStorage.getItem('openclaw_config')}
+                    onRefresh={onRefreshBotChats}
+                    onOpenSettings={() => {
+                      setSettingsInitialCategory('openclaw');
+                      setSettingsOpen(true);
+                    }}
+                  />
+                </div>
+                <div className="flex-1 space-y-0.5 overflow-y-auto">
+                  {botChats && botChats.length > 0 ? (
+                    <>
+                      {botChats.slice(0, 5).map((chat) => (
+                        <div
+                          key={chat.sessionKey}
+                          className={cn(
+                            'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                            currentBotChatKey === chat.sessionKey
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          )}
+                          onClick={() =>
+                            onSelectBotChat && onSelectBotChat(chat.sessionKey)
+                          }
+                        >
+                          <div className="relative shrink-0">
+                            <MessageSquare className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">
+                              {chat.label || chat.friendlyId || '新对话'}
+                            </p>
+                            <p className="text-sidebar-foreground/40 truncate text-xs">
+                              {chat.lastMessage || `${chat.messageCount} 条消息`}
+                            </p>
+                          </div>
                         </div>
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex size-6 shrink-0 items-center justify-center rounded transition-all"
-                            >
-                              {/* Show star when favorited (hide on hover), show menu icon on hover */}
-                              {task.favorite ? (
-                                <>
-                                  <Star className="size-4 fill-amber-400 text-amber-400 group-hover:hidden" />
-                                  <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground hidden size-4 group-hover:block" />
-                                </>
-                              ) : (
-                                <MoreHorizontal className="text-sidebar-foreground/40 hover:text-sidebar-foreground size-4 opacity-0 group-hover:opacity-100" />
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            sideOffset={4}
-                            className="min-w-[140px]"
-                          >
-                            <DropdownMenuItem
-                              className="cursor-pointer"
-                              onClick={(e) => handleToggleFavorite(task, e)}
-                            >
-                              <Star
-                                className={cn(
-                                  'size-4',
-                                  task.favorite &&
-                                    'fill-amber-400 text-amber-400'
-                                )}
-                              />
-                              <span>
-                                {task.favorite
-                                  ? t.common.unfavorite
-                                  : t.common.favorite}
-                              </span>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="cursor-pointer text-red-500 focus:text-red-500"
-                              onClick={(e) => handleDeleteClick(task.id, e)}
-                            >
-                              <Trash2 className="size-4" />
-                              <span>{t.common.delete}</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      ))}
+                      {botChats.length > 5 && (
+                        <button
+                          onClick={() => onShowAllBotChats && onShowAllBotChats()}
+                          className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                        >
+                          <span className="text-sm">{t.common.more}</span>
+                        </button>
                       )}
+                    </>
+                  ) : (
+                    <div className="py-4 text-center">
+                      <p className="text-sidebar-foreground/40 text-xs">
+                        {t.nav.noChatsYet || '暂无聊天'}
+                      </p>
                     </div>
-                  );
-                })}
-                {tasks.length > 10 && (
-                  <button
-                    onClick={() => navigate('/library')}
-                    className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                  >
-                    <span className="text-sm">{t.common.more}</span>
-                  </button>
-                )}
+                  )}
+                </div>
               </div>
             </div>
 
@@ -681,7 +733,14 @@ export function LeftSidebar({
       </aside>
 
       {/* Settings Modal */}
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) setSettingsInitialCategory(undefined);
+        }}
+        initialCategory={settingsInitialCategory}
+      />
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog

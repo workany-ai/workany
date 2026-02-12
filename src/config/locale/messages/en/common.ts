@@ -33,6 +33,16 @@ export default {
   deleteTaskConfirm: 'Are you sure you want to delete this task?',
   deleteTaskDescription:
     'This action cannot be undone. All messages in this task will be permanently deleted.',
+  noChatsYet: 'No chats yet',
+
+  // Bot Chat
+  botChatTitle: 'Bot Chat',
+  botChatDescription: 'Chat with OpenClaw Bot',
+  botChatWelcome: 'Start chatting with Bot',
+  botChatWelcomeHint: 'Enter a message to start chatting with OpenClaw Bot',
+  botChatInputPlaceholder: 'Enter a message...',
+  botChatError:
+    'Sorry, an error occurred. Please make sure OpenClaw Gateway is running.',
 
   // API error messages
   errors: {
