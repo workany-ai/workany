@@ -98,6 +98,31 @@ export function createNewBotSession(): string {
 }
 
 /**
+ * Update the current session key in localStorage
+ */
+export function updateBotSessionKey(sessionKey: string): void {
+  try {
+    const stored = localStorage.getItem(BOT_SESSION_KEY);
+    let session: StoredBotSession;
+
+    if (stored) {
+      session = JSON.parse(stored) as StoredBotSession;
+      session.sessionKey = sessionKey;
+    } else {
+      session = {
+        sessionKey,
+        messages: [],
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    localStorage.setItem(BOT_SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // Ignore errors
+  }
+}
+
+/**
  * Get OpenClaw config from localStorage
  */
 export function getOpenClawConfig(): {

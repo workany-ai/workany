@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '@/config';
 import { deleteTask, getAllTasks, updateTask, type Task } from '@/shared/db';
 import type { MessageAttachment } from '@/shared/hooks/useAgent';
 import type { BotChatMessage } from '@/shared/hooks/useBotChats';
 import {
+  extractText,
+  useOpenClawWebSocket,
+  type AgentEventPayload,
+  type ChatEventPayload,
+} from '@/shared/hooks/useOpenClawWebSocket';
+import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
 } from '@/shared/lib/background-tasks';
+import { convertOpenClawMessage } from '@/shared/lib/bot-message-utils';
 import type { BotMessage } from '@/shared/lib/bot-storage';
 import {
   createNewBotSession,
@@ -16,13 +23,14 @@ import {
   loadBotMessages,
   messageToBotMessage,
   saveBotMessages,
+  updateBotSessionKey,
 } from '@/shared/lib/bot-storage';
-import { cn } from '@/shared/lib/utils';
 import { useBotChatContext } from '@/shared/providers/bot-chat-provider';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { ArrowLeft, RefreshCw, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
+import { BotLoadingIndicator } from '@/components/shared/BotLoadingIndicator';
 import { BotMessageList } from '@/components/shared/BotMessageList';
 import { ChatInput } from '@/components/shared/ChatInput';
 
@@ -55,16 +63,185 @@ function BotChatContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessionKey, setSessionKey] = useState<string>('');
-  const loadedSessionKeysRef = useRef<Set<string>>(new Set());
   const initialPromptHandledRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageCountRef = useRef(0);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track pending user messages (user message sent but not yet acknowledged)
+  const pendingUserMessageRef = useRef<BotMessage | null>(null);
+
+  // Safety timeout for loading state
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sidebar state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const { sessions: botChats, refreshSessions } = useBotChatContext();
+
+  // Get OpenClaw config for WebSocket (memoized to prevent unnecessary re-subscriptions)
+  const openclawConfig = useMemo(() => getOpenClawConfig(), []);
+
+  // Helper to safely set loading state with timeout
+  const setLoadingWithTimeout = useCallback((loading: boolean) => {
+    // Clear existing timeout
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+
+    setIsLoading(loading);
+
+    // Set safety timeout when starting to load
+    if (loading) {
+      loadingTimeoutRef.current = setTimeout(() => {
+        console.warn('[BotChat] Loading timeout - clearing loading state');
+        setIsLoading(false);
+        // Show timeout error message
+        setMessages((prev) => {
+          if (prev.length > 0 && prev[prev.length - 1].role === 'user') {
+            const timeoutMessage: BotMessage = {
+              id: `timeout_${Date.now()}`,
+              role: 'assistant',
+              content: '请求超时，请检查 OpenClaw Gateway 是否正常运行。',
+              timestamp: new Date(),
+            };
+            return [...prev, timeoutMessage];
+          }
+          return prev;
+        });
+      }, 60000); // 60 seconds timeout
+    }
+  }, []);
+
+  // Handle WebSocket chat events (following moltbot protocol)
+  // Note: delta state is handled by the hook's chatStream state
+  const handleChatEvent = useCallback(
+    (payload: ChatEventPayload) => {
+      console.log('[BotChat] Chat event:', payload.state, 'seq:', payload.seq);
+
+      switch (payload.state) {
+        case 'delta': {
+          // Delta is handled by the hook's chatStream state
+          // Just log for debugging
+          console.log('[BotChat] Delta text length:', extractText(payload.message)?.length);
+          break;
+        }
+
+        case 'final': {
+          // Completed - add final message to history
+          if (payload.message) {
+            const converted = convertOpenClawMessage(payload.message);
+            const assistantMessage: BotMessage = {
+              id: `assistant_${Date.now()}`,
+              role: converted.role,
+              content: converted.content,
+              timestamp: new Date(converted.timestamp || Date.now()),
+              rawContent: converted.rawContent,
+              toolCallId: converted.toolCallId,
+              toolName: converted.toolName,
+              details: converted.details,
+              isError: converted.isError,
+            };
+
+            setMessages((prev) => {
+              // If we have a pending user message, include it
+              if (pendingUserMessageRef.current) {
+                const updated = [
+                  ...prev,
+                  pendingUserMessageRef.current,
+                  assistantMessage,
+                ];
+                pendingUserMessageRef.current = null;
+                saveBotMessages(updated);
+                return updated;
+              }
+              const updated = [...prev, assistantMessage];
+              saveBotMessages(updated);
+              return updated;
+            });
+          }
+
+          setLoadingWithTimeout(false);
+          refreshSessions();
+          break;
+        }
+
+        case 'error': {
+          // Error - show error message
+          const errorMessage: BotMessage = {
+            id: `error_${Date.now()}`,
+            role: 'assistant',
+            content:
+              payload.errorMessage ||
+              '抱歉，发生了错误。请确保 OpenClaw Gateway 正在运行。',
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          setLoadingWithTimeout(false);
+          pendingUserMessageRef.current = null;
+          break;
+        }
+
+        case 'aborted': {
+          // Aborted - clear state
+          setLoadingWithTimeout(false);
+          pendingUserMessageRef.current = null;
+          break;
+        }
+      }
+    },
+    [refreshSessions]
+  );
+
+  // Handle agent events (tool calls)
+  const handleAgentEvent = useCallback((payload: AgentEventPayload) => {
+    console.log(
+      '[BotChat] Agent event:',
+      payload.stream,
+      'phase:',
+      payload.data?.phase
+    );
+    // Tool events are handled by the hook's toolStream state
+  }, []);
+
+  // WebSocket connection - hook manages chatStream and toolStream states
+  const {
+    isConnected: wsConnected,
+    chatStream,
+    toolStream,
+    subscribe,
+    unsubscribe,
+  } = useOpenClawWebSocket({
+    autoConnect: true,
+    onChatEvent: handleChatEvent,
+    onAgentEvent: handleAgentEvent,
+    onError: (error) => {
+      console.error('[BotChat] WebSocket error:', error);
+    },
+  });
+
+  // Cleanup loading timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Subscribe to session events when sessionKey changes
+  useEffect(() => {
+    if (sessionKey && openclawConfig && wsConnected) {
+      console.log('[BotChat] Subscribing to session:', sessionKey);
+      subscribe(sessionKey, openclawConfig);
+    }
+
+    return () => {
+      if (sessionKey) {
+        unsubscribe(sessionKey);
+      }
+    };
+  }, [sessionKey, openclawConfig, wsConnected, subscribe, unsubscribe]);
 
   useEffect(() => {
     const unsubscribe = subscribeToBackgroundTasks(setBackgroundTasks);
@@ -104,6 +281,22 @@ function BotChatContent() {
   };
 
   const handleNewTask = () => navigate('/');
+
+  // Handle session selection from sidebar
+  const handleSelectBotChat = useCallback(
+    (chatKey: string) => {
+      if (chatKey === sessionKey) return;
+
+      console.log('[BotChat] Switching to session:', chatKey);
+      // Update localStorage so getBotSessionKey() returns the correct key
+      updateBotSessionKey(chatKey);
+      // Clear messages before loading new history
+      setMessages([]);
+      // Update session key (this will trigger loadChatHistory)
+      setSessionKey(chatKey);
+    },
+    [sessionKey]
+  );
 
   const loadChatHistory = useCallback(async () => {
     if (!sessionKey) return;
@@ -149,33 +342,53 @@ function BotChatContent() {
     }
   }, [sessionKey]);
 
+  // Track the session key created from initialPrompt (to skip history loading for it)
+  const newSessionKeyRef = useRef<string | null>(null);
+  const isInitializedRef = useRef(false);
+
+  // Initialize session key only once on mount
   useEffect(() => {
+    // Skip if already initialized
+    if (isInitializedRef.current) return;
+
     const initialPrompt = (location.state as any)?.initialPrompt;
 
-    let key: string;
     if (initialPrompt && !initialPromptHandledRef.current) {
-      key = createNewBotSession();
+      const key = createNewBotSession();
       console.log('[BotChat] Created new session for initialPrompt:', key);
       initialPromptHandledRef.current = true;
+      newSessionKeyRef.current = key;
+      setSessionKey(key);
       window.history.replaceState({}, document.title);
     } else {
-      key = getBotSessionKey();
+      // Only use stored sessionKey if no sessionKey is set
+      const storedKey = getBotSessionKey();
+      setSessionKey(storedKey);
     }
 
-    setSessionKey(key);
-
-    const localMessages = loadBotMessages();
-    if (localMessages.length > 0) {
-      setMessages(localMessages);
-    }
+    isInitializedRef.current = true;
   }, [location.state]);
 
+  // Track previous session key to detect switches
+  const prevSessionKeyRef = useRef<string>('');
+
+  // Handle session changes - load history from server
   useEffect(() => {
-    if (!sessionKey || loadedSessionKeysRef.current.has(sessionKey)) {
+    if (!sessionKey) return;
+
+    // Update previous session key
+    prevSessionKeyRef.current = sessionKey;
+
+    // New session from initialPrompt doesn't need history loading
+    if (newSessionKeyRef.current === sessionKey) {
+      setMessages([]);
+      setIsLoadingHistory(false);
       return;
     }
-    loadedSessionKeysRef.current.add(sessionKey);
-  }, [sessionKey]);
+
+    // Always load history when sessionKey changes
+    loadChatHistory();
+  }, [sessionKey, loadChatHistory]);
 
   useEffect(() => {
     const initialPrompt = (location.state as any)?.initialPrompt;
@@ -205,15 +418,6 @@ function BotChatContent() {
     }
   }, [messages.length, isLoading]);
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
-
   const handleSubmit = async (
     text: string,
     _attachments?: MessageAttachment[]
@@ -226,19 +430,18 @@ function BotChatContent() {
       content: text.trim(),
       timestamp: new Date(),
     };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    saveBotMessages(newMessages);
-    setIsLoading(true);
 
-    // Start polling history
-    if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-    pollingIntervalRef.current = setInterval(() => {
-      loadChatHistory();
-    }, 1000);
+    // Immediately add user message to UI
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Store as pending in case WebSocket event arrives before we finish
+    pendingUserMessageRef.current = userMessage;
+    setLoadingWithTimeout(true);
 
     try {
       const openclawConfig = getOpenClawConfig();
+
+      // Send message (async - returns immediately)
       const response = await fetch(`${API_BASE_URL}/openclaw/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -254,9 +457,57 @@ function BotChatContent() {
         throw new Error('Failed to send message');
       }
 
-      await response.json();
-      // We rely on polling/history load for the assistant message
-      await loadChatHistory();
+      const data = await response.json();
+
+      if (data.status === 'accepted') {
+        console.log(
+          '[BotChat] Message accepted, waiting for WebSocket event...'
+        );
+        // The response will come via WebSocket event
+        // Clear pending message since we've already added it
+        pendingUserMessageRef.current = null;
+      } else if (data.message) {
+        // Fallback for sync response (backward compatibility)
+        const botChatMessage = convertOpenClawMessage(data.message);
+        const assistantMessage: BotMessage = {
+          id: `assistant_${Date.now()}`,
+          role: botChatMessage.role,
+          content: botChatMessage.content,
+          timestamp: new Date(botChatMessage.timestamp || Date.now()),
+          rawContent: botChatMessage.rawContent,
+          toolCallId: botChatMessage.toolCallId,
+          toolName: botChatMessage.toolName,
+          details: botChatMessage.details,
+          isError: botChatMessage.isError,
+        };
+        setMessages((prev) => {
+          const updated = [...prev, assistantMessage];
+          saveBotMessages(updated);
+          return updated;
+        });
+        setLoadingWithTimeout(false);
+        pendingUserMessageRef.current = null;
+      } else if (data.reply) {
+        // Fallback for older API response
+        const assistantMessage: BotMessage = {
+          id: `assistant_${Date.now()}`,
+          role: 'assistant',
+          content: data.reply,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => {
+          const updated = [...prev, assistantMessage];
+          saveBotMessages(updated);
+          return updated;
+        });
+        setLoadingWithTimeout(false);
+        pendingUserMessageRef.current = null;
+      } else if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Refresh sessions list to update sidebar
+      refreshSessions();
     } catch (error) {
       console.error('[BotChat] Error:', error);
       const errorMessage: BotMessage = {
@@ -268,25 +519,10 @@ function BotChatContent() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
+      setLoadingWithTimeout(false);
+      pendingUserMessageRef.current = null;
     }
   };
-
-  const handleRefresh = () => loadChatHistory();
-
-  const handleNewChat = () => {
-    const newSessionKey = createNewBotSession();
-    setSessionKey(newSessionKey);
-    setMessages([]);
-    loadedSessionKeysRef.current.add(newSessionKey);
-  };
-
-  const handleBack = () => navigate('/');
 
   return (
     <div className="bg-sidebar flex h-screen overflow-hidden">
@@ -301,7 +537,7 @@ function BotChatContent() {
           .map((t) => t.taskId)}
         botChats={botChats}
         currentBotChatKey={sessionKey}
-        onSelectBotChat={setSessionKey}
+        onSelectBotChat={handleSelectBotChat}
         onRefreshBotChats={refreshSessions}
         onNewTask={handleNewTask}
       />
@@ -313,8 +549,8 @@ function BotChatContent() {
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6">
           {isLoadingHistory ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="bg-foreground/10 border-t-foreground h-8 w-8 animate-spin rounded-full border-2 border-transparent" />
+            <div className="p-4">
+              <BotLoadingIndicator />
             </div>
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center">
@@ -336,6 +572,8 @@ function BotChatContent() {
               messages={convertToBotChatMessages(messages)}
               isLoading={isLoading}
               messagesEndRef={messagesEndRef}
+              streamingMessage={chatStream}
+              toolStream={toolStream}
             />
           )}
         </div>

@@ -7,10 +7,11 @@ import {
   type ReactNode,
 } from 'react';
 import { API_BASE_URL } from '@/config';
+import { type BotChatSession } from '@/shared/hooks/useBotChats';
 import {
-  type BotChatMessage,
-  type BotChatSession,
-} from '@/shared/hooks/useBotChats';
+  convertOpenClawMessage,
+  getLastMessagePreview,
+} from '@/shared/lib/bot-message-utils';
 
 interface BotChatContextType {
   sessions: BotChatSession[];
@@ -34,147 +35,17 @@ function getOpenClawConfig(): {
   }
 }
 
-interface OpenClawMessage {
-  role: string;
-  content?: Array<{ type?: string; text?: string }>;
-  timestamp?: number;
-  toolCallId?: string;
-  toolName?: string;
-  details?: Record<string, unknown>;
-  isError?: boolean;
-}
-
-// 从可能包含系统上下文标记的文本中提取真实用户内容
-function extractRealUserContent(content: string): string {
-  if (!content) return '';
-
-  let result = content;
-
-  // 移除所有 "xxx (untrusted xxx)" 后跟 ```json ... ``` 的块
-  // 匹配模式：
-  // 1. 以 "xxx (untrusted xxx)" 开头
-  // 2. 后跟可选的冒号和换行
-  // 3. 后跟 ```json ... ``` 代码块
-  // 4. 后跟可选的换行
-  const untrustedBlockPattern =
-    /[^\n]*\(untrusted[^)]*\):\s*\n```json\s*```[\s\n]*/gi;
-  result = result.replace(untrustedBlockPattern, '');
-
-  // 移除所有 ```json ... ``` 代码块（单独的，可能被遗漏的）
-  const jsonBlockPattern = /```json\s*```[\s\n]*/gi;
-  result = result.replace(jsonBlockPattern, '');
-
-  // 移除 "Conversation info (untrusted metadata):" 这类标题行（如果没有被上面的模式匹配到）
-  const titlePattern = /^[^\n]*\(untrusted[^)]*\):\s*\n/gim;
-  result = result.replace(titlePattern, '');
-
-  // 移除可能残留的 JSON 块（更宽松的匹配）
-  const looseJsonPattern = /```json[^`]*```/gi;
-  result = result.replace(looseJsonPattern, '');
-
-  return result.trim();
-}
-
 interface OpenClawSession {
   key: string;
   friendlyId?: string;
   label?: string;
   updatedAt?: number;
+  lastMessage?: any; // Using any for simplicity as it matches OpenClawMessage structure
 }
 
 interface OpenClawSessionsResponse {
   success: boolean;
   sessions?: OpenClawSession[];
-}
-
-interface OpenClawHistoryResponse {
-  success: boolean;
-  messages?: OpenClawMessage[];
-}
-
-function convertMessage(message: OpenClawMessage): BotChatMessage {
-  // 提取并清理文本内容（移除系统上下文标记）
-  const extractCleanContent = (): string => {
-    if (!message.content) return '';
-
-    const textParts = message.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text || '')
-      .filter((text) => text.trim());
-
-    // 从每个文本块中提取真实用户内容（移除系统上下文标记）
-    const cleanParts = textParts.map((text) => extractRealUserContent(text));
-    return cleanParts.join('\n');
-  };
-
-  return {
-    role: message.role as BotChatMessage['role'],
-    content: extractCleanContent(),
-    timestamp: message.timestamp,
-    rawContent: (message.content || []) as any,
-    toolCallId: message.toolCallId,
-    toolName: message.toolName,
-    details: message.details,
-    isError: message.isError,
-  };
-}
-
-function getLastMessage(messages: BotChatMessage[]): string {
-  const sortByTimestamp = (a: BotChatMessage, b: BotChatMessage) =>
-    (b.timestamp || 0) - (a.timestamp || 0);
-
-  const lastAssistant = messages
-    .filter((m) => m.role === 'assistant')
-    .sort(sortByTimestamp)[0];
-
-  const lastUser = messages
-    .filter((m) => m.role === 'user')
-    .sort(sortByTimestamp)[0];
-
-  const content = lastAssistant?.content || lastUser?.content || '';
-  const previewLength = 50;
-
-  return content.length > previewLength
-    ? content.slice(0, previewLength) + '...'
-    : content;
-}
-
-async function fetchSessionHistory(
-  sessionKey: string,
-  config: { gatewayUrl?: string; authToken?: string }
-): Promise<BotChatMessage[]> {
-  const response = await fetch(`${API_BASE_URL}/openclaw/history`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionKey,
-      gatewayUrl: config.gatewayUrl,
-      authToken: config.authToken,
-    }),
-  });
-
-  if (!response.ok) return [];
-
-  const data = (await response.json()) as OpenClawHistoryResponse;
-  if (!data.success || !data.messages) return [];
-
-  const validRoles = new Set(['user', 'assistant', 'toolResult']);
-
-  return data.messages
-    .filter((m) => validRoles.has(m.role))
-    .map(convertMessage);
-}
-
-function createFallbackSession(session: OpenClawSession): BotChatSession {
-  return {
-    sessionKey: session.key,
-    friendlyId: session.friendlyId,
-    label: session.label,
-    messages: [],
-    lastMessage: session.label || '新对话',
-    messageCount: 0,
-    updatedAt: session.updatedAt,
-  };
 }
 
 export function BotChatProvider({ children }: { children: ReactNode }) {
@@ -198,6 +69,7 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             gatewayUrl: config.gatewayUrl,
             authToken: config.authToken,
+            includeLastMessage: true,
           }),
         }
       );
@@ -214,28 +86,29 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const chatSessions: BotChatSession[] = await Promise.all(
-        sessionsData.sessions.map(async (session) => {
-          try {
-            const messages = await fetchSessionHistory(session.key, config);
+      const chatSessions: BotChatSession[] = sessionsData.sessions.map(
+        (session) => {
+          let lastMessagePreview = session.label || '新对话';
+          let messageCount = 0;
 
-            if (messages.length > 0) {
-              return {
-                sessionKey: session.key,
-                friendlyId: session.friendlyId,
-                label: session.label,
-                messages,
-                lastMessage: getLastMessage(messages),
-                messageCount: messages.length,
-                updatedAt: session.updatedAt || Date.now(),
-              };
-            }
-
-            return createFallbackSession(session);
-          } catch {
-            return createFallbackSession(session);
+          if (session.lastMessage) {
+            const botMessage = convertOpenClawMessage(session.lastMessage);
+            lastMessagePreview = getLastMessagePreview([botMessage]);
+            // Since we don't have the full count without fetching history, we can assume at least 1 if lastMessage exists
+            // Or we can rely on what the API provides if it provides count (it currently doesn't seem to)
+            messageCount = 1;
           }
-        })
+
+          return {
+            sessionKey: session.key,
+            friendlyId: session.friendlyId,
+            label: session.label,
+            messages: [], // We don't load full messages here anymore
+            lastMessage: lastMessagePreview,
+            messageCount: messageCount, // This might be inaccurate but is better than fetching all
+            updatedAt: session.updatedAt || Date.now(),
+          };
+        }
       );
 
       chatSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));

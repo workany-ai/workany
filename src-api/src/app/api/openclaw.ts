@@ -118,7 +118,8 @@ openclawRoutes.post('/detect', async (c) => {
 
 /**
  * POST /openclaw/chat
- * Send a message to OpenClaw Bot
+ * Send a message to OpenClaw Bot (async mode)
+ * Returns immediately with runId, frontend polls history for response
  */
 openclawRoutes.post('/chat', async (c) => {
   try {
@@ -138,6 +139,7 @@ openclawRoutes.post('/chat', async (c) => {
 
     const gateway = new OpenClawGateway(config);
     const sessionKey = body.sessionId || `bot_${Date.now()}`;
+    const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Create or patch session
     try {
@@ -157,84 +159,32 @@ openclawRoutes.post('/chat', async (c) => {
       }
     }
 
-    // Count existing assistant messages before sending
-    let existingAssistantCount = 0;
-    try {
-      const preHistory = await gateway.chatHistory({ sessionKey });
-      existingAssistantCount = preHistory?.messages?.filter(
-        (m) => m.role === 'assistant'
-      ).length ?? 0;
-    } catch {
-      // Ignore - treat as 0 existing messages
-    }
-
-    // Send chat message
-    await gateway.chatSend({
+    // Send chat message (fire and forget - don't wait for response)
+    gateway.chatSend({
       sessionKey,
       message: body.message,
       deliver: true,
-      timeoutMs: 25000,
-      idempotencyKey: `chat_${sessionKey}_${Date.now()}`,
+      timeoutMs: 60000,
+      idempotencyKey: runId,
+    }).catch((err) => {
+      logger.error('[OpenClawAPI] Chat send error (async):', err);
     });
 
-    // Poll for response
-    const reply = await pollForReply(gateway, sessionKey, existingAssistantCount);
+    logger.info('[OpenClawAPI] Chat request accepted:', { runId, sessionKey });
 
-    logger.info('[OpenClawAPI] Chat response received:', {
-      replyLength: reply.length,
+    // Return immediately with runId
+    return c.json({
+      success: true,
+      runId,
+      sessionKey,
+      status: 'accepted',
     });
-
-    return c.json({ success: true, reply: reply || '抱歉，我暂时无法回复。' });
   } catch (error) {
     logger.error('[OpenClawAPI] Chat error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ success: false, error: `Chat error: ${errorMessage}` });
   }
 });
-
-/**
- * Poll for assistant reply from chat history
- */
-async function pollForReply(
-  gateway: OpenClawGateway,
-  sessionKey: string,
-  existingCount: number
-): Promise<string> {
-  const maxAttempts = 30;
-  const pollDelay = 500;
-
-  for (let attempts = 0; attempts < maxAttempts; attempts++) {
-    await new Promise((resolve) => setTimeout(resolve, pollDelay));
-
-    try {
-      const history = await gateway.chatHistory({ sessionKey });
-      if (!history?.messages) continue;
-
-      const assistantMessages = history.messages.filter((m) => m.role === 'assistant');
-
-      // Check for new assistant messages
-      if (assistantMessages.length > existingCount) {
-        const lastMessage = assistantMessages.sort(
-          (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
-        )[0];
-
-        if (lastMessage.content?.length > 0) {
-          const reply = lastMessage.content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text || '')
-            .join('\n')
-            .trim();
-
-          if (reply) return reply;
-        }
-      }
-    } catch (error) {
-      logger.warn('[OpenClawAPI] Failed to fetch history:', error);
-    }
-  }
-
-  return '';
-}
 
 /**
  * POST /openclaw/history
@@ -263,14 +213,25 @@ openclawRoutes.post('/history', async (c) => {
  * POST /openclaw/sessions
  * Get all chat sessions
  */
-openclawRoutes.post('/sessions', async (c) => {
+ openclawRoutes.post('/sessions', async (c) => {
   try {
-    const body = (await c.req.json()) as { gatewayUrl?: string; authToken?: string };
+    const body = (await c.req.json()) as { 
+      gatewayUrl?: string; 
+      authToken?: string;
+      limit?: number;
+      includeLastMessage?: boolean;
+    };
 
-    logger.info('[OpenClawAPI] Sessions request');
+    logger.info('[OpenClawAPI] Sessions request', {
+      limit: body.limit,
+      includeLastMessage: body.includeLastMessage,
+    });
 
     const gateway = new OpenClawGateway(createGatewayConfig(body));
-    const sessions = await gateway.sessionsList();
+    const sessions = await gateway.sessionsList({
+      limit: body.limit,
+      includeLastMessage: body.includeLastMessage,
+    });
 
     logger.info('[OpenClawAPI] Sessions found:', sessions.sessions?.length ?? 0);
 

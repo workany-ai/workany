@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
 import type { BotChatMessage } from '@/shared/hooks/useBotChats';
+import type { ToolStreamEntry } from '@/shared/hooks/useOpenClawWebSocket';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Logo } from '@/components/common/logo';
+import { BotLoadingIndicator } from '@/components/shared/BotLoadingIndicator';
 import { ThinkingBlock } from '@/components/shared/ThinkingBlock';
 import {
   ToolCallBlock,
@@ -69,12 +71,18 @@ interface BotMessageListProps {
   messages: BotChatMessage[];
   isLoading: boolean;
   messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+  /** Streaming message text (from delta events) */
+  streamingMessage?: string | null;
+  /** Active tool calls from agent events */
+  toolStream?: Map<string, ToolStreamEntry>;
 }
 
 export function BotMessageList({
   messages,
   isLoading,
   messagesEndRef,
+  streamingMessage,
+  toolStream,
 }: BotMessageListProps) {
   const toolResultsByCallId = useMemo(() => {
     const map = new Map<string, BotChatMessage>();
@@ -85,6 +93,12 @@ export function BotMessageList({
     }
     return map;
   }, [messages]);
+
+  // Convert tool stream to array for display
+  const activeToolCalls = useMemo(() => {
+    if (!toolStream || toolStream.size === 0) return [];
+    return Array.from(toolStream.values());
+  }, [toolStream]);
 
   return (
     <div className="space-y-4">
@@ -187,16 +201,49 @@ export function BotMessageList({
           </div>
         );
       })}
-      {isLoading && (
-        <div className="flex items-center gap-3 py-2">
-          <Logo />
-          <div className="flex gap-1">
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" />
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" />
-            <div className="bg-foreground/30 h-2 w-2 animate-bounce rounded-full" />
+
+      {/* Streaming message display (delta state) */}
+      {streamingMessage && (
+        <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-3">
+            <Logo />
+            <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {streamingMessage}
+              </ReactMarkdown>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Active tool calls from agent events */}
+      {activeToolCalls.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {activeToolCalls.map((tool) => {
+            const state: ToolCallPart['state'] =
+              tool.phase === 'result' ? 'done' : 'running';
+
+            const toolPart: ToolCallPart = {
+              name: tool.name,
+              state,
+              input: tool.args,
+              output: tool.output ? JSON.parse(tool.output) : undefined,
+              toolCallId: tool.toolCallId,
+            };
+
+            return <ToolCallBlock key={tool.toolCallId} tool={toolPart} />;
+          })}
+        </div>
+      )}
+
+      {/* Show loading indicator when no streaming message */}
+      {isLoading && !streamingMessage && activeToolCalls.length === 0 && (
+        <BotLoadingIndicator />
+      )}
+
       {messagesEndRef && <div ref={messagesEndRef} />}
     </div>
   );
