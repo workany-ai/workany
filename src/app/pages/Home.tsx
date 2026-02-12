@@ -18,6 +18,7 @@ import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
 } from '@/shared/lib/background-tasks';
+import { convertOpenClawMessage } from '@/shared/lib/bot-message-utils';
 import { generateSessionId } from '@/shared/lib/session';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { MessageSquare, SquarePen, Zap } from 'lucide-react';
@@ -160,20 +161,7 @@ function HomeContent() {
                   m.role === 'assistant' ||
                   m.role === 'toolResult'
               )
-              .map((m: any) => ({
-                role: m.role,
-                content:
-                  m.content
-                    ?.filter((c: any) => c.type === 'text')
-                    .map((c: any) => c.text || '')
-                    .join('\n') || '',
-                timestamp: m.timestamp,
-                rawContent: m.content || [],
-                toolCallId: m.toolCallId,
-                toolName: m.toolName,
-                details: m.details,
-                isError: m.isError,
-              }));
+              .map(convertOpenClawMessage);
             console.log(
               '[Home] Loaded',
               messages.length,
@@ -196,6 +184,60 @@ function HomeContent() {
     [botChats]
   );
 
+  /**
+   * Poll for new assistant messages (Home version)
+   */
+  const pollForAssistantMessage = useCallback(
+    async (
+      sessionKey: string,
+      config: { gatewayUrl: string; authToken: string },
+      existingMessageCount: number,
+      maxAttempts = 60,
+      pollDelay = 1000
+    ): Promise<BotChatMessage | null> => {
+      for (let attempts = 0; attempts < maxAttempts; attempts++) {
+        await new Promise((resolve) => setTimeout(resolve, pollDelay));
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/openclaw/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionKey,
+              gatewayUrl: config.gatewayUrl,
+              authToken: config.authToken,
+            }),
+          });
+
+          if (!response.ok) continue;
+
+          const data = await response.json();
+          if (!data.success || !data.messages) continue;
+
+          const assistantMessages = data.messages.filter(
+            (m: any) => m.role === 'assistant'
+          );
+
+          // Check for new assistant messages
+          if (assistantMessages.length > existingMessageCount) {
+            const lastMessage = assistantMessages.sort(
+              (a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0)
+            )[0];
+
+            if (lastMessage?.content?.length > 0) {
+              return convertOpenClawMessage(lastMessage);
+            }
+          }
+        } catch (error) {
+          console.warn('[Home] Polling error:', error);
+        }
+      }
+
+      return null;
+    },
+    []
+  );
+
   const handleSendBotMessage = useCallback(
     async (text: string) => {
       const trimmedText = text.trim();
@@ -214,7 +256,7 @@ function HomeContent() {
       isSendingMessageRef.current = true;
       pendingMessageRef.current = trimmedText;
 
-      // Add user message locally
+      // Add user message locally (immediately)
       const userMessage: BotChatMessage = {
         role: 'user',
         content: trimmedText,
@@ -227,6 +269,35 @@ function HomeContent() {
         return newMessages;
       });
       setIsSendingBotMessage(true);
+
+      // Count existing assistant messages before sending
+      let existingAssistantCount = 0;
+      try {
+        const openClawConfig = localStorage.getItem('openclaw_config');
+        if (openClawConfig) {
+          const config = JSON.parse(openClawConfig);
+          const historyResponse = await fetch(
+            `${API_BASE_URL}/openclaw/history`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionKey: selectedBotChat.sessionKey,
+                gatewayUrl: config.gatewayUrl,
+                authToken: config.authToken,
+              }),
+            }
+          );
+          if (historyResponse.ok) {
+            const historyData = await historyResponse.json();
+            existingAssistantCount =
+              historyData.messages?.filter((m: any) => m.role === 'assistant')
+                .length ?? 0;
+          }
+        }
+      } catch {
+        // Ignore errors in counting
+      }
 
       try {
         const openClawConfig = localStorage.getItem('openclaw_config');
@@ -255,27 +326,42 @@ function HomeContent() {
         }
 
         const data = await response.json();
-        console.log('[Home] Received response, success:', data.success);
+        console.log('[Home] Received response, status:', data.status);
 
-        // Only add assistant message if we're still processing this message
-        if (pendingMessageRef.current === trimmedText && data.reply) {
+        // Handle async response - poll for result
+        if (data.status === 'accepted') {
+          console.log('[Home] Message accepted, polling for response...');
+          const assistantMessage = await pollForAssistantMessage(
+            selectedBotChat.sessionKey,
+            config,
+            existingAssistantCount
+          );
+
+          if (assistantMessage && pendingMessageRef.current === trimmedText) {
+            console.log(
+              '[Home] Adding assistant message, length:',
+              assistantMessage.content.length
+            );
+            setBotMessages((prev) => [...prev, assistantMessage]);
+          } else if (!assistantMessage) {
+            throw new Error('Response timeout');
+          }
+        } else if (pendingMessageRef.current === trimmedText && data.message) {
+          // Fallback for sync response
+          const assistantMessage = convertOpenClawMessage(data.message);
+          console.log(
+            '[Home] Adding assistant message, length:',
+            assistantMessage.content.length
+          );
+          setBotMessages((prev) => [...prev, assistantMessage]);
+        } else if (data.reply) {
+          // Backward compatibility
           const assistantMessage: BotChatMessage = {
             role: 'assistant',
             content: data.reply,
             timestamp: Date.now(),
           };
-          console.log(
-            '[Home] Adding assistant message, length:',
-            assistantMessage.content.length
-          );
-          setBotMessages((prev) => {
-            const newMessages = [...prev, assistantMessage];
-            console.log(
-              '[Home] Messages after adding assistant:',
-              newMessages.length
-            );
-            return newMessages;
-          });
+          setBotMessages((prev) => [...prev, assistantMessage]);
         } else if (data.error) {
           throw new Error(data.error);
         }
@@ -296,7 +382,7 @@ function HomeContent() {
         console.log('[Home] Message sending complete, all refs cleared');
       }
     },
-    [selectedBotChat]
+    [selectedBotChat, pollForAssistantMessage]
   );
 
   const handleNewTask = useCallback(() => {
@@ -523,6 +609,10 @@ function HomeContent() {
                       const openClawConfig =
                         localStorage.getItem('openclaw_config');
                       if (!openClawConfig) {
+                        alert(
+                          t.common.configureOpenClawFirst ||
+                            'Please configure OpenClaw first in Settings'
+                        );
                         return;
                       }
                       setTaskMode('bot');
