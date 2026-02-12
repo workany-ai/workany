@@ -240,6 +240,8 @@ export function useOpenClawWebSocket(
   const configRef = useRef<OpenClawConfig | null>(null);
   const currentRunIdRef = useRef<string | null>(null);
   const lastSeqRef = useRef<number | null>(null);
+  const isMountedRef = useRef(false);
+  const isConnectingRef = useRef(false);
 
   // Use refs for callbacks to prevent unnecessary re-renders
   const onChatEventRef = useRef(onChatEvent);
@@ -369,6 +371,8 @@ export function useOpenClawWebSocket(
    * Handle incoming WebSocket messages
    */
   const handleMessage = useCallback((msg: WebSocketMessage) => {
+    console.log('[OpenClawWS] Received message:', JSON.stringify(msg).slice(0, 200));
+
     switch (msg.type) {
       case 'connected':
         console.log('[OpenClawWS] Server confirmed connection');
@@ -385,6 +389,7 @@ export function useOpenClawWebSocket(
         break;
 
       case 'event':
+        console.log('[OpenClawWS] Received event:', msg.event, 'seq:', msg.seq);
         if (msg.event && msg.payload) {
           // Check for sequence gap
           if (msg.seq !== undefined && lastSeqRef.current !== null) {
@@ -398,10 +403,14 @@ export function useOpenClawWebSocket(
           }
 
           if (msg.event === 'chat') {
+            console.log('[OpenClawWS] Processing chat event');
             handleChatEventInternal(msg.payload as ChatEventPayload);
           } else if (msg.event === 'agent') {
+            console.log('[OpenClawWS] Processing agent event');
             handleAgentEventInternal(msg.payload as AgentEventPayload);
           }
+        } else {
+          console.warn('[OpenClawWS] Event missing event or payload');
         }
         break;
 
@@ -424,13 +433,28 @@ export function useOpenClawWebSocket(
       return;
     }
 
+    if (isConnectingRef.current) {
+      console.log('[OpenClawWS] Already connecting, skipping...');
+      return;
+    }
+
+    isConnectingRef.current = true;
     const wsUrl = `${API_BASE_URL.replace(/^http/, 'ws')}/openclaw/ws`;
 
     try {
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
+        // Check if component is still mounted (handles StrictMode)
+        if (!isMountedRef.current) {
+          console.log('[OpenClawWS] Connected but component unmounted, closing...');
+          ws.close(1000, 'Component unmounted');
+          isConnectingRef.current = false;
+          return;
+        }
+
         console.log('[OpenClawWS] Connected');
+        isConnectingRef.current = false;
         setIsConnected(true);
         lastSeqRef.current = null;
 
@@ -457,26 +481,31 @@ export function useOpenClawWebSocket(
 
       ws.onclose = (event) => {
         console.log('[OpenClawWS] Disconnected:', event.code, event.reason);
+        isConnectingRef.current = false;
         setIsConnected(false);
         setIsSubscribed(false);
 
-        // Attempt to reconnect after a delay
-        if (autoConnect && event.code !== 1000) {
+        // Attempt to reconnect after a delay (only if still mounted)
+        if (autoConnect && event.code !== 1000 && isMountedRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
             console.log('[OpenClawWS] Attempting to reconnect...');
-            connect();
+            if (isMountedRef.current) {
+              connect();
+            }
           }, 3000);
         }
       };
 
       ws.onerror = (error) => {
         console.error('[OpenClawWS] Error:', error);
+        isConnectingRef.current = false;
         onErrorRef.current?.('WebSocket connection error');
       };
 
       wsRef.current = ws;
     } catch (error) {
       console.error('[OpenClawWS] Failed to connect:', error);
+      isConnectingRef.current = false;
       onErrorRef.current?.('Failed to create WebSocket connection');
     }
   }, [autoConnect, handleMessage]);
@@ -486,6 +515,10 @@ export function useOpenClawWebSocket(
    */
   const subscribe = useCallback(
     (sessionKey: string, config: OpenClawConfig) => {
+      console.log('[OpenClawWS] subscribe() called with sessionKey:', sessionKey);
+      console.log('[OpenClawWS] subscribe() config:', JSON.stringify(config));
+      console.log('[OpenClawWS] WebSocket state:', wsRef.current?.readyState);
+
       subscribedSessionRef.current = sessionKey;
       configRef.current = config;
 
@@ -495,6 +528,7 @@ export function useOpenClawWebSocket(
       lastSeqRef.current = null;
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
+        console.log('[OpenClawWS] Sending subscribe message...');
         wsRef.current.send(
           JSON.stringify({
             type: 'subscribe',
@@ -503,6 +537,7 @@ export function useOpenClawWebSocket(
           })
         );
       } else {
+        console.log('[OpenClawWS] WebSocket not open, calling connect()...');
         // Connect first, then subscribe
         connect();
       }
@@ -540,6 +575,7 @@ export function useOpenClawWebSocket(
       wsRef.current = null;
     }
 
+    isConnectingRef.current = false;
     setIsConnected(false);
     setIsSubscribed(false);
     setChatStream(null);
@@ -547,14 +583,30 @@ export function useOpenClawWebSocket(
     subscribedSessionRef.current = null;
   }, []);
 
-  // Auto-connect on mount (only once)
+  // Auto-connect on mount (handles React StrictMode double-invocation)
   useEffect(() => {
-    if (autoConnect) {
+    isMountedRef.current = true;
+
+    if (autoConnect && !isConnectingRef.current) {
       connect();
     }
 
     return () => {
-      disconnect();
+      isMountedRef.current = false;
+      // In StrictMode, this cleanup runs before the connection is established
+      // Only disconnect if we're actually unmounting (not StrictMode re-render)
+      const ws = wsRef.current;
+      if (ws) {
+        if (ws.readyState === WebSocket.OPEN) {
+          // Connection is open - safe to disconnect
+          console.log('[OpenClawWS] Cleanup: disconnecting open WebSocket');
+          disconnect();
+        } else if (ws.readyState === WebSocket.CONNECTING) {
+          // Still connecting - let StrictMode handle it by not disconnecting
+          // The onopen handler will check isMountedRef
+          console.log('[OpenClawWS] Cleanup: WebSocket still connecting, deferring disconnect');
+        }
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount/unmount

@@ -231,13 +231,22 @@ function BotChatContent() {
 
   // Subscribe to session events when sessionKey changes
   useEffect(() => {
+    console.log('[BotChat] Subscribe effect triggered:', {
+      sessionKey,
+      wsConnected,
+      hasConfig: !!openclawConfig,
+    });
+
     if (sessionKey && openclawConfig && wsConnected) {
-      console.log('[BotChat] Subscribing to session:', sessionKey);
+      console.log('[BotChat] Calling subscribe with sessionKey:', sessionKey);
       subscribe(sessionKey, openclawConfig);
+    } else {
+      console.log('[BotChat] Skipping subscribe - missing requirements');
     }
 
     return () => {
       if (sessionKey) {
+        console.log('[BotChat] Unsubscribing from session:', sessionKey);
         unsubscribe(sessionKey);
       }
     };

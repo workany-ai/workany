@@ -96,14 +96,21 @@ class GatewayConnectionManager {
   ): Promise<{ connectionKey: string; close: () => void }> {
     const connectionKey = this.createConnectionKey(config);
 
+    logger.info('[GatewayManager] getConnection called, key:', connectionKey);
+
     let conn = this.connections.get(connectionKey);
 
     if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
+      logger.info('[GatewayManager] Creating new connection...');
       conn = await this.createConnection(config);
       this.connections.set(connectionKey, conn);
+      logger.info('[GatewayManager] Connection created and stored');
+    } else {
+      logger.info('[GatewayManager] Reusing existing connection');
     }
 
     conn.subscribers.add(onEvent);
+    logger.info('[GatewayManager] Total subscribers:', conn.subscribers.size);
 
     return {
       connectionKey,
@@ -177,9 +184,10 @@ class GatewayConnectionManager {
 
   private sendSessionSubscribe(conn: GatewayConnection, sessionKey: string) {
     const requestId = ++conn.requestId;
+    // moltbot protocol uses payloadJSON as a string
     const params = {
       event: 'chat.subscribe',
-      payload: { sessionKey },
+      payloadJSON: JSON.stringify({ sessionKey }),
     };
 
     conn.ws.send(
@@ -191,14 +199,15 @@ class GatewayConnectionManager {
       })
     );
 
-    logger.debug('[GatewayManager] Sent chat.subscribe for session:', sessionKey);
+    logger.info('[GatewayManager] Sent chat.subscribe for session:', sessionKey);
   }
 
   private sendSessionUnsubscribe(conn: GatewayConnection, sessionKey: string) {
     const requestId = ++conn.requestId;
+    // moltbot protocol uses payloadJSON as a string
     const params = {
       event: 'chat.unsubscribe',
-      payload: { sessionKey },
+      payloadJSON: JSON.stringify({ sessionKey }),
     };
 
     conn.ws.send(
@@ -228,6 +237,9 @@ class GatewayConnectionManager {
         requestId: 0,
       };
 
+      let connectionResolved = false;
+      const connectRequestId = `connect-${Date.now()}`;
+
       ws.on('open', () => {
         logger.info('[GatewayManager] Connected to OpenClaw Gateway');
 
@@ -255,30 +267,54 @@ class GatewayConnectionManager {
         ws.send(
           JSON.stringify({
             type: 'req',
-            id: `connect-${Date.now()}`,
+            id: connectRequestId,
             method: 'connect',
             params: connectParams,
           })
         );
 
-        resolve(conn);
+        // Set a timeout for connection
+        setTimeout(() => {
+          if (!connectionResolved) {
+            logger.warn('[GatewayManager] Connection timeout - proceeding anyway');
+            connectionResolved = true;
+            resolve(conn);
+          }
+        }, 5000);
       });
 
       ws.on('message', (data) => {
         try {
           const frame = JSON.parse(data.toString());
 
+          // Log all incoming frames for debugging
+          logger.info('[GatewayManager] Received frame:', JSON.stringify({
+            type: frame.type,
+            event: frame.event,
+            id: frame.id,
+            method: frame.method,
+          }));
+
+          // Wait for connect response before resolving
+          if (frame.type === 'res' && frame.id === connectRequestId && !connectionResolved) {
+            connectionResolved = true;
+            logger.info('[GatewayManager] Connect handshake completed');
+            resolve(conn);
+          }
+
           // Handle event frames
           if (frame.type === 'event') {
             const eventFrame = frame as JsonRpcEventFrame;
             const payload = eventFrame.payload as { sessionKey?: string };
             logger.info(
-              '[GatewayManager] Received event:',
+              '[GatewayManager] Event details - event:',
               eventFrame.event,
               'sessionKey:',
               payload?.sessionKey,
               'seq:',
-              eventFrame.seq
+              eventFrame.seq,
+              'subscribers:',
+              conn.subscribers.size
             );
 
             // Broadcast to all subscribers
@@ -287,7 +323,7 @@ class GatewayConnectionManager {
             }
           } else if (frame.type === 'res') {
             // Response to our requests (connect, node.event, etc.)
-            logger.debug('[GatewayManager] Received response:', frame.id, 'result:', frame.result);
+            logger.info('[GatewayManager] Response to:', frame.id, 'result:', JSON.stringify(frame.result)?.slice(0, 200));
           }
         } catch (error) {
           logger.error('[GatewayManager] Failed to parse message:', error);
@@ -296,7 +332,9 @@ class GatewayConnectionManager {
 
       ws.on('error', (error) => {
         logger.error('[GatewayManager] WebSocket error:', error);
-        reject(error);
+        if (!connectionResolved) {
+          reject(error);
+        }
       });
 
       ws.on('close', () => {
@@ -382,8 +420,13 @@ export function createOpenClawEventServer() {
     const client = clients.get(ws);
     if (!client) return;
 
+    logger.info('[OpenClawWS] Received message:', msg.type);
+
     switch (msg.type) {
       case 'subscribe': {
+        logger.info('[OpenClawWS] Subscribe request - sessionKey:', msg.sessionKey);
+        logger.info('[OpenClawWS] Subscribe config:', JSON.stringify(msg.config));
+
         if (!msg.sessionKey || !msg.config) {
           sendMessage(ws, {
             type: 'error',
@@ -395,25 +438,40 @@ export function createOpenClawEventServer() {
         // Store config and session key
         client.config = msg.config as OpenClawConfig;
         client.sessionKeys.add(msg.sessionKey);
+        logger.info('[OpenClawWS] Client sessionKeys:', Array.from(client.sessionKeys));
 
         // Subscribe to gateway events
         try {
+          logger.info('[OpenClawWS] Getting gateway connection...');
           const { close, connectionKey } = await gatewayManager.getConnection(
             client.config,
             (event) => {
               // Filter events for this client's sessions
               const payload = event.payload as { sessionKey?: string; runId?: string };
+              logger.info(
+                '[OpenClawWS] Event callback - event:',
+                event.event,
+                'payload sessionKey:',
+                payload?.sessionKey,
+                'client sessionKeys:',
+                Array.from(client.sessionKeys),
+                'match:',
+                payload?.sessionKey && client.sessionKeys.has(payload.sessionKey)
+              );
               if (
                 payload?.sessionKey &&
                 client.sessionKeys.has(payload.sessionKey)
               ) {
                 // Forward event with seq number
+                logger.info('[OpenClawWS] Forwarding event to client');
                 sendMessage(ws, {
                   type: 'event',
                   event: event.event,
                   payload: event.payload,
                   seq: event.seq,
                 });
+              } else {
+                logger.warn('[OpenClawWS] Event NOT forwarded - sessionKey mismatch');
               }
             }
           );
