@@ -65,11 +65,12 @@ function BotChatContent() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessionKey, setSessionKey] = useState<string>('');
   const initialPromptHandledRef = useRef(false);
+  const initialPromptSentRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageCountRef = useRef(0);
 
-  // Track pending user messages (user message sent but not yet acknowledged)
-  const pendingUserMessageRef = useRef<BotMessage | null>(null);
+  // Deduplication: track last assistant message to prevent duplicates
+  const lastAssistantMessageRef = useRef<{ content: string; timestamp: number } | null>(null);
 
   // Safety timeout for loading state
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -117,52 +118,62 @@ function BotChatContent() {
     }
   }, []);
 
-  // Handle WebSocket chat events (following moltbot protocol)
-  // Note: delta state is handled by the hook's chatStream state
+  // Helper to add assistant message with deduplication
+  const addAssistantMessage = useCallback((content: string, source: string = 'unknown') => {
+    const now = Date.now();
+
+    console.log(`[BotChat] addAssistantMessage called from: ${source}, content length: ${content?.length}`);
+
+    // Check for duplicate (same content within 1 second)
+    if (
+      lastAssistantMessageRef.current &&
+      lastAssistantMessageRef.current.content === content &&
+      now - lastAssistantMessageRef.current.timestamp < 1000
+    ) {
+      console.log('[BotChat] Skipping duplicate assistant message');
+      return;
+    }
+
+    const assistantMessage: BotMessage = {
+      id: `assistant_${now}`,
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+    };
+
+    // Update deduplication tracker
+    lastAssistantMessageRef.current = { content, timestamp: now };
+
+    console.log('[BotChat] Adding assistant message to history');
+
+    setMessages((prev) => {
+      const updated = [...prev, assistantMessage];
+      saveBotMessages(updated);
+      return updated;
+    });
+  }, []);
+
+  // Handle WebSocket chat events (primary source for messages)
   const handleChatEvent = useCallback(
     (payload: ChatEventPayload) => {
       console.log('[BotChat] Chat event:', payload.state, 'seq:', payload.seq);
 
       switch (payload.state) {
         case 'delta': {
-          // Delta is handled by the hook's chatStream state
-          // Just log for debugging
-          console.log('[BotChat] Delta text length:', extractText(payload.message)?.length);
+          // Delta updates chatStream - handled by hook
+          console.log(
+            '[BotChat] Delta text length:',
+            extractText(payload.message)?.length
+          );
           break;
         }
 
         case 'final': {
-          // Completed - add final message to history
+          // Message complete - add to history
           if (payload.message) {
             const converted = convertOpenClawMessage(payload.message);
-            const assistantMessage: BotMessage = {
-              id: `assistant_${Date.now()}`,
-              role: converted.role,
-              content: converted.content,
-              timestamp: new Date(converted.timestamp || Date.now()),
-              rawContent: converted.rawContent,
-              toolCallId: converted.toolCallId,
-              toolName: converted.toolName,
-              details: converted.details,
-              isError: converted.isError,
-            };
-
-            setMessages((prev) => {
-              // If we have a pending user message, include it
-              if (pendingUserMessageRef.current) {
-                const updated = [
-                  ...prev,
-                  pendingUserMessageRef.current,
-                  assistantMessage,
-                ];
-                pendingUserMessageRef.current = null;
-                saveBotMessages(updated);
-                return updated;
-              }
-              const updated = [...prev, assistantMessage];
-              saveBotMessages(updated);
-              return updated;
-            });
+            // Use deduplication helper
+            addAssistantMessage(converted.content, 'chat.final');
           }
 
           setLoadingWithTimeout(false);
@@ -171,7 +182,6 @@ function BotChatContent() {
         }
 
         case 'error': {
-          // Error - show error message
           const errorMessage: BotMessage = {
             id: `error_${Date.now()}`,
             role: 'assistant',
@@ -182,35 +192,58 @@ function BotChatContent() {
           };
           setMessages((prev) => [...prev, errorMessage]);
           setLoadingWithTimeout(false);
-          pendingUserMessageRef.current = null;
           break;
         }
 
         case 'aborted': {
-          // Aborted - clear state
           setLoadingWithTimeout(false);
-          pendingUserMessageRef.current = null;
           break;
         }
       }
     },
-    [refreshSessions]
+    [refreshSessions, setLoadingWithTimeout, addAssistantMessage]
   );
 
-  // Handle agent events (tool calls)
-  const handleAgentEvent = useCallback((payload: AgentEventPayload) => {
-    console.log(
-      '[BotChat] Agent event:',
-      payload.stream,
-      'phase:',
-      payload.data?.phase
-    );
-    // Tool events are handled by the hook's toolStream state
-  }, []);
+  // Track chatStream via ref for fallback message creation
+  const chatStreamRef = useRef<string | null>(null);
 
-  // WebSocket connection - hook manages chatStream and toolStream states
+  // Handle agent events (fallback when chat events not sent)
+  const handleAgentEvent = useCallback(
+    (payload: AgentEventPayload) => {
+      console.log(
+        '[BotChat] Agent event:',
+        payload.stream,
+        'phase:',
+        payload.data?.phase
+      );
+
+      // Handle lifecycle.end with _useChatStream flag (fallback mode)
+      if (
+        payload.stream === 'lifecycle' &&
+        payload.data?.phase === 'end' &&
+        (payload.data as { _useChatStream?: boolean })._useChatStream
+      ) {
+        const streamContent = chatStreamRef.current;
+        chatStreamRef.current = null;
+
+        console.log('[BotChat] lifecycle.end with _useChatStream, chatStream:', streamContent?.substring(0, 50));
+
+        if (streamContent) {
+          // Use deduplication helper
+          addAssistantMessage(streamContent, 'agent.lifecycle.end');
+        }
+
+        setLoadingWithTimeout(false);
+        refreshSessions();
+      }
+    },
+    [refreshSessions, setLoadingWithTimeout, addAssistantMessage]
+  );
+
+  // WebSocket connection
   const {
     isConnected: wsConnected,
+    isSubscribed,
     chatStream,
     toolStream,
     subscribe,
@@ -223,6 +256,11 @@ function BotChatContent() {
       console.error('[BotChat] WebSocket error:', error);
     },
   });
+
+  // Keep chatStreamRef in sync
+  useEffect(() => {
+    chatStreamRef.current = chatStream;
+  }, [chatStream]);
 
   // Cleanup loading timeout on unmount
   useEffect(() => {
@@ -403,26 +441,6 @@ function BotChatContent() {
     loadChatHistory();
   }, [sessionKey, loadChatHistory]);
 
-  useEffect(() => {
-    const initialPrompt = (location.state as any)?.initialPrompt;
-    if (
-      initialPrompt &&
-      sessionKey &&
-      !isLoading &&
-      !isLoadingHistory &&
-      messages.length === 0
-    ) {
-      handleSubmit(initialPrompt);
-    }
-  }, [
-    sessionKey,
-    isLoading,
-    isLoadingHistory,
-    messages.length,
-    location.state,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  ]);
-
   // Auto-scroll
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current || isLoading) {
@@ -447,8 +465,6 @@ function BotChatContent() {
     // Immediately add user message to UI
     setMessages((prev) => [...prev, userMessage]);
 
-    // Store as pending in case WebSocket event arrives before we finish
-    pendingUserMessageRef.current = userMessage;
     setLoadingWithTimeout(true);
 
     try {
@@ -477,8 +493,6 @@ function BotChatContent() {
           '[BotChat] Message accepted, waiting for WebSocket event...'
         );
         // The response will come via WebSocket event
-        // Clear pending message since we've already added it
-        pendingUserMessageRef.current = null;
       } else if (data.message) {
         // Fallback for sync response (backward compatibility)
         const botChatMessage = convertOpenClawMessage(data.message);
@@ -499,7 +513,6 @@ function BotChatContent() {
           return updated;
         });
         setLoadingWithTimeout(false);
-        pendingUserMessageRef.current = null;
       } else if (data.reply) {
         // Fallback for older API response
         const assistantMessage: BotMessage = {
@@ -514,7 +527,6 @@ function BotChatContent() {
           return updated;
         });
         setLoadingWithTimeout(false);
-        pendingUserMessageRef.current = null;
       } else if (data.error) {
         throw new Error(data.error);
       }
@@ -533,9 +545,33 @@ function BotChatContent() {
       };
       setMessages((prev) => [...prev, errorMessage]);
       setLoadingWithTimeout(false);
-      pendingUserMessageRef.current = null;
     }
   };
+
+  // Handle initial prompt - must be after handleSubmit definition
+  useEffect(() => {
+    const initialPrompt = (location.state as any)?.initialPrompt;
+    if (
+      initialPrompt &&
+      sessionKey &&
+      !isLoading &&
+      !isLoadingHistory &&
+      messages.length === 0 &&
+      isSubscribed && // Wait for subscription to be complete before sending
+      !initialPromptSentRef.current
+    ) {
+      initialPromptSentRef.current = true;
+      handleSubmit(initialPrompt);
+    }
+  }, [
+    sessionKey,
+    isLoading,
+    isLoadingHistory,
+    messages.length,
+    location.state,
+    isSubscribed,
+    handleSubmit,
+  ]);
 
   return (
     <div className="bg-sidebar flex h-screen overflow-hidden">
@@ -655,7 +691,9 @@ function BotChatContent() {
               <div className="mx-auto max-w-3xl">
                 <ChatInput
                   variant="reply"
-                  placeholder={t.common.botChatInputPlaceholder || '输入消息...'}
+                  placeholder={
+                    t.common.botChatInputPlaceholder || '输入消息...'
+                  }
                   onSubmit={handleSubmit}
                   isRunning={isLoading}
                   disabled={isLoading}

@@ -80,6 +80,14 @@ export interface AgentEventPayload {
     result?: unknown;
     partialResult?: unknown;
     error?: string;
+    // Assistant stream
+    text?: string;
+    delta?: string;
+    // Lifecycle
+    startedAt?: number;
+    endedAt?: number;
+    // Internal flag for fallback mode
+    _useChatStream?: boolean;
   };
 }
 
@@ -243,6 +251,9 @@ export function useOpenClawWebSocket(
   const isMountedRef = useRef(false);
   const isConnectingRef = useRef(false);
 
+  // Track finalized runs to prevent duplicate message creation
+  const finalizedRunsRef = useRef<Set<string>>(new Set());
+
   // Use refs for callbacks to prevent unnecessary re-renders
   const onChatEventRef = useRef(onChatEvent);
   const onAgentEventRef = useRef(onAgentEvent);
@@ -257,14 +268,10 @@ export function useOpenClawWebSocket(
 
   /**
    * Handle chat events (delta/final/error/aborted)
+   * Primary source for message content when available
    */
   const handleChatEventInternal = useCallback((payload: ChatEventPayload) => {
-    console.log(
-      '[OpenClawWS] Chat event:',
-      payload.state,
-      'seq:',
-      payload.seq
-    );
+    console.log('[OpenClawWS] Chat event:', payload.state, 'seq:', payload.seq);
 
     // Track runId
     if (payload.runId && payload.state === 'delta') {
@@ -273,22 +280,20 @@ export function useOpenClawWebSocket(
 
     switch (payload.state) {
       case 'delta': {
-        // Streaming text - accumulate
+        // Streaming text - update chatStream
         const text = extractText(payload.message);
         if (text) {
-          setChatStream((prev) => {
-            // Only update if new text is longer (accumulate like moltbot)
-            if (!prev || text.length >= prev.length) {
-              return text;
-            }
-            return prev;
-          });
+          setChatStream(text);
         }
         break;
       }
 
       case 'final': {
-        // Completed - clear stream, keep tool stream
+        // Mark run as finalized to prevent duplicate from agent.lifecycle.end
+        if (payload.runId) {
+          finalizedRunsRef.current.add(payload.runId);
+        }
+        // Clear chatStream - message will come from payload
         setChatStream(null);
         currentRunIdRef.current = null;
         break;
@@ -296,7 +301,7 @@ export function useOpenClawWebSocket(
 
       case 'error':
       case 'aborted': {
-        // Error or aborted - clear state
+        // Clear state
         setChatStream(null);
         currentRunIdRef.current = null;
         break;
@@ -307,7 +312,8 @@ export function useOpenClawWebSocket(
   }, []);
 
   /**
-   * Handle agent events (tool/lifecycle)
+   * Handle agent events (tool/lifecycle/assistant)
+   * Secondary source for message content (fallback when chat events not sent)
    */
   const handleAgentEventInternal = useCallback((payload: AgentEventPayload) => {
     console.log(
@@ -357,10 +363,48 @@ export function useOpenClawWebSocket(
 
         return next;
       });
+    } else if (payload.stream === 'assistant') {
+      // Update chatStream with streaming text
+      const { text } = payload.data;
+      if (typeof text === 'string') {
+        setChatStream(text);
+      }
     } else if (payload.stream === 'lifecycle') {
-      if (payload.data?.phase === 'end') {
-        // Agent finished - clear run state
+      if (payload.data?.phase === 'start') {
+        // New run starting - clear finalized tracking for this run
+        if (payload.runId) {
+          finalizedRunsRef.current.delete(payload.runId);
+          console.log('[OpenClawWS] Lifecycle start, cleared finalized for runId:', payload.runId);
+        }
+      } else if (payload.data?.phase === 'end') {
+        // Agent finished - clear tool stream
         setToolStream(new Map());
+
+        const isFinalized = payload.runId && finalizedRunsRef.current.has(payload.runId);
+        console.log('[OpenClawWS] Lifecycle end, runId:', payload.runId, 'already finalized:', isFinalized);
+
+        // Only trigger finalization if not already finalized by chat event
+        if (payload.runId && !isFinalized) {
+          // Mark as finalized
+          finalizedRunsRef.current.add(payload.runId);
+          currentRunIdRef.current = null;
+
+          console.log('[OpenClawWS] Sending lifecycle.end with _useChatStream=true');
+
+          // Notify UI to use chatStream content
+          // Pass a special payload indicating fallback mode
+          onAgentEventRef.current?.({
+            ...payload,
+            data: {
+              ...payload.data,
+              _useChatStream: true, // Signal to UI to use chatStream
+            },
+          });
+
+          // Clear chatStream AFTER notifying UI so it can capture the content
+          setChatStream(null);
+          return; // Don't call callback again
+        }
       }
     }
 
@@ -370,71 +414,94 @@ export function useOpenClawWebSocket(
   /**
    * Handle incoming WebSocket messages
    */
-  const handleMessage = useCallback((msg: WebSocketMessage) => {
-    console.log('[OpenClawWS] Received message:', JSON.stringify(msg).slice(0, 200));
+  const handleMessage = useCallback(
+    (msg: WebSocketMessage) => {
+      console.log(
+        '[OpenClawWS] Received message:',
+        JSON.stringify(msg).slice(0, 200)
+      );
 
-    switch (msg.type) {
-      case 'connected':
-        console.log('[OpenClawWS] Server confirmed connection');
-        break;
+      switch (msg.type) {
+        case 'connected':
+          console.log('[OpenClawWS] Server confirmed connection');
+          break;
 
-      case 'subscribed':
-        console.log('[OpenClawWS] Subscribed to session:', msg.sessionKey);
-        setIsSubscribed(true);
-        break;
+        case 'subscribed':
+          console.log('[OpenClawWS] Subscribed to session:', msg.sessionKey);
+          setIsSubscribed(true);
+          break;
 
-      case 'unsubscribed':
-        console.log('[OpenClawWS] Unsubscribed from session:', msg.sessionKey);
-        setIsSubscribed(false);
-        break;
+        case 'unsubscribed':
+          console.log(
+            '[OpenClawWS] Unsubscribed from session:',
+            msg.sessionKey
+          );
+          setIsSubscribed(false);
+          break;
 
-      case 'event':
-        console.log('[OpenClawWS] Received event:', msg.event, 'seq:', msg.seq);
-        if (msg.event && msg.payload) {
-          // Check for sequence gap
-          if (msg.seq !== undefined && lastSeqRef.current !== null) {
-            if (msg.seq > lastSeqRef.current + 1) {
-              console.warn(
-                '[OpenClawWS] Sequence gap detected:',
-                `expected ${lastSeqRef.current + 1}, got ${msg.seq}`
-              );
+        case 'event':
+          console.log(
+            '[OpenClawWS] Received event:',
+            msg.event,
+            'seq:',
+            msg.seq
+          );
+          if (msg.event && msg.payload) {
+            // Check for sequence gap
+            if (msg.seq !== undefined && lastSeqRef.current !== null) {
+              if (msg.seq > lastSeqRef.current + 1) {
+                console.warn(
+                  '[OpenClawWS] Sequence gap detected:',
+                  `expected ${lastSeqRef.current + 1}, got ${msg.seq}`
+                );
+              }
+              lastSeqRef.current = msg.seq;
             }
-            lastSeqRef.current = msg.seq;
+
+            if (msg.event === 'chat') {
+              console.log('[OpenClawWS] Processing chat event');
+              handleChatEventInternal(msg.payload as ChatEventPayload);
+            } else if (msg.event === 'agent') {
+              console.log('[OpenClawWS] Processing agent event');
+              handleAgentEventInternal(msg.payload as AgentEventPayload);
+            }
+          } else {
+            console.warn('[OpenClawWS] Event missing event or payload');
           }
+          break;
 
-          if (msg.event === 'chat') {
-            console.log('[OpenClawWS] Processing chat event');
-            handleChatEventInternal(msg.payload as ChatEventPayload);
-          } else if (msg.event === 'agent') {
-            console.log('[OpenClawWS] Processing agent event');
-            handleAgentEventInternal(msg.payload as AgentEventPayload);
-          }
-        } else {
-          console.warn('[OpenClawWS] Event missing event or payload');
-        }
-        break;
+        case 'error':
+          console.error('[OpenClawWS] Server error:', msg.message);
+          onErrorRef.current?.(msg.message || 'Unknown error');
+          break;
 
-      case 'error':
-        console.error('[OpenClawWS] Server error:', msg.message);
-        onErrorRef.current?.(msg.message || 'Unknown error');
-        break;
-
-      case 'pong':
-        // Keep-alive response
-        break;
-    }
-  }, [handleChatEventInternal, handleAgentEventInternal]);
+        case 'pong':
+          // Keep-alive response
+          break;
+      }
+    },
+    [handleChatEventInternal, handleAgentEventInternal]
+  );
 
   /**
    * Connect to WebSocket server
    */
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return;
+    // Close any existing connection first (handles StrictMode double-mount)
+    if (wsRef.current) {
+      const existingWs = wsRef.current;
+      if (existingWs.readyState === WebSocket.OPEN || existingWs.readyState === WebSocket.CONNECTING) {
+        console.log('[OpenClawWS] Closing existing connection before creating new one');
+        existingWs.onopen = null;
+        existingWs.onmessage = null;
+        existingWs.onclose = null;
+        existingWs.onerror = null;
+        existingWs.close(1000, 'Reconnecting');
+        wsRef.current = null;
+      }
     }
 
-    if (isConnectingRef.current) {
-      console.log('[OpenClawWS] Already connecting, skipping...');
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
@@ -443,11 +510,14 @@ export function useOpenClawWebSocket(
 
     try {
       const ws = new WebSocket(wsUrl);
+      wsRef.current = ws; // Store reference immediately
 
       ws.onopen = () => {
         // Check if component is still mounted (handles StrictMode)
         if (!isMountedRef.current) {
-          console.log('[OpenClawWS] Connected but component unmounted, closing...');
+          console.log(
+            '[OpenClawWS] Connected but component unmounted, closing...'
+          );
           ws.close(1000, 'Component unmounted');
           isConnectingRef.current = false;
           return;
@@ -515,7 +585,10 @@ export function useOpenClawWebSocket(
    */
   const subscribe = useCallback(
     (sessionKey: string, config: OpenClawConfig) => {
-      console.log('[OpenClawWS] subscribe() called with sessionKey:', sessionKey);
+      console.log(
+        '[OpenClawWS] subscribe() called with sessionKey:',
+        sessionKey
+      );
       console.log('[OpenClawWS] subscribe() config:', JSON.stringify(config));
       console.log('[OpenClawWS] WebSocket state:', wsRef.current?.readyState);
 
@@ -587,26 +660,27 @@ export function useOpenClawWebSocket(
   useEffect(() => {
     isMountedRef.current = true;
 
-    if (autoConnect && !isConnectingRef.current) {
+    if (autoConnect) {
       connect();
     }
 
     return () => {
       isMountedRef.current = false;
-      // In StrictMode, this cleanup runs before the connection is established
-      // Only disconnect if we're actually unmounting (not StrictMode re-render)
+      // Always cleanup the WebSocket on unmount
       const ws = wsRef.current;
       if (ws) {
-        if (ws.readyState === WebSocket.OPEN) {
-          // Connection is open - safe to disconnect
-          console.log('[OpenClawWS] Cleanup: disconnecting open WebSocket');
-          disconnect();
-        } else if (ws.readyState === WebSocket.CONNECTING) {
-          // Still connecting - let StrictMode handle it by not disconnecting
-          // The onopen handler will check isMountedRef
-          console.log('[OpenClawWS] Cleanup: WebSocket still connecting, deferring disconnect');
+        console.log('[OpenClawWS] Cleanup: closing WebSocket, state:', ws.readyState);
+        // Remove all handlers to prevent callbacks after unmount
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, 'Component unmounted');
         }
+        wsRef.current = null;
       }
+      isConnectingRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run on mount/unmount

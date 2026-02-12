@@ -9,6 +9,8 @@
  * - agent: {stream: "tool"|"lifecycle"|"assistant", data, seq}
  */
 
+import { randomUUID } from 'node:crypto';
+import { platform } from 'node:os';
 import WebSocket from 'ws';
 
 import type {
@@ -81,6 +83,36 @@ interface GatewayConnection {
 }
 
 /**
+ * Normalize sessionKey to canonical format for matching
+ * MoltBot sends events with canonical format: "agent:main:bot_xxx"
+ * Frontend may subscribe with short format: "bot_xxx"
+ * This function handles both cases.
+ */
+function normalizeSessionKey(sessionKey: string): string {
+  // If already in canonical format, return as-is
+  if (sessionKey.startsWith('agent:')) {
+    return sessionKey;
+  }
+  // Convert short format to canonical
+  return `agent:main:${sessionKey}`;
+}
+
+/**
+ * Check if a payload sessionKey matches any subscribed session
+ * All keys in subscribedKeys are already in canonical format
+ */
+function sessionKeyMatches(
+  payloadSessionKey: string | undefined,
+  subscribedKeys: Set<string>
+): boolean {
+  if (!payloadSessionKey) return false;
+
+  // Normalize payload key and check for match
+  const normalizedPayload = normalizeSessionKey(payloadSessionKey);
+  return subscribedKeys.has(normalizedPayload);
+}
+
+/**
  * Manages persistent connections to OpenClaw Gateway for event streaming
  * Follows moltbot protocol for session subscription via node.event
  */
@@ -148,16 +180,19 @@ class GatewayConnectionManager {
       return;
     }
 
+    // Use canonical format for subscription (moltbot requirement)
+    const canonicalKey = normalizeSessionKey(sessionKey);
+
     // Already subscribed?
-    if (conn.subscribedSessions.has(sessionKey)) {
-      logger.debug('[GatewayManager] Already subscribed to session:', sessionKey);
+    if (conn.subscribedSessions.has(canonicalKey)) {
+      logger.debug('[GatewayManager] Already subscribed to session:', canonicalKey);
       return;
     }
 
     // Send chat.subscribe via node.event (moltbot protocol)
-    this.sendSessionSubscribe(conn, sessionKey);
-    conn.subscribedSessions.add(sessionKey);
-    logger.info('[GatewayManager] Subscribed to session:', sessionKey);
+    this.sendSessionSubscribe(conn, canonicalKey);
+    conn.subscribedSessions.add(canonicalKey);
+    logger.info(`[GatewayManager] Subscribed to session: ${canonicalKey} (original: ${sessionKey})`);
   }
 
   /**
@@ -175,10 +210,13 @@ class GatewayConnectionManager {
       return;
     }
 
-    if (conn.subscribedSessions.has(sessionKey)) {
-      this.sendSessionUnsubscribe(conn, sessionKey);
-      conn.subscribedSessions.delete(sessionKey);
-      logger.info('[GatewayManager] Unsubscribed from session:', sessionKey);
+    // Use canonical format for unsubscription
+    const canonicalKey = normalizeSessionKey(sessionKey);
+
+    if (conn.subscribedSessions.has(canonicalKey)) {
+      this.sendSessionUnsubscribe(conn, canonicalKey);
+      conn.subscribedSessions.delete(canonicalKey);
+      logger.info('[GatewayManager] Unsubscribed from session:', canonicalKey);
     }
   }
 
@@ -244,24 +282,24 @@ class GatewayConnectionManager {
         logger.info('[GatewayManager] Connected to OpenClaw Gateway');
 
         // Send connect handshake following moltbot protocol
+        // Use role: 'node' to access node.event (chat.subscribe)
         const connectParams = {
           minProtocol: 3,
           maxProtocol: 3,
           client: {
-            id: 'workany-events',
-            displayName: 'WorkAny',
+            id: 'gateway-client',
+            displayName: 'workany',
             version: '1.0.0',
-            platform: process.platform,
-            mode: 'ui',
-            instanceId: `workany-${Date.now()}`,
+            platform: platform(),
+            mode: 'node',
+            instanceId: randomUUID(),
           },
           auth: {
             token: config.authToken,
             password: config.password,
           },
-          role: 'operator',
-          scopes: ['operator.admin'],
-          caps: ['tool-events'], // Request tool events
+          role: 'node',
+          commands: [],
         };
 
         ws.send(
@@ -307,14 +345,7 @@ class GatewayConnectionManager {
             const eventFrame = frame as JsonRpcEventFrame;
             const payload = eventFrame.payload as { sessionKey?: string };
             logger.info(
-              '[GatewayManager] Event details - event:',
-              eventFrame.event,
-              'sessionKey:',
-              payload?.sessionKey,
-              'seq:',
-              eventFrame.seq,
-              'subscribers:',
-              conn.subscribers.size
+              `[GatewayManager] Event details - event: ${eventFrame.event}, sessionKey: ${payload?.sessionKey}, seq: ${eventFrame.seq}, subscribers: ${conn.subscribers.size}`
             );
 
             // Broadcast to all subscribers
@@ -323,7 +354,7 @@ class GatewayConnectionManager {
             }
           } else if (frame.type === 'res') {
             // Response to our requests (connect, node.event, etc.)
-            logger.info('[GatewayManager] Response to:', frame.id, 'result:', JSON.stringify(frame.result)?.slice(0, 200));
+            logger.info(`[GatewayManager] Response to: ${frame.id}, result: ${JSON.stringify(frame.result)?.slice(0, 200)}`);
           }
         } catch (error) {
           logger.error('[GatewayManager] Failed to parse message:', error);
@@ -366,6 +397,8 @@ interface ClientData {
     connectionKey: string;
   };
   config?: OpenClawConfig;
+  // Deduplication: track recently seen events by (runId, payloadSeq)
+  seenEvents: Map<string, number>; // runId -> last seq
 }
 
 /**
@@ -381,6 +414,7 @@ export function createOpenClawEventServer() {
   const handleConnection = (ws: WebSocket) => {
     const client: ClientData = {
       sessionKeys: new Set(),
+      seenEvents: new Map(),
     };
     clients.set(ws, client);
 
@@ -435,10 +469,11 @@ export function createOpenClawEventServer() {
           return;
         }
 
-        // Store config and session key
+        // Store config and session key (normalize to canonical format)
         client.config = msg.config as OpenClawConfig;
-        client.sessionKeys.add(msg.sessionKey);
-        logger.info('[OpenClawWS] Client sessionKeys:', Array.from(client.sessionKeys));
+        const canonicalKey = normalizeSessionKey(msg.sessionKey);
+        client.sessionKeys.add(canonicalKey);
+        logger.info(`[OpenClawWS] Client sessionKeys: [${Array.from(client.sessionKeys).join(', ')}] (original: ${msg.sessionKey})`);
 
         // Subscribe to gateway events
         try {
@@ -448,30 +483,55 @@ export function createOpenClawEventServer() {
             (event) => {
               // Filter events for this client's sessions
               const payload = event.payload as { sessionKey?: string; runId?: string };
+              const payloadSessionKey = payload?.sessionKey;
+              const clientSessionKeys = Array.from(client.sessionKeys);
+
+              // Use normalized matching to handle canonical vs short format
+              const hasMatch = sessionKeyMatches(payloadSessionKey, client.sessionKeys);
+
               logger.info(
-                '[OpenClawWS] Event callback - event:',
-                event.event,
-                'payload sessionKey:',
-                payload?.sessionKey,
-                'client sessionKeys:',
-                Array.from(client.sessionKeys),
-                'match:',
-                payload?.sessionKey && client.sessionKeys.has(payload.sessionKey)
+                `[OpenClawWS] Event: ${event.event}, sessionKey: ${payloadSessionKey || 'MISSING'}, clientKeys: [${clientSessionKeys.join(', ')}], match: ${hasMatch}`
               );
-              if (
-                payload?.sessionKey &&
-                client.sessionKeys.has(payload.sessionKey)
-              ) {
-                // Forward event with seq number
+
+              if (hasMatch) {
+                // Deduplicate: check if we've seen this event before
+                const runId = payload?.runId;
+                const payloadSeq = (payload as { seq?: number }).seq;
+                const dedupeKey = runId;
+
+                if (dedupeKey && payloadSeq !== undefined) {
+                  const lastSeq = client.seenEvents.get(dedupeKey);
+                  if (lastSeq !== undefined && payloadSeq <= lastSeq) {
+                    // Duplicate event, skip
+                    logger.info(`[OpenClawWS] Skipping duplicate event: runId=${dedupeKey}, seq=${payloadSeq} (last=${lastSeq})`);
+                    return;
+                  }
+                  // Update seen seq
+                  client.seenEvents.set(dedupeKey, payloadSeq);
+
+                  // Cleanup old entries (keep last 100)
+                  if (client.seenEvents.size > 100) {
+                    const keys = Array.from(client.seenEvents.keys());
+                    for (let i = 0; i < keys.length - 100; i++) {
+                      client.seenEvents.delete(keys[i]);
+                    }
+                  }
+                }
+
+                // Forward event with seq number from payload (if available)
+                const forwardSeq = event.seq ?? payloadSeq;
                 logger.info('[OpenClawWS] Forwarding event to client');
                 sendMessage(ws, {
                   type: 'event',
                   event: event.event,
                   payload: event.payload,
-                  seq: event.seq,
+                  seq: forwardSeq,
                 });
               } else {
-                logger.warn('[OpenClawWS] Event NOT forwarded - sessionKey mismatch');
+                logger.warn(
+                  '[OpenClawWS] Event NOT forwarded - reason:',
+                  !payloadSessionKey ? 'NO_SESSIONKEY_IN_PAYLOAD' : 'SESSIONKEY_MISMATCH'
+                );
               }
             }
           );
@@ -479,8 +539,10 @@ export function createOpenClawEventServer() {
           client.gatewayConnection = { close, connectionKey };
 
           // Subscribe to session events on the gateway (moltbot protocol)
+          // Note: gatewayManager.subscribeToSession already normalizes the key
           await gatewayManager.subscribeToSession(client.config, msg.sessionKey);
 
+          // Send subscribed message with the ORIGINAL key (what the client sent)
           sendMessage(ws, { type: 'subscribed', sessionKey: msg.sessionKey });
 
           logger.info('[OpenClawWS] Subscribed to session:', msg.sessionKey);
@@ -496,7 +558,9 @@ export function createOpenClawEventServer() {
 
       case 'unsubscribe': {
         if (msg.sessionKey) {
-          client.sessionKeys.delete(msg.sessionKey);
+          // Normalize the key before deleting
+          const canonicalKey = normalizeSessionKey(msg.sessionKey);
+          client.sessionKeys.delete(canonicalKey);
 
           // Unsubscribe from session events on the gateway
           if (client.config) {

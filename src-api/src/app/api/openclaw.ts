@@ -141,20 +141,18 @@ openclawRoutes.post('/chat', async (c) => {
     const sessionKey = body.sessionId || `bot_${Date.now()}`;
     const runId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Create or patch session
-    try {
-      await gateway.sessionsPatch({
-        key: sessionKey,
-        label: body.message.slice(0, 50),
-      });
-    } catch (error: unknown) {
-      // Ignore "label already in use" error - session already exists
-      if (
-        !error ||
-        typeof error !== 'object' ||
-        !('code' in error) ||
-        error.code !== 'INVALID_REQUEST'
-      ) {
+    // Create or patch session (only set label for new sessions)
+    // For existing sessions, we don't update the label to avoid conflicts
+    if (!body.sessionId) {
+      // New session - set a unique label using session key prefix
+      const labelPrefix = body.message.slice(0, 30).replace(/\n/g, ' ');
+      try {
+        await gateway.sessionsPatch({
+          key: sessionKey,
+          label: `${labelPrefix} (${sessionKey.slice(-6)})`,
+        });
+      } catch (error: unknown) {
+        // Log but don't fail - label uniqueness is not critical
         logger.warn('[OpenClawAPI] Session patch failed:', error);
       }
     }
