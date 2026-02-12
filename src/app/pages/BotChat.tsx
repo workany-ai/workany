@@ -25,9 +25,10 @@ import {
   saveBotMessages,
   updateBotSessionKey,
 } from '@/shared/lib/bot-storage';
+import { cn } from '@/shared/lib/utils';
 import { useBotChatContext } from '@/shared/providers/bot-chat-provider';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { Zap } from 'lucide-react';
+import { MessageSquare, X, Zap } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
 import { BotLoadingIndicator } from '@/components/shared/BotLoadingIndicator';
@@ -77,6 +78,9 @@ function BotChatContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const { sessions: botChats, refreshSessions } = useBotChatContext();
+
+  // State for showing all bot chats (covers main content)
+  const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
 
   // Get OpenClaw config for WebSocket (memoized to prevent unnecessary re-subscriptions)
   const openclawConfig = useMemo(() => getOpenClawConfig(), []);
@@ -548,57 +552,118 @@ function BotChatContent() {
         currentBotChatKey={sessionKey}
         onSelectBotChat={handleSelectBotChat}
         onRefreshBotChats={refreshSessions}
+        onShowAllBotChats={() => setShowAllChatsPanel(true)}
         onNewTask={handleNewTask}
       />
 
       {/* Main Content */}
       <div className="bg-background my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl shadow-sm">
-        {/* Messages Area */}
-
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {isLoadingHistory ? (
-            <div className="p-4">
-              <BotLoadingIndicator />
+        {showAllChatsPanel ? (
+          /* All Bot Chats Panel - covers main content */
+          <>
+            {/* Panel Header */}
+            <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+              <h3 className="text-foreground text-sm font-medium">
+                {t.nav.allChats}
+              </h3>
+              <button
+                onClick={() => setShowAllChatsPanel(false)}
+                className="text-muted-foreground hover:text-foreground flex size-6 cursor-pointer items-center justify-center rounded transition-colors"
+              >
+                <X className="size-4" />
+              </button>
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <div className="bg-primary/10 text-primary mx-auto mb-4 flex size-12 items-center justify-center rounded-full">
-                  <Zap className="size-6" />
+
+            {/* Chat List */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {botChats && botChats.length > 0 ? (
+                <div className="mx-auto max-w-2xl space-y-1">
+                  {botChats.map((chat) => (
+                    <div
+                      key={chat.sessionKey}
+                      className={cn(
+                        'group flex w-full cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors',
+                        sessionKey === chat.sessionKey
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-foreground/80 hover:bg-accent/50'
+                      )}
+                      onClick={() => {
+                        handleSelectBotChat(chat.sessionKey);
+                        setShowAllChatsPanel(false);
+                      }}
+                    >
+                      <div className="relative shrink-0">
+                        <MessageSquare className="text-muted-foreground size-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {chat.label || chat.friendlyId || '新对话'}
+                        </p>
+                        <p className="text-muted-foreground truncate text-xs">
+                          {chat.lastMessage || `${chat.messageCount} 条消息`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <h3 className="text-foreground mb-2 text-lg font-semibold">
-                  {t.common.botChatWelcome || '开始与 Bot 对话'}
-                </h3>
-                <p className="text-muted-foreground text-sm">
-                  {t.common.botChatWelcomeHint ||
-                    '输入消息开始与 OpenClaw Bot 聊天'}
-                </p>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-muted-foreground text-sm">
+                    {t.nav.noChatsYet || '暂无聊天'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Normal Chat View */
+          <>
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingHistory ? (
+                <div className="p-4">
+                  <BotLoadingIndicator />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <div className="bg-primary/10 text-primary mx-auto mb-4 flex size-12 items-center justify-center rounded-full">
+                      <Zap className="size-6" />
+                    </div>
+                    <h3 className="text-foreground mb-2 text-lg font-semibold">
+                      {t.common.botChatWelcome || '开始与 Bot 对话'}
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
+                      {t.common.botChatWelcomeHint ||
+                        '输入消息开始与 OpenClaw Bot 聊天'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <BotMessageList
+                  messages={convertToBotChatMessages(messages)}
+                  isLoading={isLoading}
+                  messagesEndRef={messagesEndRef}
+                  streamingMessage={chatStream}
+                  toolStream={toolStream}
+                />
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="border-border border-t p-4">
+              <div className="mx-auto max-w-3xl">
+                <ChatInput
+                  variant="reply"
+                  placeholder={t.common.botChatInputPlaceholder || '输入消息...'}
+                  onSubmit={handleSubmit}
+                  isRunning={isLoading}
+                  disabled={isLoading}
+                />
               </div>
             </div>
-          ) : (
-            <BotMessageList
-              messages={convertToBotChatMessages(messages)}
-              isLoading={isLoading}
-              messagesEndRef={messagesEndRef}
-              streamingMessage={chatStream}
-              toolStream={toolStream}
-            />
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="border-border border-t p-4">
-          <div className="mx-auto max-w-3xl">
-            <ChatInput
-              variant="reply"
-              placeholder={t.common.botChatInputPlaceholder || '输入消息...'}
-              onSubmit={handleSubmit}
-              isRunning={isLoading}
-              disabled={isLoading}
-            />
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

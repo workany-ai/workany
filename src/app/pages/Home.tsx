@@ -20,8 +20,9 @@ import {
 } from '@/shared/lib/background-tasks';
 import { convertOpenClawMessage } from '@/shared/lib/bot-message-utils';
 import { generateSessionId } from '@/shared/lib/session';
+import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { MessageSquare, SquarePen, Zap } from 'lucide-react';
+import { MessageSquare, SquarePen, X, Zap } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
 import { BotMessageList } from '@/components/shared/BotMessageList';
@@ -50,6 +51,9 @@ function HomeContent() {
   const [isSendingBotMessage, setIsSendingBotMessage] = useState(false);
 
   const [taskMode, setTaskMode] = useState<'local' | 'bot'>('local');
+
+  // State for showing all bot chats (covers main content)
+  const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
 
   const isSendingMessageRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -490,60 +494,120 @@ function HomeContent() {
           currentBotChatKey={selectedBotChat.sessionKey}
           onSelectBotChat={handleSelectBotChat}
           onRefreshBotChats={refreshSessions}
+          onShowAllBotChats={() => setShowAllChatsPanel(true)}
           onNewTask={handleNewTask}
         />
 
         {/* Main Content - Bot Chat View */}
         <div className="bg-background my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl shadow-sm">
-          {/* Header */}
-          {/* Messages Area - Centered content like TaskDetail */}
+          {showAllChatsPanel ? (
+            /* All Bot Chats Panel - covers main content */
+            <>
+              {/* Panel Header */}
+              <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+                <h3 className="text-foreground text-sm font-medium">
+                  {t.nav.allChats}
+                </h3>
+                <button
+                  onClick={() => setShowAllChatsPanel(false)}
+                  className="text-muted-foreground hover:text-foreground flex size-6 cursor-pointer items-center justify-center rounded transition-colors"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
 
-          {/* Messages Area - Centered content like TaskDetail */}
-          <div className="relative flex flex-1 justify-center overflow-x-hidden overflow-y-auto">
-            <div className="w-full max-w-[800px] px-6 pt-4 pb-24">
-              {isLoadingBotMessages ? (
-                <div className="flex min-h-[200px] items-center justify-center py-12">
-                  <div className="text-muted-foreground flex items-center gap-3">
-                    <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    <span>加载中...</span>
+              {/* Chat List */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {botChats && botChats.length > 0 ? (
+                  <div className="mx-auto max-w-2xl space-y-1">
+                    {botChats.map((chat) => (
+                      <div
+                        key={chat.sessionKey}
+                        className={cn(
+                          'group flex w-full cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors',
+                          selectedBotChat?.sessionKey === chat.sessionKey
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-foreground/80 hover:bg-accent/50'
+                        )}
+                        onClick={() => {
+                          handleSelectBotChat(chat.sessionKey);
+                          setShowAllChatsPanel(false);
+                        }}
+                      >
+                        <div className="relative shrink-0">
+                          <MessageSquare className="text-muted-foreground size-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {chat.label || chat.friendlyId || '新对话'}
+                          </p>
+                          <p className="text-muted-foreground truncate text-xs">
+                            {chat.lastMessage || `${chat.messageCount} 条消息`}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ) : botMessages.length === 0 ? (
-                <div className="flex min-h-[200px] items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="bg-primary/10 text-primary mx-auto mb-4 flex size-12 items-center justify-center rounded-full">
-                      <MessageSquare className="size-6" />
-                    </div>
-                    <h3 className="text-foreground mb-2 text-lg font-semibold">
-                      开始对话
-                    </h3>
+                ) : (
+                  <div className="flex h-full items-center justify-center">
                     <p className="text-muted-foreground text-sm">
-                      输入消息开始与 Bot 聊天
+                      {t.nav.noChatsYet || '暂无聊天'}
                     </p>
                   </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Normal Chat View */
+            <>
+              {/* Messages Area - Centered content like TaskDetail */}
+              <div className="relative flex flex-1 justify-center overflow-x-hidden overflow-y-auto">
+                <div className="w-full max-w-[800px] px-6 pt-4 pb-24">
+                  {isLoadingBotMessages ? (
+                    <div className="flex min-h-[200px] items-center justify-center py-12">
+                      <div className="text-muted-foreground flex items-center gap-3">
+                        <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <span>加载中...</span>
+                      </div>
+                    </div>
+                  ) : botMessages.length === 0 ? (
+                    <div className="flex min-h-[200px] items-center justify-center py-12">
+                      <div className="text-center">
+                        <div className="bg-primary/10 text-primary mx-auto mb-4 flex size-12 items-center justify-center rounded-full">
+                          <MessageSquare className="size-6" />
+                        </div>
+                        <h3 className="text-foreground mb-2 text-lg font-semibold">
+                          开始对话
+                        </h3>
+                        <p className="text-muted-foreground text-sm">
+                          输入消息开始与 Bot 聊天
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <BotMessageList
+                      messages={botMessages}
+                      isLoading={isSendingBotMessage}
+                      messagesEndRef={messagesEndRef}
+                    />
+                  )}
                 </div>
-              ) : (
-                <BotMessageList
-                  messages={botMessages}
-                  isLoading={isSendingBotMessage}
-                  messagesEndRef={messagesEndRef}
-                />
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Reply Input - Centered like TaskDetail */}
-          <div className="border-border/50 bg-background relative flex shrink-0 justify-center border-none">
-            <div className="w-full max-w-[800px] px-4 py-3">
-              <ChatInput
-                variant="reply"
-                placeholder="输入消息..."
-                onSubmit={handleSendBotMessage}
-                isRunning={isSendingBotMessage}
-                disabled={isSendingBotMessage}
-              />
-            </div>
-          </div>
+              {/* Reply Input - Centered like TaskDetail */}
+              <div className="border-border/50 bg-background relative flex shrink-0 justify-center border-none">
+                <div className="w-full max-w-[800px] px-4 py-3">
+                  <ChatInput
+                    variant="reply"
+                    placeholder="输入消息..."
+                    onSubmit={handleSendBotMessage}
+                    isRunning={isSendingBotMessage}
+                    disabled={isSendingBotMessage}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -563,74 +627,129 @@ function HomeContent() {
         botChats={botChats}
         onSelectBotChat={handleSelectBotChat}
         onRefreshBotChats={refreshSessions}
+        onShowAllBotChats={() => setShowAllChatsPanel(true)}
       />
 
       {/* Main Content */}
       <div className="bg-background my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl shadow-sm">
-        {/* Content Area - Vertically Centered */}
-        <div className="flex flex-1 flex-col items-center justify-center overflow-auto px-4">
-          <div className="flex w-full max-w-2xl flex-col items-center gap-6">
-            {/* Title */}
-            <h1 className="text-foreground text-center font-serif text-4xl font-normal tracking-tight md:text-5xl">
-              {t.home.welcomeTitle}
-            </h1>
+        {showAllChatsPanel ? (
+          /* All Bot Chats Panel - covers main content */
+          <>
+            {/* Panel Header */}
+            <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+              <h3 className="text-foreground text-sm font-medium">
+                {t.nav.allChats}
+              </h3>
+              <button
+                onClick={() => setShowAllChatsPanel(false)}
+                className="text-muted-foreground hover:text-foreground flex size-6 cursor-pointer items-center justify-center rounded transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
 
-            {/* Description */}
-            <p className="text-muted-foreground text-center text-sm">
-              {t.home.welcomeSubtitle}
-            </p>
-
-            {/* Input Box - Using shared ChatInput component */}
-            <ChatInput
-              variant="home"
-              placeholder={
-                taskMode === 'bot'
-                  ? t.home.botInputPlaceholder || 'Ask Bot anything...'
-                  : t.home.inputPlaceholder
-              }
-              onSubmit={handleSubmit}
-              className="w-full"
-              autoFocus
-              bottomContent={
-                <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
-                  <button
-                    onClick={() => setTaskMode('local')}
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                      taskMode === 'local'
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <SquarePen className="size-3.5" />
-                    {t.nav.localTask}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const openClawConfig =
-                        localStorage.getItem('openclaw_config');
-                      if (!openClawConfig) {
-                        alert(
-                          t.common.configureOpenClawFirst ||
-                            'Please configure OpenClaw first in Settings'
-                        );
-                        return;
-                      }
-                      setTaskMode('bot');
-                    }}
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                      taskMode === 'bot'
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Zap className="size-3.5" />
-                    {t.nav.botTask}
-                  </button>
+            {/* Chat List */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {botChats && botChats.length > 0 ? (
+                <div className="mx-auto max-w-2xl space-y-1">
+                  {botChats.map((chat) => (
+                    <div
+                      key={chat.sessionKey}
+                      className="text-foreground/80 hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-4 py-3 transition-colors"
+                      onClick={() => {
+                        handleSelectBotChat(chat.sessionKey);
+                        setShowAllChatsPanel(false);
+                      }}
+                    >
+                      <div className="relative shrink-0">
+                        <MessageSquare className="text-muted-foreground size-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {chat.label || chat.friendlyId || '新对话'}
+                        </p>
+                        <p className="text-muted-foreground truncate text-xs">
+                          {chat.lastMessage || `${chat.messageCount} 条消息`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              }
-            />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-muted-foreground text-sm">
+                    {t.nav.noChatsYet || '暂无聊天'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Normal Home View */
+          <div className="flex flex-1 flex-col items-center justify-center overflow-auto px-4">
+            <div className="flex w-full max-w-2xl flex-col items-center gap-6">
+              {/* Title */}
+              <h1 className="text-foreground text-center font-serif text-4xl font-normal tracking-tight md:text-5xl">
+                {t.home.welcomeTitle}
+              </h1>
+
+              {/* Description */}
+              <p className="text-muted-foreground text-center text-sm">
+                {t.home.welcomeSubtitle}
+              </p>
+
+              {/* Input Box - Using shared ChatInput component */}
+              <ChatInput
+                variant="home"
+                placeholder={
+                  taskMode === 'bot'
+                    ? t.home.botInputPlaceholder || 'Ask Bot anything...'
+                    : t.home.inputPlaceholder
+                }
+                onSubmit={handleSubmit}
+                className="w-full"
+                autoFocus
+                bottomContent={
+                  <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
+                    <button
+                      onClick={() => setTaskMode('local')}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                        taskMode === 'local'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <SquarePen className="size-3.5" />
+                      {t.nav.localTask}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const openClawConfig =
+                          localStorage.getItem('openclaw_config');
+                        if (!openClawConfig) {
+                          alert(
+                            t.common.configureOpenClawFirst ||
+                              'Please configure OpenClaw first in Settings'
+                          );
+                          return;
+                        }
+                        setTaskMode('bot');
+                      }}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                        taskMode === 'bot'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Zap className="size-3.5" />
+                      {t.nav.botTask}
+                    </button>
+                  </div>
+                }
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -56,6 +56,7 @@ interface LeftSidebarProps {
   currentBotChatKey?: string;
   onSelectBotChat?: (chatKey: string) => void;
   onRefreshBotChats?: () => void;
+  onShowAllBotChats?: () => void;
   onNewTask?: () => void;
 }
 
@@ -157,6 +158,7 @@ export function LeftSidebar({
   currentBotChatKey,
   onSelectBotChat,
   onRefreshBotChats,
+  onShowAllBotChats,
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
@@ -367,32 +369,42 @@ export function LeftSidebar({
                 </div>
                 <div className="flex-1 space-y-0.5 overflow-y-auto">
                   {botChats && botChats.length > 0 ? (
-                    botChats.slice(0, 5).map((chat) => (
-                      <div
-                        key={chat.sessionKey}
-                        className={cn(
-                          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                          currentBotChatKey === chat.sessionKey
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                        )}
-                        onClick={() =>
-                          onSelectBotChat && onSelectBotChat(chat.sessionKey)
-                        }
-                      >
-                        <div className="relative shrink-0">
-                          <MessageSquare className="size-4" />
+                    <>
+                      {botChats.slice(0, 5).map((chat) => (
+                        <div
+                          key={chat.sessionKey}
+                          className={cn(
+                            'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                            currentBotChatKey === chat.sessionKey
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          )}
+                          onClick={() =>
+                            onSelectBotChat && onSelectBotChat(chat.sessionKey)
+                          }
+                        >
+                          <div className="relative shrink-0">
+                            <MessageSquare className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">
+                              {chat.label || chat.friendlyId || '新对话'}
+                            </p>
+                            <p className="text-sidebar-foreground/40 truncate text-xs">
+                              {chat.lastMessage || `${chat.messageCount} 条消息`}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">
-                            {chat.label || chat.friendlyId || '新对话'}
-                          </p>
-                          <p className="text-sidebar-foreground/40 truncate text-xs">
-                            {chat.lastMessage || `${chat.messageCount} 条消息`}
-                          </p>
-                        </div>
-                      </div>
-                    ))
+                      ))}
+                      {botChats.length > 5 && (
+                        <button
+                          onClick={() => onShowAllBotChats && onShowAllBotChats()}
+                          className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                        >
+                          <span className="text-sm">{t.common.more}</span>
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <div className="py-4 text-center">
                       <p className="text-sidebar-foreground/40 text-xs">
