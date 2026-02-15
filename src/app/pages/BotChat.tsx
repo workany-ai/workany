@@ -667,7 +667,6 @@ function BotChatContent() {
         currentBotChatKey={sessionKey}
         onSelectBotChat={handleSelectBotChat}
         onRefreshBotChats={refreshSessions}
-        onShowAllBotChats={() => setShowAllChatsPanel(true)}
         onNewTask={handleNewTask}
       />
 

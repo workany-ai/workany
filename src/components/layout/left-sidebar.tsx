@@ -56,7 +56,6 @@ interface LeftSidebarProps {
   currentBotChatKey?: string;
   onSelectBotChat?: (chatKey: string) => void;
   onRefreshBotChats?: () => void;
-  onShowAllBotChats?: () => void;
   onNewTask?: () => void;
 }
 
@@ -158,7 +157,6 @@ export function LeftSidebar({
   currentBotChatKey,
   onSelectBotChat,
   onRefreshBotChats,
-  onShowAllBotChats,
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
@@ -249,6 +247,9 @@ export function LeftSidebar({
   const [showTasksPopup, setShowTasksPopup] = useState(false);
   // Hover state for logo expand button
   const [logoHovered, setLogoHovered] = useState(false);
+  // Pagination state for visible items
+  const [visibleTaskCount, setVisibleTaskCount] = useState(10);
+  const [visibleChatCount, setVisibleChatCount] = useState(10);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -334,7 +335,7 @@ export function LeftSidebar({
                     <div className="space-y-0.5">
                       {tasks.length > 0 ? (
                         <>
-                          {tasks.slice(0, 5).map((task) => {
+                          {tasks.slice(0, visibleTaskCount).map((task) => {
                             const TaskIcon = getTaskIcon(task.prompt);
                             const isRunningInBackground = runningTaskIds.includes(
                               task.id
@@ -372,9 +373,9 @@ export function LeftSidebar({
                               </div>
                             );
                           })}
-                          {tasks.length > 5 && (
+                          {tasks.length > visibleTaskCount && (
                             <button
-                              onClick={() => navigate('/library')}
+                              onClick={() => setVisibleTaskCount(prev => prev + 5)}
                               className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
                             >
                               <span className="text-sm">{t.common.more}</span>
@@ -426,7 +427,7 @@ export function LeftSidebar({
                     <div className="flex-1 space-y-0.5 overflow-y-auto">
                       {botChats && botChats.length > 0 ? (
                         <>
-                          {botChats.slice(0, 5).map((chat) => (
+                          {botChats.slice(0, visibleChatCount).map((chat) => (
                             <div
                               key={chat.sessionKey}
                               className={cn(
@@ -453,11 +454,9 @@ export function LeftSidebar({
                               </div>
                             </div>
                           ))}
-                          {botChats.length > 5 && (
+                          {botChats.length > visibleChatCount && (
                             <button
-                              onClick={() =>
-                                onShowAllBotChats && onShowAllBotChats()
-                              }
+                              onClick={() => setVisibleChatCount(prev => prev + 5)}
                               className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
                             >
                               <span className="text-sm">{t.common.more}</span>
@@ -616,7 +615,7 @@ export function LeftSidebar({
                           </div>
                         ) : (
                           <div className="space-y-0.5">
-                            {tasks.slice(0, 10).map((task) => {
+                            {tasks.slice(0, visibleTaskCount).map((task) => {
                               const TaskIcon = getTaskIcon(task.prompt);
                               const isRunningInBackground =
                                 runningTaskIds.includes(task.id);
@@ -713,9 +712,9 @@ export function LeftSidebar({
                                 </div>
                               );
                             })}
-                            {tasks.length > 10 && (
+                            {tasks.length > visibleTaskCount && (
                               <button
-                                onClick={() => navigate('/library')}
+                                onClick={() => setVisibleTaskCount(prev => prev + 5)}
                                 className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                               >
                                 <span className="text-sm">{t.common.more}</span>

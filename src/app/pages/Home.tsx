@@ -489,7 +489,6 @@ function HomeContent() {
           currentBotChatKey={selectedBotChat.sessionKey}
           onSelectBotChat={handleSelectBotChat}
           onRefreshBotChats={refreshSessions}
-          onShowAllBotChats={() => setShowAllChatsPanel(true)}
           onNewTask={handleNewTask}
         />
 
@@ -622,7 +621,6 @@ function HomeContent() {
         botChats={botChats}
         onSelectBotChat={handleSelectBotChat}
         onRefreshBotChats={refreshSessions}
-        onShowAllBotChats={() => setShowAllChatsPanel(true)}
       />
 
       {/* Main Content */}
