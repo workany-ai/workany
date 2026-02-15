@@ -30,7 +30,7 @@ import { useBotChatContext } from '@/shared/providers/bot-chat-provider';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { MessageSquare, X, Zap } from 'lucide-react';
 
-import { LeftSidebar, SidebarProvider } from '@/components/layout';
+import { LeftSidebar, useSidebar } from '@/components/layout';
 import { BotLoadingIndicator } from '@/components/shared/BotLoadingIndicator';
 import { BotMessageList } from '@/components/shared/BotMessageList';
 import { ChatInput } from '@/components/shared/ChatInput';
@@ -49,17 +49,14 @@ function convertToBotChatMessages(messages: BotMessage[]): BotChatMessage[] {
 }
 
 export function BotChatPage() {
-  return (
-    <SidebarProvider>
-      <BotChatContent />
-    </SidebarProvider>
-  );
+  return <BotChatContent />;
 }
 
 function BotChatContent() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
+  const { setLeftActiveTab } = useSidebar();
   const [messages, setMessages] = useState<BotMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -82,6 +79,11 @@ function BotChatContent() {
 
   // State for showing all bot chats (covers main content)
   const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
+
+  // Set left sidebar to bot tab when this page loads
+  useEffect(() => {
+    setLeftActiveTab('bot');
+  }, [setLeftActiveTab]);
 
   // Get OpenClaw config for WebSocket (memoized to prevent unnecessary re-subscriptions)
   const openclawConfig = useMemo(() => getOpenClawConfig(), []);

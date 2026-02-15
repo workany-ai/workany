@@ -22,22 +22,19 @@ import { convertOpenClawMessage } from '@/shared/lib/bot-message-utils';
 import { generateSessionId } from '@/shared/lib/session';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { MessageSquare, SquarePen, X, Zap } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 
-import { LeftSidebar, SidebarProvider } from '@/components/layout';
+import { LeftSidebar, useSidebar } from '@/components/layout';
 import { BotMessageList } from '@/components/shared/BotMessageList';
 import { ChatInput } from '@/components/shared/ChatInput';
 
 export function HomePage() {
-  return (
-    <SidebarProvider>
-      <HomeContent />
-    </SidebarProvider>
-  );
+  return <HomeContent />;
 }
 
 function HomeContent() {
   const { t } = useLanguage();
+  const { leftActiveTab } = useSidebar();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const { sessions: botChats, refreshSessions } = useBotChats();
@@ -49,8 +46,6 @@ function HomeContent() {
   const [botMessages, setBotMessages] = useState<BotChatMessage[]>([]);
   const [isLoadingBotMessages, setIsLoadingBotMessages] = useState(false);
   const [isSendingBotMessage, setIsSendingBotMessage] = useState(false);
-
-  const [taskMode, setTaskMode] = useState<'local' | 'bot'>('local');
 
   // State for showing all bot chats (covers main content)
   const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
@@ -438,11 +433,11 @@ function HomeContent() {
     }
 
     // Bot mode: navigate to /bot with the prompt
-    if (taskMode === 'bot') {
+    if (leftActiveTab === 'bot') {
       const openClawConfig = localStorage.getItem('openclaw_config');
       if (!openClawConfig) {
-        // Not configured, switch back to local and alert
-        setTaskMode('local');
+        // Not configured, show alert
+        alert(t.common.configureOpenClawFirst || 'Please configure OpenClaw first in Settings');
         return;
       }
       navigate('/bot', { state: { initialPrompt: text.trim() } });
@@ -702,50 +697,13 @@ function HomeContent() {
               <ChatInput
                 variant="home"
                 placeholder={
-                  taskMode === 'bot'
+                  leftActiveTab === 'bot'
                     ? t.home.botInputPlaceholder || 'Ask Bot anything...'
                     : t.home.inputPlaceholder
                 }
                 onSubmit={handleSubmit}
                 className="w-full"
                 autoFocus
-                bottomContent={
-                  <div className="bg-muted/50 flex items-center gap-1 rounded-lg p-1">
-                    <button
-                      onClick={() => setTaskMode('local')}
-                      className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                        taskMode === 'local'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <SquarePen className="size-3.5" />
-                      {t.nav.localTask}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const openClawConfig =
-                          localStorage.getItem('openclaw_config');
-                        if (!openClawConfig) {
-                          alert(
-                            t.common.configureOpenClawFirst ||
-                              'Please configure OpenClaw first in Settings'
-                          );
-                          return;
-                        }
-                        setTaskMode('bot');
-                      }}
-                      className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                        taskMode === 'bot'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <Zap className="size-3.5" />
-                      {t.nav.botTask}
-                    </button>
-                  </div>
-                }
               />
             </div>
           </div>

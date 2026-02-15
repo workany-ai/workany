@@ -69,7 +69,7 @@ function CollapsibleSection({
 }
 
 export function RightSidebar({ task, messages, isRunning }: RightSidebarProps) {
-  const { rightOpen, toggleRight, setRightOpen } = useSidebar();
+  const { rightOpen, toggleRight, setRightOpen, leftActiveTab } = useSidebar();
   const [activeTab, setActiveTab] = useState<TabType>('computer');
 
   // Calculate stats
@@ -107,8 +107,8 @@ export function RightSidebar({ task, messages, isRunning }: RightSidebarProps) {
   const status =
     statusConfig[isRunning ? 'running' : displayStatus] || statusConfig.running;
 
-  // Tab switcher component
-  const tabSwitcher = (
+  // Tab switcher component - only show for local tasks
+  const tabSwitcher = leftActiveTab === 'local' && (
     <div className="border-border flex items-center gap-1 border-b p-2">
       <button
         onClick={() => setActiveTab('computer')}
@@ -263,18 +263,24 @@ export function RightSidebar({ task, messages, isRunning }: RightSidebarProps) {
     </div>
   );
 
-  // Full sidebar content with tabs
+  // Full sidebar content with tabs (for local tasks) or just details (for bot chats)
   const sidebarContent = (
     <div className="flex h-full flex-col">
       {tabSwitcher}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'computer' ? (
-          <div className="h-full p-3">
-            <div className="border-border/50 h-full overflow-hidden rounded-xl border shadow-sm">
-              <VirtualComputer messages={messages} isRunning={isRunning} />
+        {leftActiveTab === 'local' ? (
+          // Local tasks: show Computer or Details based on activeTab
+          activeTab === 'computer' ? (
+            <div className="h-full p-3">
+              <div className="border-border/50 h-full overflow-hidden rounded-xl border shadow-sm">
+                <VirtualComputer messages={messages} isRunning={isRunning} />
+              </div>
             </div>
-          </div>
+          ) : (
+            detailsContent
+          )
         ) : (
+          // Bot chats: always show details view
           detailsContent
         )}
       </div>

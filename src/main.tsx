@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
 import { router } from './app/router';
+import { SidebarProvider } from './components/layout';
 import { initializeSettings } from './shared/db/settings';
 import { BotChatProvider } from './shared/providers/bot-chat-provider';
 import { LanguageProvider } from './shared/providers/language-provider';
@@ -21,7 +22,9 @@ initializeSettings()
         <LanguageProvider>
           <BotChatProvider>
             <ThemeProvider>
-              <RouterProvider router={router} />
+              <SidebarProvider>
+                <RouterProvider router={router} />
+              </SidebarProvider>
             </ThemeProvider>
           </BotChatProvider>
         </LanguageProvider>

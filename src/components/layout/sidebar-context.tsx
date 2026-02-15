@@ -6,13 +6,17 @@ import {
   type ReactNode,
 } from 'react';
 
+export type LeftActiveTab = 'local' | 'bot';
+
 interface SidebarContextType {
   leftOpen: boolean;
   rightOpen: boolean;
+  leftActiveTab: LeftActiveTab;
   toggleLeft: () => void;
   toggleRight: () => void;
   setLeftOpen: (open: boolean) => void;
   setRightOpen: (open: boolean) => void;
+  setLeftActiveTab: (tab: LeftActiveTab) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -20,6 +24,7 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [leftActiveTab, setLeftActiveTab] = useState<LeftActiveTab>('local');
 
   const toggleLeft = useCallback(() => setLeftOpen((prev) => !prev), []);
   const toggleRight = useCallback(() => setRightOpen((prev) => !prev), []);
@@ -29,10 +34,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       value={{
         leftOpen,
         rightOpen,
+        leftActiveTab,
         toggleLeft,
         toggleRight,
         setLeftOpen,
         setRightOpen,
+        setLeftActiveTab,
       }}
     >
       {children}

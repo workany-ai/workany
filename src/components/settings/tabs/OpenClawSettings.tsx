@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   Check,
+  ExternalLink,
   Eye,
   EyeOff,
-  ExternalLink,
   Loader2,
   RefreshCw,
   Shield,
@@ -183,7 +183,7 @@ export function OpenClawSettings({
   return (
     <div className="space-y-6">
       {/* Get OpenClaw Bot Section */}
-      <div className="border-border bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border p-4">
+      <div className="border-border from-primary/5 to-primary/10 rounded-xl border bg-gradient-to-r p-4">
         <div className="flex items-start gap-4">
           <div className="bg-primary/20 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
             <Zap className="size-5" />

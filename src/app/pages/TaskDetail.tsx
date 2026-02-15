@@ -39,7 +39,7 @@ import {
   type Artifact,
 } from '@/components/artifacts';
 import { Logo } from '@/components/common/logo';
-import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
+import { LeftSidebar, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput } from '@/components/shared/ChatInput';
 import { LazyImage } from '@/components/shared/LazyImage';
@@ -78,15 +78,12 @@ export function useToolSelection() {
 }
 
 export function TaskDetailPage() {
-  return (
-    <SidebarProvider>
-      <TaskDetailContent />
-    </SidebarProvider>
-  );
+  return <TaskDetailContent />;
 }
 
 function TaskDetailContent() {
   const { t } = useLanguage();
+  const { setLeftActiveTab } = useSidebar();
   const { taskId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -116,6 +113,12 @@ function TaskDetailContent() {
   } = useAgent();
   const { sessions: botChats, refreshSessions } = useBotChats();
   const { toggleLeft, setLeftOpen } = useSidebar();
+
+  // Set left sidebar to local tab when this page loads
+  useEffect(() => {
+    setLeftActiveTab('local');
+  }, [setLeftActiveTab]);
+
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
   const [task, setTask] = useState<Task | null>(null);

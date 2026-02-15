@@ -162,7 +162,7 @@ export function LeftSidebar({
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
-  const { leftOpen, toggleLeft } = useSidebar();
+  const { leftOpen, toggleLeft, leftActiveTab, setLeftActiveTab } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialCategory, setSettingsInitialCategory] = useState<
     SettingsCategory | undefined
@@ -283,137 +283,198 @@ export function LeftSidebar({
               </button>
             </div>
 
-            {/* Navigation Items */}
-            <nav className="flex shrink-0 flex-col gap-1 px-3">
-              <NavItem
-                icon={SquarePen}
-                label={t.nav.newTask}
-                collapsed={false}
-                onClick={handleNewTask}
-              />
-            </nav>
+            {/* Tab Navigation */}
+            <div className="mx-3 mb-3 flex shrink-0 gap-1 rounded-xl bg-sidebar-accent/30 p-1">
+              <button
+                onClick={() => setLeftActiveTab('local')}
+                className={cn(
+                  'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                  leftActiveTab === 'local'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+                )}
+              >
+                <ListTodo className="size-4" />
+                <span>{t.nav.tabLocal}</span>
+              </button>
+              <button
+                onClick={() => setLeftActiveTab('bot')}
+                className={cn(
+                  'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                  leftActiveTab === 'bot'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
+                )}
+              >
+                <MessageSquare className="size-4" />
+                <span>{t.nav.tabBot}</span>
+              </button>
+            </div>
 
-            {/* Tasks Section */}
-            <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
-              {/* Tasks */}
-              <div className="mb-4">
-                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
-                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                    {t.nav.allTasks}
-                  </span>
-                </div>
-                <div className="space-y-0.5">
-                  {tasks.slice(0, 5).map((task) => {
-                    const TaskIcon = getTaskIcon(task.prompt);
-                    const isRunningInBackground = runningTaskIds.includes(
-                      task.id
-                    );
-                    const isLoading = loadingTaskId === task.id;
-                    return (
-                      <div
-                        key={task.id}
-                        className={cn(
-                          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                          currentTaskId === task.id || isLoading
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-                          isLoading && 'opacity-70'
-                        )}
-                        onClick={() => handleSelectTask(task.id)}
-                      >
-                        <div className="relative shrink-0">
-                          {isLoading ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <TaskIcon className="size-4" />
+            {/* Tab Content */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
+              {/* Local Tab Content */}
+              {leftActiveTab === 'local' && (
+                <>
+                  {/* New Task Button */}
+                  <NavItem
+                    icon={SquarePen}
+                    label={t.nav.newTask}
+                    collapsed={false}
+                    onClick={handleNewTask}
+                  />
+
+                  {/* History Section */}
+                  <div className="mt-4">
+                    <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                      <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                        {t.nav.history}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {tasks.length > 0 ? (
+                        <>
+                          {tasks.slice(0, 5).map((task) => {
+                            const TaskIcon = getTaskIcon(task.prompt);
+                            const isRunningInBackground = runningTaskIds.includes(
+                              task.id
+                            );
+                            const isLoading = loadingTaskId === task.id;
+                            return (
+                              <div
+                                key={task.id}
+                                className={cn(
+                                  'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                                  currentTaskId === task.id || isLoading
+                                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                                  isLoading && 'opacity-70'
+                                )}
+                                onClick={() => handleSelectTask(task.id)}
+                              >
+                                <div className="relative shrink-0">
+                                  {isLoading ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    <TaskIcon className="size-4" />
+                                  )}
+                                  {/* Running indicator */}
+                                  {isRunningInBackground && !isLoading && (
+                                    <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                      <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="min-w-0 flex-1 truncate text-sm">
+                                  {task.prompt}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {tasks.length > 5 && (
+                            <button
+                              onClick={() => navigate('/library')}
+                              className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                            >
+                              <span className="text-sm">{t.common.more}</span>
+                            </button>
                           )}
-                          {/* Running indicator */}
-                          {isRunningInBackground && !isLoading && (
-                            <span className="absolute -top-0.5 -right-0.5 flex size-2">
-                              <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
-                              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-                            </span>
-                          )}
+                        </>
+                      ) : (
+                        <div className="py-4 text-center">
+                          <p className="text-sidebar-foreground/40 text-xs">
+                            {t.nav.noTasksYet}
+                          </p>
                         </div>
-                        <span className="min-w-0 flex-1 truncate text-sm">
-                          {task.prompt}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {tasks.length > 5 && (
-                    <button
-                      onClick={() => navigate('/library')}
-                      className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                    >
-                      <span className="text-sm">{t.common.more}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* Bot Chats */}
-              <div className="flex shrink-0 flex-col overflow-hidden">
-                <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
-                  <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                    {t.nav.allChats}
-                  </span>
-                  <ChatSettingsButton
-                    hasConfig={!!localStorage.getItem('openclaw_config')}
-                    onRefresh={onRefreshBotChats}
-                    onOpenSettings={() => {
-                      setSettingsInitialCategory('openclaw');
-                      setSettingsOpen(true);
+              {/* Bot Tab Content */}
+              {leftActiveTab === 'bot' && (
+                <>
+                  {/* New Chat Button */}
+                  <NavItem
+                    icon={MessageSquare}
+                    label={t.nav.newChat}
+                    collapsed={false}
+                    onClick={() => {
+                      if (onSelectBotChat) {
+                        onSelectBotChat('');
+                      }
                     }}
                   />
-                </div>
-                <div className="flex-1 space-y-0.5 overflow-y-auto">
-                  {botChats && botChats.length > 0 ? (
-                    <>
-                      {botChats.slice(0, 5).map((chat) => (
-                        <div
-                          key={chat.sessionKey}
-                          className={cn(
-                            'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                            currentBotChatKey === chat.sessionKey
-                              ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                          )}
-                          onClick={() =>
-                            onSelectBotChat && onSelectBotChat(chat.sessionKey)
-                          }
-                        >
-                          <div className="relative shrink-0">
-                            <MessageSquare className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm">
-                              {chat.label || chat.friendlyId || '新对话'}
-                            </p>
-                            <p className="text-sidebar-foreground/40 truncate text-xs">
-                              {chat.lastMessage || `${chat.messageCount} 条消息`}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      {botChats.length > 5 && (
-                        <button
-                          onClick={() => onShowAllBotChats && onShowAllBotChats()}
-                          className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                        >
-                          <span className="text-sm">{t.common.more}</span>
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <div className="py-4 text-center">
-                      <p className="text-sidebar-foreground/40 text-xs">
-                        {t.nav.noChatsYet || '暂无聊天'}
-                      </p>
+
+                  {/* History Section */}
+                  <div className="mt-4 flex shrink-0 flex-col overflow-hidden">
+                    <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                      <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                        {t.nav.history}
+                      </span>
+                      <ChatSettingsButton
+                        hasConfig={!!localStorage.getItem('openclaw_config')}
+                        onRefresh={onRefreshBotChats}
+                        onOpenSettings={() => {
+                          setSettingsInitialCategory('openclaw');
+                          setSettingsOpen(true);
+                        }}
+                      />
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div className="flex-1 space-y-0.5 overflow-y-auto">
+                      {botChats && botChats.length > 0 ? (
+                        <>
+                          {botChats.slice(0, 5).map((chat) => (
+                            <div
+                              key={chat.sessionKey}
+                              className={cn(
+                                'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                                currentBotChatKey === chat.sessionKey
+                                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                              )}
+                              onClick={() =>
+                                onSelectBotChat && onSelectBotChat(chat.sessionKey)
+                              }
+                            >
+                              <div className="relative shrink-0">
+                                <MessageSquare className="size-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm">
+                                  {chat.label || chat.friendlyId || '新对话'}
+                                </p>
+                                <p className="text-sidebar-foreground/40 truncate text-xs">
+                                  {chat.lastMessage ||
+                                    `${chat.messageCount} 条消息`}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                          {botChats.length > 5 && (
+                            <button
+                              onClick={() =>
+                                onShowAllBotChats && onShowAllBotChats()
+                              }
+                              className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                            >
+                              <span className="text-sm">{t.common.more}</span>
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="py-4 text-center">
+                          <p className="text-sidebar-foreground/40 text-xs">
+                            {t.nav.noChatsYet || '暂无聊天'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Bottom Section - Avatar with Dropdown */}
