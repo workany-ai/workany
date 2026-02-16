@@ -313,8 +313,11 @@ export function LeftSidebar({
               <div className="flex-1 space-y-0.5 overflow-y-auto">
                 {/* Unified list: local tasks + bot chats */}
                 {(() => {
-                  // Merge and sort all items by updated_at
-                  const localItems = tasks.map((task) => ({
+                  // Filter local tasks only (exclude bot type to avoid duplicates)
+                  const localOnlyTasks = tasks.filter(
+                    (task) => task.type !== 'bot'
+                  );
+                  const localItems = localOnlyTasks.map((task) => ({
                     type: 'local' as const,
                     id: task.id,
                     title: task.prompt,
