@@ -8,17 +8,17 @@ import {
 } from 'react';
 import { API_BASE_URL } from '@/config';
 import {
-  getTask,
   createTask,
-  updateTask,
+  getTask,
   getTasksByType,
+  updateTask,
   type Task,
 } from '@/shared/db';
 import { type BotChatSession } from '@/shared/hooks/useBotChats';
 import {
   convertOpenClawMessage,
-  getLastMessagePreview,
   generateTitleFromContent,
+  getLastMessagePreview,
 } from '@/shared/lib/bot-message-utils';
 
 interface BotChatContextType {
@@ -175,9 +175,9 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
 
       // Also include local-only sessions (not in cloud)
       const localBotTasks = await getTasksByType('bot');
-      const cloudKeys = new Set(sessionsData.sessions.map(s => s.key));
+      const cloudKeys = new Set(sessionsData.sessions.map((s) => s.key));
       const localOnlySessions = localBotTasks
-        .filter(task => !cloudKeys.has(task.id))
+        .filter((task) => !cloudKeys.has(task.id))
         .map(taskToBotChatSession);
 
       // Merge and sort

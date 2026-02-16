@@ -78,7 +78,9 @@ async function getIndexedDB(): Promise<IDBDatabase> {
           autoIncrement: true,
         });
         messagesStore.createIndex('task_id', 'task_id', { unique: false });
-        messagesStore.createIndex('message_key', 'message_key', { unique: false }); // 新增: 按message_key查询
+        messagesStore.createIndex('message_key', 'message_key', {
+          unique: false,
+        }); // 新增: 按message_key查询
       }
 
       // Create files store
@@ -107,7 +109,9 @@ async function getIndexedDB(): Promise<IDBDatabase> {
           try {
             const messagesStore = tx.objectStore('messages');
             if (!messagesStore.indexNames.contains('message_key')) {
-              messagesStore.createIndex('message_key', 'message_key', { unique: false });
+              messagesStore.createIndex('message_key', 'message_key', {
+                unique: false,
+              });
             }
           } catch {
             // Store might not exist yet
@@ -354,20 +358,38 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     } catch {
       // Fallback: try adding new columns and retry
       try {
-        await database.execute('ALTER TABLE tasks ADD COLUMN type TEXT DEFAULT \'local\'');
-      } catch { /* column exists */ }
+        await database.execute(
+          "ALTER TABLE tasks ADD COLUMN type TEXT DEFAULT 'local'"
+        );
+      } catch {
+        /* column exists */
+      }
       try {
         await database.execute('ALTER TABLE tasks ADD COLUMN label TEXT');
-      } catch { /* column exists */ }
+      } catch {
+        /* column exists */
+      }
       try {
-        await database.execute('ALTER TABLE tasks ADD COLUMN last_message TEXT');
-      } catch { /* column exists */ }
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN last_message TEXT'
+        );
+      } catch {
+        /* column exists */
+      }
       try {
-        await database.execute('ALTER TABLE tasks ADD COLUMN message_count INTEGER DEFAULT 0');
-      } catch { /* column exists */ }
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN message_count INTEGER DEFAULT 0'
+        );
+      } catch {
+        /* column exists */
+      }
       try {
-        await database.execute('ALTER TABLE tasks ADD COLUMN remote_updated_at INTEGER');
-      } catch { /* column exists */ }
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN remote_updated_at INTEGER'
+        );
+      } catch {
+        /* column exists */
+      }
 
       // Retry insert
       await database.execute(
@@ -623,7 +645,9 @@ export async function createMessage(
       for (const col of columnsToAdd) {
         try {
           await database.execute(`ALTER TABLE messages ADD COLUMN ${col}`);
-        } catch { /* column exists */ }
+        } catch {
+          /* column exists */
+        }
       }
 
       const result = await database.execute(
@@ -924,7 +948,9 @@ export async function getFilesGroupedByTask(): Promise<
 /**
  * Get message by message_key (for deduplication)
  */
-export async function getMessageByKey(messageKey: string): Promise<Message | null> {
+export async function getMessageByKey(
+  messageKey: string
+): Promise<Message | null> {
   const database = await getSQLiteDatabase();
 
   if (database) {
@@ -991,7 +1017,12 @@ export async function getTasksByType(type: TaskType): Promise<Task[]> {
 /**
  * Generate message_key for deduplication
  */
-export function generateMessageKey(taskId: string, timestamp: number, role: string, contentPrefix: string): string {
+export function generateMessageKey(
+  taskId: string,
+  timestamp: number,
+  role: string,
+  contentPrefix: string
+): string {
   // Simple hash: use first 50 chars of content
   const hash = contentPrefix.slice(0, 50).replace(/\s+/g, '_');
   return `${taskId}_${timestamp}_${role}_${hash}`;
@@ -1041,7 +1072,12 @@ export async function syncBotMessages(
 
   for (const msg of messages) {
     const timestamp = msg.timestamp || Date.now();
-    const messageKey = generateMessageKey(taskId, timestamp, msg.role, msg.content);
+    const messageKey = generateMessageKey(
+      taskId,
+      timestamp,
+      msg.role,
+      msg.content
+    );
 
     const result = await upsertBotMessage({
       task_id: taskId,

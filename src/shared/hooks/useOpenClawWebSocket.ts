@@ -374,14 +374,23 @@ export function useOpenClawWebSocket(
         // New run starting - clear finalized tracking for this run
         if (payload.runId) {
           finalizedRunsRef.current.delete(payload.runId);
-          console.log('[OpenClawWS] Lifecycle start, cleared finalized for runId:', payload.runId);
+          console.log(
+            '[OpenClawWS] Lifecycle start, cleared finalized for runId:',
+            payload.runId
+          );
         }
       } else if (payload.data?.phase === 'end') {
         // Agent finished - clear tool stream
         setToolStream(new Map());
 
-        const isFinalized = payload.runId && finalizedRunsRef.current.has(payload.runId);
-        console.log('[OpenClawWS] Lifecycle end, runId:', payload.runId, 'already finalized:', isFinalized);
+        const isFinalized =
+          payload.runId && finalizedRunsRef.current.has(payload.runId);
+        console.log(
+          '[OpenClawWS] Lifecycle end, runId:',
+          payload.runId,
+          'already finalized:',
+          isFinalized
+        );
 
         // Only trigger finalization if not already finalized by chat event
         if (payload.runId && !isFinalized) {
@@ -389,7 +398,9 @@ export function useOpenClawWebSocket(
           finalizedRunsRef.current.add(payload.runId);
           currentRunIdRef.current = null;
 
-          console.log('[OpenClawWS] Sending lifecycle.end with _useChatStream=true');
+          console.log(
+            '[OpenClawWS] Sending lifecycle.end with _useChatStream=true'
+          );
 
           // Notify UI to use chatStream content
           // Pass a special payload indicating fallback mode
@@ -490,8 +501,13 @@ export function useOpenClawWebSocket(
     // Close any existing connection first (handles StrictMode double-mount)
     if (wsRef.current) {
       const existingWs = wsRef.current;
-      if (existingWs.readyState === WebSocket.OPEN || existingWs.readyState === WebSocket.CONNECTING) {
-        console.log('[OpenClawWS] Closing existing connection before creating new one');
+      if (
+        existingWs.readyState === WebSocket.OPEN ||
+        existingWs.readyState === WebSocket.CONNECTING
+      ) {
+        console.log(
+          '[OpenClawWS] Closing existing connection before creating new one'
+        );
         existingWs.onopen = null;
         existingWs.onmessage = null;
         existingWs.onclose = null;
@@ -669,13 +685,19 @@ export function useOpenClawWebSocket(
       // Always cleanup the WebSocket on unmount
       const ws = wsRef.current;
       if (ws) {
-        console.log('[OpenClawWS] Cleanup: closing WebSocket, state:', ws.readyState);
+        console.log(
+          '[OpenClawWS] Cleanup: closing WebSocket, state:',
+          ws.readyState
+        );
         // Remove all handlers to prevent callbacks after unmount
         ws.onopen = null;
         ws.onmessage = null;
         ws.onclose = null;
         ws.onerror = null;
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        if (
+          ws.readyState === WebSocket.OPEN ||
+          ws.readyState === WebSocket.CONNECTING
+        ) {
           ws.close(1000, 'Component unmounted');
         }
         wsRef.current = null;

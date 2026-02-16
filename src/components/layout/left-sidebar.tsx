@@ -7,13 +7,13 @@ import type { BotChatSession } from '@/shared/hooks/useBotChats';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
+  Bot,
   Calendar,
   ChevronsUpDown,
   FileText,
   Globe,
   ListTodo,
   Loader2,
-  MessageSquare,
   MoreHorizontal,
   PanelLeft,
   RefreshCw,
@@ -24,6 +24,7 @@ import {
   Star,
   Trash2,
   User,
+  Zap,
 } from 'lucide-react';
 
 import { SettingsModal } from '@/components/settings';
@@ -160,7 +161,7 @@ export function LeftSidebar({
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
-  const { leftOpen, toggleLeft, leftActiveTab, setLeftActiveTab } = useSidebar();
+  const { leftOpen, toggleLeft } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialCategory, setSettingsInitialCategory] = useState<
     SettingsCategory | undefined
@@ -249,7 +250,6 @@ export function LeftSidebar({
   const [logoHovered, setLogoHovered] = useState(false);
   // Pagination state for visible items
   const [visibleTaskCount, setVisibleTaskCount] = useState(10);
-  const [visibleChatCount, setVisibleChatCount] = useState(10);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -284,196 +284,150 @@ export function LeftSidebar({
               </button>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="mx-3 mb-3 flex shrink-0 gap-1 rounded-xl bg-sidebar-accent/30 p-1">
-              <button
-                onClick={() => setLeftActiveTab('local')}
-                className={cn(
-                  'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-                  leftActiveTab === 'local'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-                )}
-              >
-                <ListTodo className="size-4" />
-                <span>{t.nav.tabLocal}</span>
-              </button>
-              <button
-                onClick={() => setLeftActiveTab('bot')}
-                className={cn(
-                  'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-                  leftActiveTab === 'bot'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'
-                )}
-              >
-                <MessageSquare className="size-4" />
-                <span>{t.nav.tabBot}</span>
-              </button>
-            </div>
+            {/* Unified Navigation - New Task */}
+            <nav className="flex shrink-0 flex-col gap-1 px-3">
+              <NavItem
+                icon={SquarePen}
+                label={t.nav.newTask}
+                collapsed={false}
+                onClick={handleNewTask}
+              />
+            </nav>
 
-            {/* Tab Content */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
-              {/* Local Tab Content */}
-              {leftActiveTab === 'local' && (
-                <>
-                  {/* New Task Button */}
-                  <NavItem
-                    icon={SquarePen}
-                    label={t.nav.newTask}
-                    collapsed={false}
-                    onClick={handleNewTask}
-                  />
+            {/* Unified History List */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3">
+              <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
+                <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
+                  {t.nav.history}
+                </span>
+                <ChatSettingsButton
+                  hasConfig={!!localStorage.getItem('openclaw_config')}
+                  onRefresh={onRefreshBotChats}
+                  onOpenSettings={() => {
+                    setSettingsInitialCategory('openclaw');
+                    setSettingsOpen(true);
+                  }}
+                />
+              </div>
 
-                  {/* History Section */}
-                  <div className="mt-4">
-                    <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
-                      <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                        {t.nav.history}
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {tasks.length > 0 ? (
-                        <>
-                          {tasks.slice(0, visibleTaskCount).map((task) => {
-                            const TaskIcon = getTaskIcon(task.prompt);
-                            const isRunningInBackground = runningTaskIds.includes(
-                              task.id
-                            );
-                            const isLoading = loadingTaskId === task.id;
-                            return (
-                              <div
-                                key={task.id}
-                                className={cn(
-                                  'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                                  currentTaskId === task.id || isLoading
-                                    ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-                                  isLoading && 'opacity-70'
-                                )}
-                                onClick={() => handleSelectTask(task.id)}
-                              >
-                                <div className="relative shrink-0">
-                                  {isLoading ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                  ) : (
-                                    <TaskIcon className="size-4" />
-                                  )}
-                                  {/* Running indicator */}
-                                  {isRunningInBackground && !isLoading && (
-                                    <span className="absolute -top-0.5 -right-0.5 flex size-2">
-                                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
-                                      <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="min-w-0 flex-1 truncate text-sm">
-                                  {task.prompt}
-                                </span>
-                              </div>
-                            );
-                          })}
-                          {tasks.length > visibleTaskCount && (
-                            <button
-                              onClick={() => setVisibleTaskCount(prev => prev + 10)}
-                              className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                            >
-                              <span className="text-sm">{t.common.more}</span>
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="py-4 text-center">
-                          <p className="text-sidebar-foreground/40 text-xs">
-                            {t.nav.noTasksYet}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
+              <div className="flex-1 space-y-0.5 overflow-y-auto">
+                {/* Unified list: local tasks + bot chats */}
+                {(() => {
+                  // Merge and sort all items by updated_at
+                  const localItems = tasks.map((task) => ({
+                    type: 'local' as const,
+                    id: task.id,
+                    title: task.prompt,
+                    subtitle: task.status,
+                    updatedAt: new Date(task.updated_at).getTime(),
+                    data: task,
+                  }));
 
-              {/* Bot Tab Content */}
-              {leftActiveTab === 'bot' && (
-                <>
-                  {/* New Chat Button */}
-                  <NavItem
-                    icon={MessageSquare}
-                    label={t.nav.newChat}
-                    collapsed={false}
-                    onClick={() => {
-                      if (onSelectBotChat) {
-                        onSelectBotChat('');
-                      }
-                    }}
-                  />
+                  const botItems = (botChats || []).map((chat) => ({
+                    type: 'bot' as const,
+                    id: chat.sessionKey,
+                    title: chat.label || chat.friendlyId || '新对话',
+                    subtitle: chat.lastMessage || `${chat.messageCount} 条消息`,
+                    updatedAt: chat.updatedAt || 0,
+                    data: chat,
+                  }));
 
-                  {/* History Section */}
-                  <div className="mt-4 flex shrink-0 flex-col overflow-hidden">
-                    <div className="mb-2 flex shrink-0 items-center justify-between px-2 py-1.5">
-                      <span className="text-sidebar-foreground/50 text-xs font-medium tracking-wider">
-                        {t.nav.history}
-                      </span>
-                      <ChatSettingsButton
-                        hasConfig={!!localStorage.getItem('openclaw_config')}
-                        onRefresh={onRefreshBotChats}
-                        onOpenSettings={() => {
-                          setSettingsInitialCategory('openclaw');
-                          setSettingsOpen(true);
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1 space-y-0.5 overflow-y-auto">
-                      {botChats && botChats.length > 0 ? (
-                        <>
-                          {botChats.slice(0, visibleChatCount).map((chat) => (
-                            <div
-                              key={chat.sessionKey}
-                              className={cn(
-                                'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
-                                currentBotChatKey === chat.sessionKey
-                                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-                                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                              )}
-                              onClick={() =>
-                                onSelectBotChat && onSelectBotChat(chat.sessionKey)
+                  const allItems = [...localItems, ...botItems]
+                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                    .slice(0, visibleTaskCount);
+
+                  if (allItems.length === 0) {
+                    return (
+                      <div className="py-4 text-center">
+                        <p className="text-sidebar-foreground/40 text-xs">
+                          {t.nav.noTasksYet}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {allItems.map((item) => {
+                        const isLocal = item.type === 'local';
+                        const task = item.data as Task;
+                        const chat = item.data as BotChatSession;
+                        const isRunningInBackground =
+                          isLocal && runningTaskIds.includes(task.id);
+                        const isLoading = isLocal && loadingTaskId === task.id;
+                        const isActive = isLocal
+                          ? currentTaskId === task.id || isLoading
+                          : currentBotChatKey === chat.sessionKey;
+
+                        return (
+                          <div
+                            key={`${item.type}-${item.id}`}
+                            className={cn(
+                              'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200',
+                              isActive
+                                ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                              isLoading && 'opacity-70'
+                            )}
+                            onClick={() => {
+                              if (isLocal) {
+                                handleSelectTask(task.id);
+                              } else {
+                                onSelectBotChat &&
+                                  onSelectBotChat(chat.sessionKey);
                               }
-                            >
-                              <div className="relative shrink-0">
-                                <MessageSquare className="size-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm">
-                                  {chat.label || chat.friendlyId || '新对话'}
-                                </p>
-                                <p className="text-sidebar-foreground/40 truncate text-xs">
-                                  {chat.lastMessage ||
-                                    `${chat.messageCount} 条消息`}
-                                </p>
-                              </div>
+                            }}
+                          >
+                            <div className="relative shrink-0">
+                              {isLoading ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : isLocal ? (
+                                <Zap className="size-4 text-amber-500" />
+                              ) : (
+                                <Bot className="size-4 text-blue-500" />
+                              )}
+                              {/* Running indicator */}
+                              {isRunningInBackground && !isLoading && (
+                                <span className="absolute -top-0.5 -right-0.5 flex size-2">
+                                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                  <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                </span>
+                              )}
                             </div>
-                          ))}
-                          {botChats.length > visibleChatCount && (
-                            <button
-                              onClick={() => setVisibleChatCount(prev => prev + 10)}
-                              className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
-                            >
-                              <span className="text-sm">{t.common.more}</span>
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="py-4 text-center">
-                          <p className="text-sidebar-foreground/40 text-xs">
-                            {t.nav.noChatsYet || '暂无聊天'}
-                          </p>
-                        </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm">{item.title}</p>
+                              <p className="text-sidebar-foreground/40 truncate text-xs">
+                                {isLocal ? (
+                                  <span className="flex items-center gap-1">
+                                    <Zap className="size-3" />
+                                    {task.status}
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <Bot className="size-3" />
+                                    {item.subtitle}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {localItems.length + botItems.length >
+                        visibleTaskCount && (
+                        <button
+                          onClick={() =>
+                            setVisibleTaskCount((prev) => prev + 10)
+                          }
+                          className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
+                        >
+                          <span className="text-sm">{t.common.more}</span>
+                        </button>
                       )}
-                    </div>
-                  </div>
-                </>
-              )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
 
             {/* Bottom Section - Avatar with Dropdown */}
@@ -714,7 +668,9 @@ export function LeftSidebar({
                             })}
                             {tasks.length > visibleTaskCount && (
                               <button
-                                onClick={() => setVisibleTaskCount(prev => prev + 10)}
+                                onClick={() =>
+                                  setVisibleTaskCount((prev) => prev + 10)
+                                }
                                 className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                               >
                                 <span className="text-sm">{t.common.more}</span>

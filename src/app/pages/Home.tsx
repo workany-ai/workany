@@ -437,7 +437,10 @@ function HomeContent() {
       const openClawConfig = localStorage.getItem('openclaw_config');
       if (!openClawConfig) {
         // Not configured, show alert
-        alert(t.common.configureOpenClawFirst || 'Please configure OpenClaw first in Settings');
+        alert(
+          t.common.configureOpenClawFirst ||
+            'Please configure OpenClaw first in Settings'
+        );
         return;
       }
       navigate('/bot', { state: { initialPrompt: text.trim() } });

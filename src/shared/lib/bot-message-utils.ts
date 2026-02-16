@@ -110,16 +110,19 @@ export function getLastMessagePreview(messages: BotChatMessage[]): string {
  * Generate a title from message content
  * Used as fallback when session has no label
  */
-export function generateTitleFromContent(content: string, maxLength = 30): string {
+export function generateTitleFromContent(
+  content: string,
+  maxLength = 30
+): string {
   if (!content || !content.trim()) {
     return '';
   }
 
   // Clean up the content
   let title = content
-    .replace(/\n/g, ' ')           // Replace newlines with space
-    .replace(/\s+/g, ' ')          // Collapse multiple spaces
-    .replace(/[#*_`]/g, '')        // Remove markdown characters
+    .replace(/\n/g, ' ') // Replace newlines with space
+    .replace(/\s+/g, ' ') // Collapse multiple spaces
+    .replace(/[#*_`]/g, '') // Remove markdown characters
     .trim();
 
   // Truncate to max length

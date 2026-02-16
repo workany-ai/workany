@@ -67,7 +67,10 @@ function BotChatContent() {
   const lastMessageCountRef = useRef(0);
 
   // Deduplication: track last assistant message to prevent duplicates
-  const lastAssistantMessageRef = useRef<{ content: string; timestamp: number } | null>(null);
+  const lastAssistantMessageRef = useRef<{
+    content: string;
+    timestamp: number;
+  } | null>(null);
 
   // Safety timeout for loading state
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -122,64 +125,75 @@ function BotChatContent() {
 
   // Helper to add assistant message with deduplication
   // Accepts either a string (for fallback) or full message data (for chat.final)
-  const addAssistantMessage = useCallback((
-    contentOrMessage: string | {
-      content: string;
-      rawContent?: any[];
-      toolCallId?: string;
-      toolName?: string;
-      details?: Record<string, unknown>;
-      isError?: boolean;
+  const addAssistantMessage = useCallback(
+    (
+      contentOrMessage:
+        | string
+        | {
+            content: string;
+            rawContent?: any[];
+            toolCallId?: string;
+            toolName?: string;
+            details?: Record<string, unknown>;
+            isError?: boolean;
+          },
+      source: string = 'unknown'
+    ) => {
+      const now = Date.now();
+
+      // Extract content and full message data
+      const isFullMessage = typeof contentOrMessage !== 'string';
+      const content = isFullMessage
+        ? contentOrMessage.content
+        : contentOrMessage;
+
+      console.log(
+        `[BotChat] addAssistantMessage called from: ${source}, content length: ${content?.length}, isFullMessage: ${isFullMessage}`
+      );
+
+      // Check for duplicate (same content within 1 second)
+      if (
+        lastAssistantMessageRef.current &&
+        lastAssistantMessageRef.current.content === content &&
+        now - lastAssistantMessageRef.current.timestamp < 1000
+      ) {
+        console.log('[BotChat] Skipping duplicate assistant message');
+        return;
+      }
+
+      const assistantMessage: BotMessage = {
+        id: `assistant_${now}`,
+        role: 'assistant',
+        content,
+        timestamp: new Date(),
+        // Include rich content if provided
+        ...(isFullMessage
+          ? {
+              rawContent: contentOrMessage.rawContent,
+              toolCallId: contentOrMessage.toolCallId,
+              toolName: contentOrMessage.toolName,
+              details: contentOrMessage.details,
+              isError: contentOrMessage.isError,
+            }
+          : {}),
+      };
+
+      // Update deduplication tracker
+      lastAssistantMessageRef.current = { content, timestamp: now };
+
+      console.log('[BotChat] Adding assistant message to history', {
+        hasRawContent: !!assistantMessage.rawContent,
+        rawContentParts: assistantMessage.rawContent?.map((p) => p.type),
+      });
+
+      setMessages((prev) => {
+        const updated = [...prev, assistantMessage];
+        saveBotMessages(updated);
+        return updated;
+      });
     },
-    source: string = 'unknown'
-  ) => {
-    const now = Date.now();
-
-    // Extract content and full message data
-    const isFullMessage = typeof contentOrMessage !== 'string';
-    const content = isFullMessage ? contentOrMessage.content : contentOrMessage;
-
-    console.log(`[BotChat] addAssistantMessage called from: ${source}, content length: ${content?.length}, isFullMessage: ${isFullMessage}`);
-
-    // Check for duplicate (same content within 1 second)
-    if (
-      lastAssistantMessageRef.current &&
-      lastAssistantMessageRef.current.content === content &&
-      now - lastAssistantMessageRef.current.timestamp < 1000
-    ) {
-      console.log('[BotChat] Skipping duplicate assistant message');
-      return;
-    }
-
-    const assistantMessage: BotMessage = {
-      id: `assistant_${now}`,
-      role: 'assistant',
-      content,
-      timestamp: new Date(),
-      // Include rich content if provided
-      ...(isFullMessage ? {
-        rawContent: contentOrMessage.rawContent,
-        toolCallId: contentOrMessage.toolCallId,
-        toolName: contentOrMessage.toolName,
-        details: contentOrMessage.details,
-        isError: contentOrMessage.isError,
-      } : {}),
-    };
-
-    // Update deduplication tracker
-    lastAssistantMessageRef.current = { content, timestamp: now };
-
-    console.log('[BotChat] Adding assistant message to history', {
-      hasRawContent: !!assistantMessage.rawContent,
-      rawContentParts: assistantMessage.rawContent?.map(p => p.type),
-    });
-
-    setMessages((prev) => {
-      const updated = [...prev, assistantMessage];
-      saveBotMessages(updated);
-      return updated;
-    });
-  }, []);
+    []
+  );
 
   // Handle WebSocket chat events (primary source for messages)
   const handleChatEvent = useCallback(
@@ -201,14 +215,17 @@ function BotChatContent() {
           if (payload.message) {
             const converted = convertOpenClawMessage(payload.message);
             // Pass full message data including rawContent for thinking/toolCalls
-            addAssistantMessage({
-              content: converted.content,
-              rawContent: converted.rawContent,
-              toolCallId: converted.toolCallId,
-              toolName: converted.toolName,
-              details: converted.details,
-              isError: converted.isError,
-            }, 'chat.final');
+            addAssistantMessage(
+              {
+                content: converted.content,
+                rawContent: converted.rawContent,
+                toolCallId: converted.toolCallId,
+                toolName: converted.toolName,
+                details: converted.details,
+                isError: converted.isError,
+              },
+              'chat.final'
+            );
           }
 
           setLoadingWithTimeout(false);
@@ -260,7 +277,9 @@ function BotChatContent() {
         payload.data?.phase === 'end' &&
         (payload.data as { _useChatStream?: boolean })._useChatStream
       ) {
-        console.log('[BotChat] lifecycle.end with _useChatStream - fetching history for complete message');
+        console.log(
+          '[BotChat] lifecycle.end with _useChatStream - fetching history for complete message'
+        );
 
         // Clear chatStream ref
         chatStreamRef.current = null;
@@ -295,7 +314,10 @@ function BotChatContent() {
                     messageToBotMessage(m, index, sessionKey)
                   );
 
-                console.log('[BotChat] Fetched history after lifecycle.end, messages:', historyMessages.length);
+                console.log(
+                  '[BotChat] Fetched history after lifecycle.end, messages:',
+                  historyMessages.length
+                );
 
                 // Update messages with complete history
                 setMessages(historyMessages);
@@ -303,11 +325,17 @@ function BotChatContent() {
               }
             }
           } catch (error) {
-            console.error('[BotChat] Failed to fetch history after lifecycle.end:', error);
+            console.error(
+              '[BotChat] Failed to fetch history after lifecycle.end:',
+              error
+            );
             // Fallback: use chatStream if available
             const streamContent = chatStreamRef.current;
             if (streamContent) {
-              addAssistantMessage(streamContent, 'agent.lifecycle.end.fallback');
+              addAssistantMessage(
+                streamContent,
+                'agent.lifecycle.end.fallback'
+              );
             }
           }
         }, 500); // 500ms delay for server to save
