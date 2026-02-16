@@ -25,6 +25,8 @@ import { useLanguage } from '@/shared/providers/language-provider';
 import { MessageSquare, X } from 'lucide-react';
 
 import { LeftSidebar, useSidebar } from '@/components/layout';
+import { SettingsModal } from '@/components/settings';
+import type { SettingsCategory } from '@/components/settings/types';
 import { BotMessageList } from '@/components/shared/BotMessageList';
 import { ChatInput, type TaskProvider } from '@/components/shared/ChatInput';
 
@@ -42,7 +44,27 @@ function HomeContent() {
   // Provider selection state
   const [selectedProvider, setSelectedProvider] =
     useState<TaskProvider>('claude-code');
-  const isOpenClawConfigured = !!localStorage.getItem('openclaw_config');
+  const [isOpenClawConfigured, setIsOpenClawConfigured] = useState(
+    !!localStorage.getItem('openclaw_config')
+  );
+
+  // Settings modal state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialCategory, setSettingsInitialCategory] = useState<
+    SettingsCategory | undefined
+  >(undefined);
+
+  const handleOpenClawSettings = useCallback(() => {
+    setSettingsInitialCategory('openclaw');
+    setSettingsOpen(true);
+  }, []);
+
+  // Refresh OpenClaw config when settings modal closes
+  useEffect(() => {
+    if (!settingsOpen) {
+      setIsOpenClawConfigured(!!localStorage.getItem('openclaw_config'));
+    }
+  }, [settingsOpen]);
 
   // Bot chat state
   const [selectedBotChat, setSelectedBotChat] = useState<BotChatSession | null>(
@@ -721,11 +743,22 @@ function HomeContent() {
                 provider={selectedProvider}
                 onProviderChange={setSelectedProvider}
                 isOpenClawConfigured={isOpenClawConfigured}
+                onOpenClawSettings={handleOpenClawSettings}
               />
             </div>
           </div>
         )}
       </div>
+
+      {/* Settings Modal for OpenClaw configuration */}
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) setSettingsInitialCategory(undefined);
+        }}
+        initialCategory={settingsInitialCategory}
+      />
     </div>
   );
 }

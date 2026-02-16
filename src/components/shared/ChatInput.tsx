@@ -17,6 +17,7 @@ import {
   Paperclip,
   Plus,
   Send,
+  Settings,
   Square,
   Terminal,
   X,
@@ -72,6 +73,8 @@ export interface ChatInputProps {
   onProviderChange?: (provider: TaskProvider) => void;
   /** Whether OpenClaw is configured */
   isOpenClawConfigured?: boolean;
+  /** Callback to open OpenClaw settings */
+  onOpenClawSettings?: () => void;
 }
 
 // Generate unique ID for attachments
@@ -122,6 +125,7 @@ export function ChatInput({
   provider = 'claude-code',
   onProviderChange,
   isOpenClawConfigured = false,
+  onOpenClawSettings,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -509,21 +513,28 @@ export function ChatInput({
                   <Zap className="size-4" />
                   <span>Codex</span>
                 </DropdownMenuItem>
-                {isOpenClawConfigured && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => onProviderChange?.('openclaw')}
-                      className={cn(
-                        'cursor-pointer gap-2 py-2',
-                        provider === 'openclaw' && 'bg-accent'
-                      )}
-                    >
-                      <Bot className="size-4" />
-                      <span>OpenClaw</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    if (isOpenClawConfigured) {
+                      onProviderChange?.('openclaw');
+                    } else {
+                      onOpenClawSettings?.();
+                    }
+                  }}
+                  className={cn(
+                    'cursor-pointer gap-2 py-2',
+                    provider === 'openclaw' &&
+                      isOpenClawConfigured &&
+                      'bg-accent'
+                  )}
+                >
+                  <Bot className="size-4" />
+                  <span>OpenClaw</span>
+                  {!isOpenClawConfigured && (
+                    <Settings className="text-muted-foreground ml-auto size-3" />
+                  )}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

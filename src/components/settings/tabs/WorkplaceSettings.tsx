@@ -2,12 +2,7 @@ import { useEffect, useState } from 'react';
 import { getPathSeparator } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import {
-  FileText,
-  FolderOpen,
-  Shield,
-  ShieldOff,
-} from 'lucide-react';
+import { FileText, FolderOpen, Shield, ShieldOff } from 'lucide-react';
 
 import { API_BASE_URL } from '../constants';
 import type { WorkplaceSettingsProps } from '../types';
