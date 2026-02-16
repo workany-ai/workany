@@ -11,6 +11,7 @@ import { type BotChatSession } from '@/shared/hooks/useBotChats';
 import {
   convertOpenClawMessage,
   getLastMessagePreview,
+  generateTitleFromContent,
 } from '@/shared/lib/bot-message-utils';
 
 interface BotChatContextType {
@@ -88,21 +89,26 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
 
       const chatSessions: BotChatSession[] = sessionsData.sessions.map(
         (session) => {
-          let lastMessagePreview = session.label || '新对话';
+          let lastMessagePreview = '新对话';
+          let generatedLabel = session.label;
           let messageCount = 0;
 
           if (session.lastMessage) {
             const botMessage = convertOpenClawMessage(session.lastMessage);
             lastMessagePreview = getLastMessagePreview([botMessage]);
-            // Since we don't have the full count without fetching history, we can assume at least 1 if lastMessage exists
-            // Or we can rely on what the API provides if it provides count (it currently doesn't seem to)
             messageCount = 1;
+
+            // Generate label from message content if no label exists
+            // Priority: existing label > user message content > assistant message content
+            if (!generatedLabel && botMessage.content) {
+              generatedLabel = generateTitleFromContent(botMessage.content);
+            }
           }
 
           return {
             sessionKey: session.key,
             friendlyId: session.friendlyId,
-            label: session.label,
+            label: generatedLabel || undefined,
             messages: [], // We don't load full messages here anymore
             lastMessage: lastMessagePreview,
             messageCount: messageCount, // This might be inaccurate but is better than fetching all
