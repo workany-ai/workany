@@ -771,6 +771,7 @@ function TaskDetailContent() {
           task_index: initialTaskIndex,
           prompt: initialPrompt,
           status: 'running',
+          type: 'local', // 本地任务
           favorite: false,
           cost: 0,
           duration: 0,

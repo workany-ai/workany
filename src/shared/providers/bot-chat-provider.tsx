@@ -7,6 +7,13 @@ import {
   type ReactNode,
 } from 'react';
 import { API_BASE_URL } from '@/config';
+import {
+  getTask,
+  createTask,
+  updateTask,
+  getTasksByType,
+  type Task,
+} from '@/shared/db';
 import { type BotChatSession } from '@/shared/hooks/useBotChats';
 import {
   convertOpenClawMessage,
@@ -49,6 +56,19 @@ interface OpenClawSessionsResponse {
   sessions?: OpenClawSession[];
 }
 
+// Helper: Convert Task to BotChatSession
+function taskToBotChatSession(task: Task): BotChatSession {
+  return {
+    sessionKey: task.id,
+    friendlyId: task.session_id,
+    label: task.label || task.prompt,
+    messages: [],
+    lastMessage: task.last_message || '',
+    messageCount: task.message_count || 0,
+    updatedAt: task.remote_updated_at || new Date(task.updated_at).getTime(),
+  };
+}
+
 export function BotChatProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<BotChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,10 +78,14 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
     try {
       const config = getOpenClawConfig();
       if (!config) {
-        setSessions([]);
+        // No config, try to load from local database
+        const localBotTasks = await getTasksByType('bot');
+        const localSessions = localBotTasks.map(taskToBotChatSession);
+        setSessions(localSessions);
         return;
       }
 
+      // Fetch from cloud
       const sessionsResponse = await fetch(
         `${API_BASE_URL}/openclaw/sessions`,
         {
@@ -76,19 +100,26 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
       );
 
       if (!sessionsResponse.ok) {
-        setSessions([]);
+        // Fallback to local data
+        const localBotTasks = await getTasksByType('bot');
+        const localSessions = localBotTasks.map(taskToBotChatSession);
+        setSessions(localSessions);
         return;
       }
 
       const sessionsData =
         (await sessionsResponse.json()) as OpenClawSessionsResponse;
       if (!sessionsData.success || !sessionsData.sessions) {
-        setSessions([]);
+        // Fallback to local data
+        const localBotTasks = await getTasksByType('bot');
+        const localSessions = localBotTasks.map(taskToBotChatSession);
+        setSessions(localSessions);
         return;
       }
 
-      const chatSessions: BotChatSession[] = sessionsData.sessions.map(
-        (session) => {
+      // Sync cloud sessions to local database
+      const chatSessions: BotChatSession[] = await Promise.all(
+        sessionsData.sessions.map(async (session) => {
           let lastMessagePreview = '新对话';
           let generatedLabel = session.label;
           let messageCount = 0;
@@ -105,6 +136,31 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
             }
           }
 
+          // Sync to local database
+          const existingTask = await getTask(session.key);
+          if (existingTask) {
+            // Update existing task
+            await updateTask(session.key, {
+              label: generatedLabel,
+              last_message: lastMessagePreview,
+              message_count: messageCount,
+              remote_updated_at: session.updatedAt,
+            });
+          } else {
+            // Create new task
+            await createTask({
+              id: session.key,
+              session_id: `bot_${session.key}`,
+              task_index: 1,
+              prompt: generatedLabel || 'Bot Chat',
+              type: 'bot',
+              label: generatedLabel,
+              last_message: lastMessagePreview,
+              message_count: messageCount,
+              remote_updated_at: session.updatedAt,
+            });
+          }
+
           return {
             sessionKey: session.key,
             friendlyId: session.friendlyId,
@@ -114,13 +170,25 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
             messageCount: messageCount, // This might be inaccurate but is better than fetching all
             updatedAt: session.updatedAt || Date.now(),
           };
-        }
+        })
       );
 
-      chatSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      setSessions(chatSessions);
+      // Also include local-only sessions (not in cloud)
+      const localBotTasks = await getTasksByType('bot');
+      const cloudKeys = new Set(sessionsData.sessions.map(s => s.key));
+      const localOnlySessions = localBotTasks
+        .filter(task => !cloudKeys.has(task.id))
+        .map(taskToBotChatSession);
+
+      // Merge and sort
+      const allSessions = [...chatSessions, ...localOnlySessions];
+      allSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      setSessions(allSessions);
     } catch {
-      setSessions([]);
+      // Fallback to local data on error
+      const localBotTasks = await getTasksByType('bot');
+      const localSessions = localBotTasks.map(taskToBotChatSession);
+      setSessions(localSessions);
     } finally {
       setIsLoading(false);
     }
