@@ -161,7 +161,7 @@ export function LeftSidebar({
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
-  const { leftOpen, toggleLeft } = useSidebar();
+  const { leftOpen, toggleLeft, visibleTaskCount, loadMoreTasks } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialCategory, setSettingsInitialCategory] = useState<
     SettingsCategory | undefined
@@ -248,8 +248,6 @@ export function LeftSidebar({
   const [showTasksPopup, setShowTasksPopup] = useState(false);
   // Hover state for logo expand button
   const [logoHovered, setLogoHovered] = useState(false);
-  // Pagination state for visible items
-  const [visibleTaskCount, setVisibleTaskCount] = useState(10);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -420,7 +418,7 @@ export function LeftSidebar({
                         visibleTaskCount && (
                         <button
                           onClick={() =>
-                            setVisibleTaskCount((prev) => prev + 10)
+                            loadMoreTasks()
                           }
                           className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
                         >
@@ -672,7 +670,7 @@ export function LeftSidebar({
                             {tasks.length > visibleTaskCount && (
                               <button
                                 onClick={() =>
-                                  setVisibleTaskCount((prev) => prev + 10)
+                                  loadMoreTasks()
                                 }
                                 className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                               >

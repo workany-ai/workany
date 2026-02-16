@@ -12,11 +12,14 @@ interface SidebarContextType {
   leftOpen: boolean;
   rightOpen: boolean;
   leftActiveTab: LeftActiveTab;
+  visibleTaskCount: number;
   toggleLeft: () => void;
   toggleRight: () => void;
   setLeftOpen: (open: boolean) => void;
   setRightOpen: (open: boolean) => void;
   setLeftActiveTab: (tab: LeftActiveTab) => void;
+  setVisibleTaskCount: (count: number) => void;
+  loadMoreTasks: () => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -25,9 +28,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [leftActiveTab, setLeftActiveTab] = useState<LeftActiveTab>('local');
+  const [visibleTaskCount, setVisibleTaskCount] = useState(10);
 
   const toggleLeft = useCallback(() => setLeftOpen((prev) => !prev), []);
   const toggleRight = useCallback(() => setRightOpen((prev) => !prev), []);
+  const loadMoreTasks = useCallback(
+    () => setVisibleTaskCount((prev) => prev + 10),
+    []
+  );
 
   return (
     <SidebarContext.Provider
@@ -35,11 +43,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         leftOpen,
         rightOpen,
         leftActiveTab,
+        visibleTaskCount,
         toggleLeft,
         toggleRight,
         setLeftOpen,
         setRightOpen,
         setLeftActiveTab,
+        setVisibleTaskCount,
+        loadMoreTasks,
       }}
     >
       {children}
