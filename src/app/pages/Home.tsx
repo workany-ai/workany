@@ -26,7 +26,7 @@ import { MessageSquare, X } from 'lucide-react';
 
 import { LeftSidebar, useSidebar } from '@/components/layout';
 import { BotMessageList } from '@/components/shared/BotMessageList';
-import { ChatInput } from '@/components/shared/ChatInput';
+import { ChatInput, type TaskProvider } from '@/components/shared/ChatInput';
 
 export function HomePage() {
   return <HomeContent />;
@@ -38,6 +38,11 @@ function HomeContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const { sessions: botChats, refreshSessions } = useBotChats();
+
+  // Provider selection state
+  const [selectedProvider, setSelectedProvider] =
+    useState<TaskProvider>('claude-code');
+  const isOpenClawConfigured = !!localStorage.getItem('openclaw_config');
 
   // Bot chat state
   const [selectedBotChat, setSelectedBotChat] = useState<BotChatSession | null>(
@@ -422,7 +427,8 @@ function HomeContent() {
 
   const handleSubmit = async (
     text: string,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    provider?: TaskProvider
   ) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
@@ -432,8 +438,11 @@ function HomeContent() {
       return;
     }
 
-    // Bot mode: navigate to /bot with the prompt
-    if (leftActiveTab === 'bot') {
+    // Determine which provider to use
+    const effectiveProvider = provider || selectedProvider;
+
+    // If OpenClaw provider is selected, navigate to /bot
+    if (effectiveProvider === 'openclaw' || leftActiveTab === 'bot') {
       const openClawConfig = localStorage.getItem('openclaw_config');
       if (!openClawConfig) {
         // Not configured, show alert
@@ -447,7 +456,7 @@ function HomeContent() {
       return;
     }
 
-    // Otherwise create a new local task
+    // Otherwise create a new local task (claude-code or codex)
     const prompt = text.trim();
 
     // Create a new session
@@ -459,11 +468,13 @@ function HomeContent() {
       console.error('[Home] Failed to create session:', error);
     }
 
-    // Generate task ID and navigate with attachments
+    // Generate task ID and navigate with attachments and provider
     const taskId = Date.now().toString();
     console.log(
       '[Home] Navigating with attachments:',
-      attachments?.length || 0
+      attachments?.length || 0,
+      'provider:',
+      effectiveProvider
     );
 
     navigate(`/task/${taskId}`, {
@@ -472,6 +483,7 @@ function HomeContent() {
         sessionId,
         taskIndex: 1,
         attachments,
+        provider: effectiveProvider,
       },
     });
   };
@@ -705,6 +717,10 @@ function HomeContent() {
                 onSubmit={handleSubmit}
                 className="w-full"
                 autoFocus
+                showProviderSelector={leftActiveTab !== 'bot'}
+                provider={selectedProvider}
+                onProviderChange={setSelectedProvider}
+                isOpenClawConfigured={isOpenClawConfigured}
               />
             </div>
           </div>

@@ -161,7 +161,8 @@ export function LeftSidebar({
   onNewTask,
 }: LeftSidebarProps) {
   const navigate = useNavigate();
-  const { leftOpen, toggleLeft, visibleTaskCount, loadMoreTasks } = useSidebar();
+  const { leftOpen, toggleLeft, visibleTaskCount, loadMoreTasks } =
+    useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialCategory, setSettingsInitialCategory] = useState<
     SettingsCategory | undefined
@@ -417,9 +418,7 @@ export function LeftSidebar({
                       {localItems.length + botItems.length >
                         visibleTaskCount && (
                         <button
-                          onClick={() =>
-                            loadMoreTasks()
-                          }
+                          onClick={() => loadMoreTasks()}
                           className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 transition-colors"
                         >
                           <span className="text-sm">{t.common.more}</span>
@@ -669,9 +668,7 @@ export function LeftSidebar({
                             })}
                             {tasks.length > visibleTaskCount && (
                               <button
-                                onClick={() =>
-                                  loadMoreTasks()
-                                }
+                                onClick={() => loadMoreTasks()}
                                 className="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors"
                               >
                                 <span className="text-sm">{t.common.more}</span>
