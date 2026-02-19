@@ -216,7 +216,10 @@ function ErrorMessage({ message }: { message: string }) {
   }
 
   // Check for agent process error (e.g., Claude Code process exited)
-  if (message === '__AGENT_PROCESS_ERROR__' || message.includes('__AGENT_PROCESS_ERROR__')) {
+  if (
+    message === '__AGENT_PROCESS_ERROR__' ||
+    message.includes('__AGENT_PROCESS_ERROR__')
+  ) {
     return (
       <>
         <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
@@ -257,8 +260,12 @@ function ErrorMessage({ message }: { message: string }) {
         try {
           const { openPath } = await import('@tauri-apps/plugin-opener');
           // Get directory path (works for both Unix / and Windows \)
-          const lastSlash = Math.max(logPath.lastIndexOf('/'), logPath.lastIndexOf('\\'));
-          const logDir = lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
+          const lastSlash = Math.max(
+            logPath.lastIndexOf('/'),
+            logPath.lastIndexOf('\\')
+          );
+          const logDir =
+            lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
           await openPath(logDir);
         } catch {
           console.error('Failed to open log file');
@@ -266,8 +273,10 @@ function ErrorMessage({ message }: { message: string }) {
       }
     };
 
-    const errorMsg = (t.common.errors.customApiError ||
-      'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}')
+    const errorMsg = (
+      t.common.errors.customApiError ||
+      'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
+    )
       .replace('{baseUrl}', baseUrl)
       .replace('{logPath}', logPath);
 
@@ -304,8 +313,12 @@ function ErrorMessage({ message }: { message: string }) {
         try {
           const { openPath } = await import('@tauri-apps/plugin-opener');
           // Get directory path (works for both Unix / and Windows \)
-          const lastSlash = Math.max(logPath.lastIndexOf('/'), logPath.lastIndexOf('\\'));
-          const logDir = lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
+          const lastSlash = Math.max(
+            logPath.lastIndexOf('/'),
+            logPath.lastIndexOf('\\')
+          );
+          const logDir =
+            lastSlash > 0 ? logPath.substring(0, lastSlash) : logPath;
           await openPath(logDir);
         } catch {
           console.error('Failed to open log file');
@@ -377,7 +390,6 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       a: ({ children, href }: any) => (
                         <a
                           href={href}

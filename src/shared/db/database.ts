@@ -7,12 +7,13 @@ import type {
   Message,
   Session,
   Task,
+  TaskType,
   UpdateTaskInput,
 } from './types';
 
 const SQLITE_DB_NAME = 'sqlite:workany.db';
 const IDB_NAME = 'workany';
-const IDB_VERSION = 2; // Bump version for sessions support
+const IDB_VERSION = 3; // Bump version for bot chat support
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -67,6 +68,7 @@ async function getIndexedDB(): Promise<IDBDatabase> {
         const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' });
         tasksStore.createIndex('created_at', 'created_at', { unique: false });
         tasksStore.createIndex('session_id', 'session_id', { unique: false });
+        tasksStore.createIndex('type', 'type', { unique: false }); // 新增: 按类型查询
       }
 
       // Create messages store
@@ -76,6 +78,9 @@ async function getIndexedDB(): Promise<IDBDatabase> {
           autoIncrement: true,
         });
         messagesStore.createIndex('task_id', 'task_id', { unique: false });
+        messagesStore.createIndex('message_key', 'message_key', {
+          unique: false,
+        }); // 新增: 按message_key查询
       }
 
       // Create files store
@@ -85,6 +90,33 @@ async function getIndexedDB(): Promise<IDBDatabase> {
           autoIncrement: true,
         });
         filesStore.createIndex('task_id', 'task_id', { unique: false });
+      }
+
+      // v3: Add indexes to existing stores if they don't exist
+      if (event.oldVersion < 3) {
+        // Try to add new indexes to existing stores
+        const tx = (event.target as IDBOpenDBRequest).transaction;
+        if (tx) {
+          try {
+            const tasksStore = tx.objectStore('tasks');
+            if (!tasksStore.indexNames.contains('type')) {
+              tasksStore.createIndex('type', 'type', { unique: false });
+            }
+          } catch {
+            // Store might not exist yet
+          }
+
+          try {
+            const messagesStore = tx.objectStore('messages');
+            if (!messagesStore.indexNames.contains('message_key')) {
+              messagesStore.createIndex('message_key', 'message_key', {
+                unique: false,
+              });
+            }
+          } catch {
+            // Store might not exist yet
+          }
+        }
       }
 
       console.log('[IDB] Database upgraded successfully');
@@ -294,6 +326,11 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     status: 'running',
     cost: null,
     duration: null,
+    type: input.type || 'local', // 默认为本地任务
+    label: input.label,
+    last_message: input.last_message,
+    message_count: input.message_count || 0,
+    remote_updated_at: input.remote_updated_at,
     created_at: now,
     updated_at: now,
   };
@@ -301,24 +338,83 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
   const database = await getSQLiteDatabase();
 
   if (database) {
-    // SQLite (Tauri) - Try with new schema, fallback to old
+    // SQLite (Tauri) - Try with new schema first
     try {
       await database.execute(
-        'INSERT INTO tasks (id, session_id, task_index, prompt) VALUES ($1, $2, $3, $4)',
-        [input.id, input.session_id, input.task_index, input.prompt]
+        `INSERT INTO tasks (id, session_id, task_index, prompt, type, label, last_message, message_count, remote_updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          input.id,
+          input.session_id,
+          input.task_index,
+          input.prompt,
+          input.type || 'local',
+          input.label || null,
+          input.last_message || null,
+          input.message_count || 0,
+          input.remote_updated_at || null,
+        ]
       );
     } catch {
-      // Fallback for older schema without session_id
-      await database.execute('INSERT INTO tasks (id, prompt) VALUES ($1, $2)', [
-        input.id,
-        input.prompt,
-      ]);
+      // Fallback: try adding new columns and retry
+      try {
+        await database.execute(
+          "ALTER TABLE tasks ADD COLUMN type TEXT DEFAULT 'local'"
+        );
+      } catch {
+        /* column exists */
+      }
+      try {
+        await database.execute('ALTER TABLE tasks ADD COLUMN label TEXT');
+      } catch {
+        /* column exists */
+      }
+      try {
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN last_message TEXT'
+        );
+      } catch {
+        /* column exists */
+      }
+      try {
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN message_count INTEGER DEFAULT 0'
+        );
+      } catch {
+        /* column exists */
+      }
+      try {
+        await database.execute(
+          'ALTER TABLE tasks ADD COLUMN remote_updated_at INTEGER'
+        );
+      } catch {
+        /* column exists */
+      }
+
+      // Retry insert
+      await database.execute(
+        `INSERT INTO tasks (id, session_id, task_index, prompt, type, label, last_message, message_count, remote_updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          input.id,
+          input.session_id,
+          input.task_index,
+          input.prompt,
+          input.type || 'local',
+          input.label || null,
+          input.last_message || null,
+          input.message_count || 0,
+          input.remote_updated_at || null,
+        ]
+      );
     }
     const result = await getTask(input.id);
     if (!result) throw new Error('Failed to create task');
 
-    // Update session task count
-    await updateSessionTaskCount(input.session_id, input.task_index);
+    // Update session task count (only for local tasks)
+    if (!input.type || input.type === 'local') {
+      await updateSessionTaskCount(input.session_id, input.task_index);
+    }
 
     return result;
   } else {
@@ -415,6 +511,23 @@ export async function updateTask(
       updates.push(`favorite = $${paramIndex++}`);
       values.push(input.favorite ? 1 : 0);
     }
+    // 新增字段
+    if (input.label !== undefined) {
+      updates.push(`label = $${paramIndex++}`);
+      values.push(input.label);
+    }
+    if (input.last_message !== undefined) {
+      updates.push(`last_message = $${paramIndex++}`);
+      values.push(input.last_message);
+    }
+    if (input.message_count !== undefined) {
+      updates.push(`message_count = $${paramIndex++}`);
+      values.push(input.message_count);
+    }
+    if (input.remote_updated_at !== undefined) {
+      updates.push(`remote_updated_at = $${paramIndex++}`);
+      values.push(input.remote_updated_at);
+    }
 
     if (updates.length > 0) {
       updates.push(`updated_at = datetime('now')`);
@@ -489,21 +602,27 @@ export async function createMessage(
   const database = await getSQLiteDatabase();
 
   if (database) {
-    // Try with attachments column first, fallback to without
+    // Try with all columns first, fallback to adding missing columns
     try {
       const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO messages (task_id, message_key, type, content, role, timestamp, raw_content, details, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, is_error, attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           input.task_id,
+          input.message_key || null,
           input.type,
           input.content || null,
+          input.role || null,
+          input.timestamp || null,
+          input.raw_content || null,
+          input.details || null,
           input.tool_name || null,
           input.tool_input || null,
           input.tool_output || null,
           input.tool_use_id || null,
           input.subtype || null,
           input.error_message || null,
+          input.is_error ? 1 : 0,
           input.attachments || null,
         ]
       );
@@ -514,28 +633,42 @@ export async function createMessage(
       );
       return messages[0];
     } catch {
-      // Fallback: add attachments column if it doesn't exist
-      try {
-        await database.execute(
-          'ALTER TABLE messages ADD COLUMN attachments TEXT'
-        );
-      } catch {
-        // Column may already exist
+      // Fallback: add missing columns and retry
+      const columnsToAdd = [
+        'message_key TEXT',
+        'role TEXT',
+        'timestamp INTEGER',
+        'raw_content TEXT',
+        'details TEXT',
+        'is_error INTEGER DEFAULT 0',
+      ];
+      for (const col of columnsToAdd) {
+        try {
+          await database.execute(`ALTER TABLE messages ADD COLUMN ${col}`);
+        } catch {
+          /* column exists */
+        }
       }
 
       const result = await database.execute(
-        `INSERT INTO messages (task_id, type, content, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, attachments)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `INSERT INTO messages (task_id, message_key, type, content, role, timestamp, raw_content, details, tool_name, tool_input, tool_output, tool_use_id, subtype, error_message, is_error, attachments)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           input.task_id,
+          input.message_key || null,
           input.type,
           input.content || null,
+          input.role || null,
+          input.timestamp || null,
+          input.raw_content || null,
+          input.details || null,
           input.tool_name || null,
           input.tool_input || null,
           input.tool_output || null,
           input.tool_use_id || null,
           input.subtype || null,
           input.error_message || null,
+          input.is_error ? 1 : 0,
           input.attachments || null,
         ]
       );
@@ -550,14 +683,20 @@ export async function createMessage(
     const db = await getIndexedDB();
     const message: Omit<Message, 'id'> & { id?: number } = {
       task_id: input.task_id,
+      message_key: input.message_key,
       type: input.type,
       content: input.content || null,
+      role: input.role,
+      timestamp: input.timestamp,
+      raw_content: input.raw_content,
+      details: input.details,
       tool_name: input.tool_name || null,
       tool_input: input.tool_input || null,
       tool_output: input.tool_output || null,
       tool_use_id: input.tool_use_id || null,
       subtype: input.subtype || null,
       error_message: input.error_message || null,
+      is_error: input.is_error,
       attachments: input.attachments || null,
       created_at: now,
     };
@@ -802,4 +941,164 @@ export async function getFilesGroupedByTask(): Promise<
   }
 
   return result;
+}
+
+// ============ Bot Chat Operations ============
+
+/**
+ * Get message by message_key (for deduplication)
+ */
+export async function getMessageByKey(
+  messageKey: string
+): Promise<Message | null> {
+  const database = await getSQLiteDatabase();
+
+  if (database) {
+    try {
+      const result = await database.select<Message[]>(
+        'SELECT * FROM messages WHERE message_key = $1',
+        [messageKey]
+      );
+      return result[0] || null;
+    } catch {
+      return null;
+    }
+  } else {
+    const db = await getIndexedDB();
+    const tx = db.transaction('messages', 'readonly');
+    const store = tx.objectStore('messages');
+    try {
+      const index = store.index('message_key');
+      const result = await idbRequest(index.get(messageKey));
+      return result || null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Get tasks filtered by type
+ */
+export async function getTasksByType(type: TaskType): Promise<Task[]> {
+  const database = await getSQLiteDatabase();
+
+  if (database) {
+    try {
+      const tasks = await database.select<Task[]>(
+        'SELECT * FROM tasks WHERE type = $1 ORDER BY updated_at DESC',
+        [type]
+      );
+      return tasks.map((task) => ({
+        ...task,
+        favorite: task.favorite !== undefined ? Boolean(task.favorite) : false,
+      }));
+    } catch {
+      // Fallback: column may not exist, return empty
+      return [];
+    }
+  } else {
+    const db = await getIndexedDB();
+    const tx = db.transaction('tasks', 'readonly');
+    const store = tx.objectStore('tasks');
+    try {
+      const index = store.index('type');
+      const tasks = await idbRequest(index.getAll(type));
+      return tasks.sort(
+        (a, b) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+    } catch {
+      return [];
+    }
+  }
+}
+
+/**
+ * Generate message_key for deduplication
+ */
+export function generateMessageKey(
+  taskId: string,
+  timestamp: number,
+  role: string,
+  contentPrefix: string
+): string {
+  // Simple hash: use first 50 chars of content
+  const hash = contentPrefix.slice(0, 50).replace(/\s+/g, '_');
+  return `${taskId}_${timestamp}_${role}_${hash}`;
+}
+
+/**
+ * Upsert bot message - create if not exists (by message_key)
+ */
+export async function upsertBotMessage(
+  input: CreateMessageInput
+): Promise<{ message: Message; created: boolean }> {
+  if (!input.message_key) {
+    // No message_key, just create
+    const message = await createMessage(input);
+    return { message, created: true };
+  }
+
+  // Check if exists
+  const existing = await getMessageByKey(input.message_key);
+  if (existing) {
+    return { message: existing, created: false };
+  }
+
+  // Create new
+  const message = await createMessage(input);
+  return { message, created: true };
+}
+
+/**
+ * Sync bot messages from cloud with deduplication
+ */
+export async function syncBotMessages(
+  taskId: string,
+  messages: Array<{
+    role: string;
+    content: string;
+    timestamp?: number;
+    rawContent?: string;
+    toolCallId?: string;
+    toolName?: string;
+    details?: string;
+    isError?: boolean;
+  }>
+): Promise<{ added: number; skipped: number }> {
+  let added = 0;
+  let skipped = 0;
+
+  for (const msg of messages) {
+    const timestamp = msg.timestamp || Date.now();
+    const messageKey = generateMessageKey(
+      taskId,
+      timestamp,
+      msg.role,
+      msg.content
+    );
+
+    const result = await upsertBotMessage({
+      task_id: taskId,
+      message_key: messageKey,
+      type: msg.role === 'user' ? 'user' : 'text',
+      content: msg.content,
+      role: msg.role,
+      timestamp: timestamp,
+      raw_content: msg.rawContent,
+      tool_use_id: msg.toolCallId,
+      tool_name: msg.toolName,
+      details: msg.details,
+      is_error: msg.isError,
+    });
+
+    if (result.created) {
+      added++;
+    } else {
+      skipped++;
+    }
+  }
+
+  return { added, skipped };
 }

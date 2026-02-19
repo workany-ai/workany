@@ -7,6 +7,7 @@ import {
   ChevronDown,
   FolderOpen,
   Github,
+  Layers,
   Loader2,
   MoreHorizontal,
   Plus,

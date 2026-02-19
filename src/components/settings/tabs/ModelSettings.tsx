@@ -1,8 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  ExternalLink,
+  Plus,
+  RefreshCw,
+  Settings,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Switch } from '../components/Switch';
 import {
@@ -57,7 +66,141 @@ export function ModelSettings({
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
-  const { t } = useLanguage();
+  const { t, tt } = useLanguage();
+
+  // Detect connection states for "Add Provider" form
+  const [detectStatus, setDetectStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [detectMessage, setDetectMessage] = useState('');
+
+  // Detect connection states for "Edit Provider" panel
+  const [editDetectStatus, setEditDetectStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
+  const [editDetectMessage, setEditDetectMessage] = useState('');
+
+  // Function to detect if API configuration is valid (for Add Provider form)
+  const handleDetectConnection = async () => {
+    if (!newProvider.baseUrl || !newProvider.apiKey) {
+      setDetectStatus('error');
+      setDetectMessage(t.settings.fillBaseUrlAndApiKey);
+      setTimeout(() => setDetectStatus('idle'), 3000);
+      return;
+    }
+
+    setDetectStatus('loading');
+    setDetectMessage('');
+
+    try {
+      const testModel =
+        newProvider.models
+          .split(',')
+          .map((m) => m.trim())
+          .filter((m) => m)[0] || 'gpt-3.5-turbo';
+
+      const response = await fetch(`${API_BASE_URL}/providers/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseUrl: newProvider.baseUrl,
+          apiKey: newProvider.apiKey,
+          model: testModel,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      if (data.success) {
+        setDetectStatus('success');
+        setDetectMessage(t.settings.connectionSuccess);
+        setTimeout(() => setDetectStatus('idle'), 3000);
+      } else {
+        setDetectStatus('error');
+        // Use local translation for common errors, otherwise use API message
+        const errorMessage = data.error || t.settings.connectionFailed;
+        setDetectMessage(errorMessage);
+        setTimeout(() => setDetectStatus('idle'), 5000);
+      }
+    } catch (error) {
+      setDetectStatus('error');
+      setDetectMessage(
+        tt('settings.connectionError', {
+          error:
+            error instanceof Error ? error.message : t.settings.networkError,
+        })
+      );
+      setTimeout(() => setDetectStatus('idle'), 5000);
+    }
+  };
+
+  // Function to detect if API configuration is valid (for Edit Provider panel)
+  const handleEditDetectConnection = async () => {
+    if (!selectedProvider?.baseUrl || !selectedProvider?.apiKey) {
+      setEditDetectStatus('error');
+      setEditDetectMessage(t.settings.fillBaseUrlAndApiKey);
+      setTimeout(() => setEditDetectStatus('idle'), 3000);
+      return;
+    }
+
+    setEditDetectStatus('loading');
+    setEditDetectMessage('');
+
+    try {
+      const testModel = selectedProvider.models?.[0] || 'gpt-3.5-turbo';
+
+      const response = await fetch(`${API_BASE_URL}/providers/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseUrl: selectedProvider.baseUrl,
+          apiKey: selectedProvider.apiKey,
+          model: testModel,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        error?: string;
+      };
+
+      if (data.success) {
+        setEditDetectStatus('success');
+        setEditDetectMessage(t.settings.connectionSuccess);
+        setTimeout(() => setEditDetectStatus('idle'), 3000);
+      } else {
+        setEditDetectStatus('error');
+        // Use API error message or fallback
+        const errorMessage = data.error || t.settings.connectionFailed;
+        setEditDetectMessage(errorMessage);
+        setTimeout(() => setEditDetectStatus('idle'), 5000);
+      }
+    } catch (error) {
+      setEditDetectStatus('error');
+      setEditDetectMessage(
+        tt('settings.connectionError', {
+          error:
+            error instanceof Error ? error.message : t.settings.networkError,
+        })
+      );
+      setTimeout(() => setEditDetectStatus('idle'), 5000);
+    }
+  };
+
+  // Reset edit detect status when switching providers
+  useEffect(() => {
+    setEditDetectStatus('idle');
+    setEditDetectMessage('');
+  }, [activeSubTab]);
 
   // Get all available models from enabled providers
   const availableModels = settings.providers
@@ -254,9 +397,14 @@ export function ModelSettings({
                 <input
                   type="password"
                   value={newProvider.apiKey}
-                  onChange={(e) =>
-                    setNewProvider({ ...newProvider, apiKey: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setNewProvider({
+                      ...newProvider,
+                      apiKey: e.target.value,
+                    });
+                    setDetectStatus('idle');
+                    setDetectMessage('');
+                  }}
                   placeholder={t.settings.enterApiKey}
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
@@ -264,7 +412,7 @@ export function ModelSettings({
 
               <div className="flex flex-col gap-2">
                 <label className="text-foreground block text-sm font-medium">
-                  API Base URL
+                  {t.settings.apiBaseUrl}
                 </label>
                 <input
                   type="text"
@@ -291,6 +439,46 @@ export function ModelSettings({
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
               </div>
+
+              {/* Detect Button */}
+              <button
+                type="button"
+                onClick={handleDetectConnection}
+                disabled={detectStatus === 'loading'}
+                className={cn(
+                  'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                  detectStatus === 'success' &&
+                    'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
+                  detectStatus === 'error' &&
+                    'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
+                )}
+              >
+                <RefreshCw
+                  className={cn(
+                    'size-4',
+                    detectStatus === 'loading' && 'animate-spin'
+                  )}
+                />
+                {detectStatus === 'loading'
+                  ? t.settings.detecting
+                  : detectStatus === 'success'
+                    ? t.settings.success
+                    : detectStatus === 'error'
+                      ? t.settings.failed
+                      : t.settings.detectConfig}
+              </button>
+              {detectMessage && (
+                <p
+                  className={cn(
+                    'text-xs font-medium',
+                    detectStatus === 'success'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-red-600 dark:text-red-400'
+                  )}
+                >
+                  {detectMessage}
+                </p>
+              )}
 
               <button
                 onClick={handleAddProvider}
@@ -467,11 +655,13 @@ export function ModelSettings({
                   <input
                     type={showApiKey ? 'text' : 'password'}
                     value={selectedProvider.apiKey}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       handleProviderUpdate(selectedProvider.id, {
                         apiKey: e.target.value,
-                      })
-                    }
+                      });
+                      setEditDetectStatus('idle');
+                      setEditDetectMessage('');
+                    }}
                     placeholder={t.settings.enterApiKey}
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border pr-10 pl-3 text-sm focus:ring-2 focus:outline-none"
                   />
@@ -529,7 +719,7 @@ export function ModelSettings({
               {/* API Base URL */}
               <div className="flex flex-col gap-2">
                 <label className="text-foreground block text-sm font-medium">
-                  API Base URL
+                  {t.settings.apiBaseUrl}
                 </label>
                 <input
                   type="text"
@@ -684,6 +874,46 @@ export function ModelSettings({
                       </div>
                     )}
                 </div>
+
+                {/* Detect Button */}
+                <button
+                  type="button"
+                  onClick={handleEditDetectConnection}
+                  disabled={editDetectStatus === 'loading'}
+                  className={cn(
+                    'border-border hover:bg-accent hover:text-accent-foreground text-muted-foreground flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                    editDetectStatus === 'success' &&
+                      'border-emerald-500 bg-emerald-500 text-white hover:border-emerald-600 hover:bg-emerald-600',
+                    editDetectStatus === 'error' &&
+                      'border-red-500 bg-red-500 text-white hover:border-red-600 hover:bg-red-600'
+                  )}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'size-4',
+                      editDetectStatus === 'loading' && 'animate-spin'
+                    )}
+                  />
+                  {editDetectStatus === 'loading'
+                    ? t.settings.detecting
+                    : editDetectStatus === 'success'
+                      ? t.settings.success
+                      : editDetectStatus === 'error'
+                        ? t.settings.failed
+                        : t.settings.detectConfig}
+                </button>
+                {editDetectMessage && (
+                  <p
+                    className={cn(
+                      'text-xs font-medium',
+                      editDetectStatus === 'success'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    )}
+                  >
+                    {editDetectMessage}
+                  </p>
+                )}
               </div>
             </div>
           </div>

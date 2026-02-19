@@ -21,6 +21,7 @@ import {
   type AgentMessage,
   type MessageAttachment,
 } from '@/shared/hooks/useAgent';
+import { useBotChats } from '@/shared/hooks/useBotChats';
 import { useVitePreview } from '@/shared/hooks/useVitePreview';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
@@ -31,8 +32,6 @@ import {
   FileText,
   PanelLeft,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 import {
   ArtifactPreview,
@@ -40,10 +39,11 @@ import {
   type Artifact,
 } from '@/components/artifacts';
 import { Logo } from '@/components/common/logo';
-import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
+import { LeftSidebar, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput } from '@/components/shared/ChatInput';
 import { LazyImage } from '@/components/shared/LazyImage';
+import { MarkdownContent } from '@/components/shared/MarkdownContent';
 import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
 import { RightSidebar } from '@/components/task/RightSidebar';
@@ -78,15 +78,12 @@ export function useToolSelection() {
 }
 
 export function TaskDetailPage() {
-  return (
-    <SidebarProvider>
-      <TaskDetailContent />
-    </SidebarProvider>
-  );
+  return <TaskDetailContent />;
 }
 
 function TaskDetailContent() {
   const { t } = useLanguage();
+  const { setLeftActiveTab } = useSidebar();
   const { taskId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -114,7 +111,14 @@ function TaskDetailContent() {
     filesVersion,
     backgroundTasks,
   } = useAgent();
+  const { sessions: botChats, refreshSessions } = useBotChats();
   const { toggleLeft, setLeftOpen } = useSidebar();
+
+  // Set left sidebar to local tab when this page loads
+  useEffect(() => {
+    setLeftActiveTab('local');
+  }, [setLeftActiveTab]);
+
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
   const [task, setTask] = useState<Task | null>(null);
@@ -313,6 +317,14 @@ function TaskDetailContent() {
       titleInputRef.current.select();
     }
   }, [isEditingTitle]);
+
+  // Handle bot chat selection - navigate to home with selected bot chat
+  const handleSelectBotChat = useCallback(
+    (sessionKey: string) => {
+      navigate('/', { state: { selectedBotChatKey: sessionKey } });
+    },
+    [navigate]
+  );
 
   // Handle artifact selection - opens preview
   const handleSelectArtifact = useCallback((artifact: Artifact) => {
@@ -759,6 +771,7 @@ function TaskDetailContent() {
           task_index: initialTaskIndex,
           prompt: initialPrompt,
           status: 'running',
+          type: 'local', // 本地任务
           favorite: false,
           cost: 0,
           duration: 0,
@@ -850,6 +863,10 @@ function TaskDetailContent() {
             // Include current task if it's running
             ...(isRunning && taskId ? [taskId] : []),
           ]}
+          botChats={botChats}
+          currentBotChatKey={undefined}
+          onSelectBotChat={handleSelectBotChat}
+          onRefreshBotChats={refreshSessions}
         />
 
         {/* Main Content Area with Responsive Layout */}
@@ -1546,79 +1563,10 @@ function MessageItem({
     return (
       <div className="flex min-w-0 flex-col gap-3">
         <Logo />
-        <div className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              pre: ({ children }: any) => (
-                <pre className="bg-muted max-w-full overflow-x-auto rounded-lg p-4">
-                  {children}
-                </pre>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              code: ({ className, children, ...props }: any) => {
-                const isInline = !className;
-                if (isInline) {
-                  return (
-                    <code
-                      className="bg-muted rounded px-1.5 py-0.5 text-sm"
-                      {...props}
-                    >
-                      {children}
-                    </code>
-                  );
-                }
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              a: ({ children, href }: any) => (
-                <a
-                  href={href}
-                  onClick={async (e) => {
-                    e.preventDefault();
-                    if (href) {
-                      try {
-                        const { openUrl } =
-                          await import('@tauri-apps/plugin-opener');
-                        await openUrl(href);
-                      } catch {
-                        window.open(href, '_blank');
-                      }
-                    }
-                  }}
-                  className="text-primary cursor-pointer hover:underline"
-                >
-                  {children}
-                </a>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              table: ({ children }: any) => (
-                <div className="overflow-x-auto">
-                  <table className="border-border border-collapse border">
-                    {children}
-                  </table>
-                </div>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              th: ({ children }: any) => (
-                <th className="border-border bg-muted border px-3 py-2 text-left">
-                  {children}
-                </th>
-              ),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              td: ({ children }: any) => (
-                <td className="border-border border px-3 py-2">{children}</td>
-              ),
-            }}
-          >
-            {message.content || ''}
-          </ReactMarkdown>
-        </div>
+        <MarkdownContent
+          content={message.content || ''}
+          className="prose prose-sm text-foreground max-w-none min-w-0 flex-1 overflow-hidden"
+        />
       </div>
     );
   }
@@ -1753,7 +1701,9 @@ function ErrorMessage({ message }: { message: string }) {
     const errorMessage = (
       t.common.errors.customApiError ||
       'Custom API ({baseUrl}) may not be compatible with Claude Code SDK. Please check the API configuration or try a different provider. Log file: {logPath}'
-    ).replace('{baseUrl}', baseUrl).replace('{logPath}', logPath);
+    )
+      .replace('{baseUrl}', baseUrl)
+      .replace('{logPath}', logPath);
 
     return (
       <div className="flex items-start gap-3 py-2">

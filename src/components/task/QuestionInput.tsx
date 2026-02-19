@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import type { AgentQuestion, PendingQuestion } from '@/shared/hooks/useAgent';
 import { cn } from '@/shared/lib/utils';
-import { Check, Send } from 'lucide-react';
 import { useLanguage } from '@/shared/providers/language-provider';
+import { Check, Send } from 'lucide-react';
 
 interface QuestionInputProps {
   pendingQuestion: PendingQuestion;
@@ -202,7 +202,9 @@ function QuestionItem({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t.common.questionInput.other}</p>
+            <p className="text-sm font-medium">
+              {t.common.questionInput.other}
+            </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
               {t.common.questionInput.customInput}
             </p>

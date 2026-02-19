@@ -11,18 +11,24 @@ import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
   ArrowUp,
+  Bot,
+  ChevronDown,
   FileText,
   Paperclip,
   Plus,
   Send,
+  Settings,
   Square,
+  Terminal,
   X,
+  Zap,
 } from 'lucide-react';
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -34,13 +40,19 @@ export interface Attachment {
   preview?: string; // Data URL for image preview
 }
 
+export type TaskProvider = 'claude-code' | 'codex' | 'openclaw';
+
 export interface ChatInputProps {
   /** Placeholder text */
   placeholder?: string;
   /** Whether the agent is running */
   isRunning?: boolean;
   /** Callback when submitting with text and attachments */
-  onSubmit: (text: string, attachments?: MessageAttachment[]) => Promise<void>;
+  onSubmit: (
+    text: string,
+    attachments?: MessageAttachment[],
+    provider?: TaskProvider
+  ) => Promise<void>;
   /** Callback when stop button is clicked */
   onStop?: () => void;
   /** Variant: 'home' for larger home page style, 'reply' for compact reply style */
@@ -51,6 +63,18 @@ export interface ChatInputProps {
   disabled?: boolean;
   /** Auto focus on mount */
   autoFocus?: boolean;
+  /** Content to render in the center of the bottom actions bar */
+  bottomContent?: React.ReactNode;
+  /** Whether to show provider selector */
+  showProviderSelector?: boolean;
+  /** Selected provider */
+  provider?: TaskProvider;
+  /** Callback when provider changes */
+  onProviderChange?: (provider: TaskProvider) => void;
+  /** Whether OpenClaw is configured */
+  isOpenClawConfigured?: boolean;
+  /** Callback to open OpenClaw settings */
+  onOpenClawSettings?: () => void;
 }
 
 // Generate unique ID for attachments
@@ -96,6 +120,12 @@ export function ChatInput({
   className,
   disabled = false,
   autoFocus = false,
+  bottomContent,
+  showProviderSelector = false,
+  provider = 'claude-code',
+  onProviderChange,
+  isOpenClawConfigured = false,
+  onOpenClawSettings,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -262,7 +292,11 @@ export function ChatInput({
 
       setValue('');
       setAttachments([]);
-      await onSubmit(text, messageAttachments);
+      await onSubmit(
+        text,
+        messageAttachments,
+        showProviderSelector ? provider : undefined
+      );
     }
   };
 
@@ -393,8 +427,8 @@ export function ChatInput({
           isHome ? 'mt-3' : 'mt-2'
         )}
       >
-        {/* Add Button with Dropdown */}
-        <div className="flex items-center gap-1">
+        {/* Left: Add Button + Provider Selector */}
+        <div className="flex items-center gap-2">
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               disabled={isRunning || disabled}
@@ -421,7 +455,97 @@ export function ChatInput({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Provider Selector */}
+          {showProviderSelector && (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger
+                disabled={isRunning || disabled}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                  isHome
+                    ? 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    : 'border-border/60 bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                {provider === 'claude-code' && (
+                  <>
+                    <Terminal className="size-3" />
+                    <span>Claude Code</span>
+                  </>
+                )}
+                {provider === 'codex' && (
+                  <>
+                    <Zap className="size-3" />
+                    <span>Codex</span>
+                  </>
+                )}
+                {provider === 'openclaw' && (
+                  <>
+                    <Bot className="size-3" />
+                    <span>OpenClaw</span>
+                  </>
+                )}
+                <ChevronDown className="size-3 opacity-60" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                sideOffset={8}
+                className="z-50 w-40"
+              >
+                <DropdownMenuItem
+                  onSelect={() => onProviderChange?.('claude-code')}
+                  className={cn(
+                    'cursor-pointer gap-2 py-2',
+                    provider === 'claude-code' && 'bg-accent'
+                  )}
+                >
+                  <Terminal className="size-4" />
+                  <span>Claude Code</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => onProviderChange?.('codex')}
+                  className={cn(
+                    'cursor-pointer gap-2 py-2',
+                    provider === 'codex' && 'bg-accent'
+                  )}
+                >
+                  <Zap className="size-4" />
+                  <span>Codex</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    if (isOpenClawConfigured) {
+                      onProviderChange?.('openclaw');
+                    } else {
+                      onOpenClawSettings?.();
+                    }
+                  }}
+                  className={cn(
+                    'cursor-pointer gap-2 py-2',
+                    provider === 'openclaw' &&
+                      isOpenClawConfigured &&
+                      'bg-accent'
+                  )}
+                >
+                  <Bot className="size-4" />
+                  <span>OpenClaw</span>
+                  {!isOpenClawConfigured && (
+                    <Settings className="text-muted-foreground ml-auto size-3" />
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
+
+        {/* Center Content */}
+        {bottomContent && (
+          <div className="flex flex-1 items-center justify-center px-2">
+            {bottomContent}
+          </div>
+        )}
 
         {/* Submit/Stop Button */}
         <div className="flex items-center gap-1">

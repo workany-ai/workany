@@ -14,6 +14,7 @@ export type SettingsCategory =
   | 'mcp'
   | 'skills'
   | 'connector'
+  | 'openclaw'
   | 'data'
   | 'about';
 
@@ -94,3 +95,10 @@ export interface SkillInfo {
 export type ModelSubTab = 'settings' | string;
 export type MCPSubTab = 'settings' | string;
 export type SkillsSubTab = 'settings' | string;
+
+// OpenClaw Gateway Config Types
+export interface OpenClawConfig {
+  gatewayUrl: string;
+  authToken?: string;
+  enabled: boolean;
+}

@@ -1,7 +1,16 @@
 export default {
   newTask: 'New task',
-  allTasks: 'All tasks',
+  newChat: 'New chat',
+  newBot: 'New Bot',
+  localTask: 'Local Task',
+  botTask: 'Bot Task',
+  allTasks: 'Local tasks',
+  allChats: 'Bot',
+  tabLocal: 'Local',
+  tabBot: 'Bot',
+  history: 'History',
   noTasksYet: 'No tasks yet',
+  noChatsYet: 'No chats yet',
   settings: 'Settings',
   logOut: 'Log out',
 };

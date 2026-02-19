@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteTask, getAllTasks, updateTask, type Task } from '@/shared/db';
+import { useBotChats } from '@/shared/hooks/useBotChats';
 import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
@@ -9,14 +10,10 @@ import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import { Search } from 'lucide-react';
 
-import { LeftSidebar, SidebarProvider } from '@/components/layout';
+import { LeftSidebar, useSidebar } from '@/components/layout';
 
 export function LibraryPage() {
-  return (
-    <SidebarProvider>
-      <LibraryContent />
-    </SidebarProvider>
-  );
+  return <LibraryContent />;
 }
 
 // Format relative time with i18n support
@@ -61,12 +58,22 @@ function formatRelativeTime(
 function LibraryContent() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { setLeftActiveTab } = useSidebar();
+
+  // Set left sidebar to local tab when this page loads
+  useEffect(() => {
+    setLeftActiveTab('local');
+  }, [setLeftActiveTab]);
   const [searchQuery, setSearchQuery] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+
+  // Bot chats state for sidebar
+  const { sessions: botChats, refreshSessions: refreshBotChats } =
+    useBotChats();
 
   // Subscribe to background tasks
   useEffect(() => {
@@ -154,6 +161,8 @@ function LibraryContent() {
         runningTaskIds={backgroundTasks
           .filter((t) => t.isRunning)
           .map((t) => t.taskId)}
+        botChats={botChats}
+        onRefreshBotChats={refreshBotChats}
       />
 
       {/* Main Content */}

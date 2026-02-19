@@ -9,6 +9,7 @@ export default {
   provider: '供应商',
   mcp: 'MCP',
   connector: '连接器',
+  openclaw: 'OpenClaw Bot',
   about: '关于',
 
   // Account
@@ -34,6 +35,8 @@ export default {
   agentRuntimeDescription: '执行任务的 AI 智能体',
   runtimeClaudeCode: 'Claude Code',
   runtimeClaudeCodeDescription: '由 Claude Code 驱动任务流程',
+  runtimeOpenClaw: 'OpenClaw Bot',
+  runtimeOpenClawDescription: '通过 OpenClaw Gateway 提供高级 AI 功能',
   installClaudeCode: 'Claude Code 未安装',
   installClaudeCodeHint: '运行: npm install -g @anthropic-ai/claude-code',
 
@@ -113,6 +116,18 @@ export default {
   maxConversationTurnsDescription: '保留的对话轮次数量（0 = 不限制）',
   maxHistoryTokens: '最大历史 Token 数',
   maxHistoryTokensDescription: '对话历史的最大 Token 数量（0 = 不限制）',
+
+  // Provider Detection
+  detectConfig: '检测配置',
+  detecting: '检测中...',
+  success: '成功',
+  failed: '失败',
+  connectionSuccess: '连接成功！配置有效',
+  connectionFailed: '连接失败',
+  connectionTimeout: '连接超时（60秒）',
+  networkError: '网络错误',
+  fillBaseUrlAndApiKey: '请先填写 Base URL 和 API Key',
+  connectionError: '连接失败: {error}',
 
   // Skills
   skills: 'Skills',
@@ -248,6 +263,30 @@ export default {
   mcpAddEnvVariable: '添加环境变量',
   mcpCommandPlaceholder: '例如: python, node, ./script.sh',
   mcpSave: '保存',
+
+  // OpenClaw Bot
+  openclawTitle: 'OpenClaw Bot',
+  openclawDescription: '配置 OpenClaw Gateway 连接以使用 AI Bot 功能',
+  openclawConnectionStatus: '连接状态',
+  openclawDetect: '检测连接',
+  openclawDetecting: '检测中...',
+  openclawConnected: '已连接',
+  openclawFailed: '失败',
+  openclawStatusIdle: '点击"检测连接"验证您的 OpenClaw Gateway 配置',
+  openclawGatewayUrl: 'Gateway URL',
+  openclawGatewayUrlHint:
+    'OpenClaw Gateway 的 WebSocket URL (默认: ws://127.0.0.1:18789)',
+  openclawAuthToken: '认证令牌 (可选)',
+  openclawAuthTokenPlaceholder: '请输入您的认证令牌',
+  openclawAuthTokenHint: '如果您的 Gateway 不需要认证，请留空',
+  openclawEnable: '启用 OpenClaw Bot',
+  openclawEnterGatewayUrl: '请输入 Gateway URL',
+  openclawConnectionSuccess: '连接成功！配置有效',
+  openclawConnectionFailed: '连接失败',
+  openclawConnectionError: '连接错误',
+  openclawHelpTitle: '关于 OpenClaw Bot:',
+  openclawHelpText:
+    'OpenClaw Bot 通过 Gateway 协议提供高级 AI 功能。检测连接前请确保 Gateway 正在运行。',
 
   // Connector
   connectorDescription: '配置 Skills 和 MCP 服务器以扩展功能',
