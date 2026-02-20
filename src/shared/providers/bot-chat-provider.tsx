@@ -53,7 +53,15 @@ interface OpenClawSession {
   friendlyId?: string;
   label?: string;
   updatedAt?: number;
-  lastMessage?: unknown;
+  lastMessage?: {
+    role: string;
+    content?: Array<{ type?: string; text?: string }>;
+    timestamp?: number;
+    toolCallId?: string;
+    toolName?: string;
+    details?: Record<string, unknown>;
+    isError?: boolean;
+  };
 }
 
 interface OpenClawSessionsResponse {
