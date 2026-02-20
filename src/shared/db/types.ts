@@ -139,3 +139,33 @@ export interface CreateFileInput {
   preview?: string;
   thumbnail?: string;
 }
+
+/**
+ * Bot session row in SQLite database
+ */
+export interface BotSessionRow {
+  session_key: string;
+  friendly_id?: string;
+  label?: string;
+  last_message?: string;
+  message_count: number;
+  updated_at?: number;
+  synced_at?: number;
+}
+
+/**
+ * Bot message row in SQLite database
+ */
+export interface BotMessageRow {
+  id?: number;
+  session_key: string;
+  msg_id?: string;
+  role: 'user' | 'assistant' | 'toolResult';
+  content?: string;
+  raw_content?: string;
+  tool_call_id?: string;
+  tool_name?: string;
+  details?: string;
+  is_error: boolean;
+  timestamp?: number;
+}
