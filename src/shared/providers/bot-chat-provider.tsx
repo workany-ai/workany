@@ -230,7 +230,8 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
 
       chatSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       setSessions(chatSessions);
-    } catch {
+    } catch (error) {
+      console.error('[BotChatProvider] Failed to fetch from cloud:', error);
       setSessions([]);
     } finally {
       setIsLoading(false);
@@ -241,11 +242,15 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
    * Initialize: Load local sessions first, then sync from cloud if configured
    */
   useEffect(() => {
+    let isMounted = true;
+
     const initialize = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
 
       // First, try to load local sessions
       const localSessions = await loadLocalSessions();
+      if (!isMounted) return;
       if (localSessions.length > 0) {
         // Sort by updatedAt
         localSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -262,6 +267,7 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
         } else {
           // No local sessions, need to wait for cloud fetch
           await syncSessionsFromCloud();
+          if (!isMounted) return;
           setIsLoading(false);
         }
       } else {
@@ -270,6 +276,10 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
     };
 
     initialize();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
