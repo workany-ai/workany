@@ -1,4 +1,6 @@
 import type {
+  BotMessageRow,
+  BotSessionRow,
   CreateFileInput,
   CreateMessageInput,
   CreateSessionInput,
@@ -133,9 +135,11 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 // ============ Tauri SQLite ============
-let sqliteDb: Awaited<
+type Database = Awaited<
   ReturnType<typeof import('@tauri-apps/plugin-sql').default.load>
-> | null = null;
+>;
+
+let sqliteDb: Database | null = null;
 
 async function getSQLiteDatabase() {
   if (!isTauriSync()) {
@@ -1101,4 +1105,102 @@ export async function syncBotMessages(
   }
 
   return { added, skipped };
+}
+
+// ============================================================================
+// Bot Session Operations
+// ============================================================================
+
+/**
+ * Upsert a bot session to the database
+ */
+export async function upsertBotSession(db: Database, session: BotSessionRow): Promise<void> {
+  await db.execute(
+    `INSERT OR REPLACE INTO bot_sessions
+     (session_key, friendly_id, label, last_message, message_count, updated_at, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      session.session_key,
+      session.friendly_id ?? null,
+      session.label ?? null,
+      session.last_message ?? null,
+      session.message_count ?? 0,
+      session.updated_at ?? null,
+      session.synced_at ?? Date.now(),
+    ]
+  );
+}
+
+/**
+ * Upsert multiple bot sessions
+ */
+export async function upsertBotSessions(db: Database, sessions: BotSessionRow[]): Promise<void> {
+  for (const session of sessions) {
+    await upsertBotSession(db, session);
+  }
+}
+
+/**
+ * Get all bot sessions from database
+ */
+export async function getBotSessions(db: Database): Promise<BotSessionRow[]> {
+  const result = await db.select<BotSessionRow[]>(
+    'SELECT * FROM bot_sessions ORDER BY updated_at DESC'
+  );
+  return result;
+}
+
+/**
+ * Get a single bot session by key
+ */
+export async function getBotSession(db: Database, sessionKey: string): Promise<BotSessionRow | null> {
+  const result = await db.select<BotSessionRow[]>(
+    'SELECT * FROM bot_sessions WHERE session_key = ?',
+    [sessionKey]
+  );
+  return result[0] ?? null;
+}
+
+/**
+ * Delete a bot session and its messages
+ */
+export async function deleteBotSession(db: Database, sessionKey: string): Promise<void> {
+  await db.execute('DELETE FROM bot_messages WHERE session_key = ?', [sessionKey]);
+  await db.execute('DELETE FROM bot_sessions WHERE session_key = ?', [sessionKey]);
+}
+
+/**
+ * Update session metadata after message sync
+ */
+export async function updateBotSessionMeta(
+  db: Database,
+  sessionKey: string,
+  meta: { last_message?: string; message_count?: number; updated_at?: number }
+): Promise<void> {
+  const sets: string[] = [];
+  const values: (string | number | null)[] = [];
+
+  if (meta.last_message !== undefined) {
+    sets.push('last_message = ?');
+    values.push(meta.last_message);
+  }
+  if (meta.message_count !== undefined) {
+    sets.push('message_count = ?');
+    values.push(meta.message_count);
+  }
+  if (meta.updated_at !== undefined) {
+    sets.push('updated_at = ?');
+    values.push(meta.updated_at);
+  }
+
+  if (sets.length > 0) {
+    sets.push('synced_at = ?');
+    values.push(Date.now());
+    values.push(sessionKey);
+
+    await db.execute(
+      `UPDATE bot_sessions SET ${sets.join(', ')} WHERE session_key = ?`,
+      values
+    );
+  }
 }
