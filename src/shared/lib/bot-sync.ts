@@ -1,0 +1,167 @@
+/**
+ * Bot Session Sync Utilities
+ *
+ * Handles syncing bot sessions and messages between cloud and local SQLite.
+ */
+
+import {
+  getBotSessions,
+  upsertBotSessions,
+  getBotMessages,
+  upsertBotMessageRows,
+  updateBotSessionMeta,
+} from '@/shared/db/database';
+import type { Database } from '@/shared/db/database';
+import type { BotSessionRow, BotMessageRow } from '@/shared/db/types';
+import type { BotContentPart } from '@/shared/hooks/useBotChats';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:2026';
+
+/**
+ * Sync state for UI
+ */
+export interface BotSyncState {
+  isSyncingSessions: boolean;
+  syncingSessionKey: string | null;
+  lastSyncTime: number | null;
+  syncError: string | null;
+}
+
+/**
+ * Fetch sessions from cloud
+ */
+export async function fetchCloudSessions(): Promise<BotSessionRow[]> {
+  const response = await fetch(`${API_BASE}/openclaw/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ includeLastMessage: true }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sessions: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const sessions = data.sessions ?? [];
+
+  return sessions.map((s: any) => ({
+    session_key: s.key,
+    friendly_id: s.friendlyId,
+    label: s.label ?? s.derivedTitle,
+    last_message: extractLastMessageText(s.lastMessage),
+    message_count: 0, // Will be updated when messages are synced
+    updated_at: s.updatedAt,
+    synced_at: Date.now(),
+  }));
+}
+
+/**
+ * Extract text from last message for preview
+ */
+function extractLastMessageText(msg: any): string | undefined {
+  if (!msg?.content) return undefined;
+  const textParts = msg.content.filter((c: any) => c.type === 'text');
+  const text = textParts.map((c: any) => c.text || '').join(' ');
+  return text.slice(0, 200) || undefined;
+}
+
+/**
+ * Sync all sessions from cloud to local database
+ */
+export async function syncBotSessions(db: Database): Promise<BotSessionRow[]> {
+  const cloudSessions = await fetchCloudSessions();
+  await upsertBotSessions(db, cloudSessions);
+  return getBotSessions(db);
+}
+
+/**
+ * Fetch messages from cloud for a specific session
+ */
+export async function fetchCloudMessages(sessionKey: string): Promise<BotMessageRow[]> {
+  const response = await fetch(`${API_BASE}/openclaw/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionKey }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch messages: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const messages = data.messages ?? [];
+
+  return messages.map((m: any, index: number) => ({
+    session_key: sessionKey,
+    msg_id: m.__optimisticId ?? `${sessionKey}_${m.timestamp}_${index}`,
+    role: m.role === 'system' ? 'assistant' : (m.role ?? 'assistant'),
+    content: extractMessageText(m.content),
+    raw_content: m.content ? JSON.stringify(m.content) : undefined,
+    tool_call_id: m.toolCallId,
+    tool_name: m.toolName,
+    details: m.details ? JSON.stringify(m.details) : undefined,
+    is_error: m.isError ?? false,
+    timestamp: m.timestamp ?? Date.now(),
+  }));
+}
+
+/**
+ * Extract text content from message
+ */
+function extractMessageText(content: any[]): string {
+  if (!content) return '';
+  const textParts = content.filter((c: any) => c.type === 'text');
+  return textParts.map((c: any) => c.text || '').join('\n');
+}
+
+/**
+ * Sync messages for a specific session
+ */
+export async function syncBotMessages(
+  db: Database,
+  sessionKey: string
+): Promise<BotMessageRow[]> {
+  const cloudMessages = await fetchCloudMessages(sessionKey);
+  await upsertBotMessageRows(db, cloudMessages);
+
+  // Update session metadata
+  const lastMessage = cloudMessages[cloudMessages.length - 1];
+  await updateBotSessionMeta(db, sessionKey, {
+    last_message: lastMessage?.content?.slice(0, 200),
+    message_count: cloudMessages.length,
+    updated_at: lastMessage?.timestamp,
+  });
+
+  return getBotMessages(db, sessionKey);
+}
+
+/**
+ * Convert BotMessageRow to BotChatMessage format
+ */
+export function rowToBotChatMessage(row: BotMessageRow) {
+  return {
+    role: row.role,
+    content: row.content ?? '',
+    timestamp: row.timestamp,
+    rawContent: row.raw_content ? JSON.parse(row.raw_content) as BotContentPart[] : undefined,
+    toolCallId: row.tool_call_id,
+    toolName: row.tool_name,
+    details: row.details ? JSON.parse(row.details) : undefined,
+    isError: row.is_error,
+  };
+}
+
+/**
+ * Convert BotSessionRow to BotChatSession format
+ */
+export function rowToBotChatSession(row: BotSessionRow, messages: BotMessageRow[] = []) {
+  return {
+    sessionKey: row.session_key,
+    friendlyId: row.friendly_id,
+    label: row.label,
+    messages: messages.map(rowToBotChatMessage),
+    lastMessage: row.last_message,
+    messageCount: row.message_count,
+    updatedAt: row.updated_at,
+  };
+}

@@ -135,7 +135,7 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 // ============ Tauri SQLite ============
-type Database = Awaited<
+export type Database = Awaited<
   ReturnType<typeof import('@tauri-apps/plugin-sql').default.load>
 >;
 
