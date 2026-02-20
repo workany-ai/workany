@@ -28,7 +28,7 @@ import {
 import { cn } from '@/shared/lib/utils';
 import { useBotChatContext } from '@/shared/providers/bot-chat-provider';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { MessageSquare, X, Zap } from 'lucide-react';
+import { Loader2, MessageSquare, X, Zap } from 'lucide-react';
 
 import { LeftSidebar, useSidebar } from '@/components/layout';
 import { BotLoadingIndicator } from '@/components/shared/BotLoadingIndicator';
@@ -78,10 +78,13 @@ function BotChatContent() {
   // Sidebar state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
-  const { sessions: botChats, refreshSessions } = useBotChatContext();
+  const { sessions: botChats, refreshSessions, syncState, syncMessages } = useBotChatContext();
 
   // State for showing all bot chats (covers main content)
   const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
+
+  // Track if current session is syncing from cloud
+  const isCurrentSessionSyncing = syncState.syncingSessionKey === sessionKey;
 
   // Set left sidebar to bot tab when this page loads
   useEffect(() => {
@@ -456,9 +459,55 @@ function BotChatContent() {
     [sessionKey]
   );
 
+  /**
+   * Load local messages from the context's sessions
+   * This is used to show messages immediately while sync happens in background
+   */
+  const loadLocalMessagesFromContext = useCallback(
+    (key: string): BotMessage[] => {
+      const session = botChats.find((s) => s.sessionKey === key);
+      if (session && session.messages && session.messages.length > 0) {
+        return session.messages.map((m, index) => ({
+          id: `local_${key}_${index}`,
+          role: m.role,
+          content: m.content ?? '',
+          timestamp: new Date(m.timestamp ?? Date.now()),
+          rawContent: m.rawContent,
+          toolCallId: m.toolCallId,
+          toolName: m.toolName,
+          details: m.details,
+          isError: m.isError,
+        }));
+      }
+      return [];
+    },
+    [botChats]
+  );
+
+  /**
+   * Load chat history - tries local first, then syncs from cloud in background
+   */
   const loadChatHistory = useCallback(async () => {
     if (!sessionKey) return;
 
+    // Step 1: Load local messages from context immediately
+    const localMessages = loadLocalMessagesFromContext(sessionKey);
+    if (localMessages.length > 0) {
+      console.log(
+        '[BotChat] Loaded local messages from context:',
+        localMessages.length
+      );
+      setMessages(localMessages);
+      setIsLoadingHistory(false);
+
+      // Step 2: Trigger background sync from cloud
+      syncMessages(sessionKey).catch((err) => {
+        console.error('[BotChat] Background sync failed:', err);
+      });
+      return;
+    }
+
+    // Step 3: No local messages - need to fetch from cloud
     setIsLoadingHistory(true);
     try {
       const openclawConfig = getOpenClawConfig();
@@ -491,14 +540,15 @@ function BotChatContent() {
       }
     } catch (error) {
       console.error('[BotChat] Failed to load history:', error);
-      const localMessages = loadBotMessages();
-      if (localMessages.length > 0) {
-        setMessages(localMessages);
+      // Fallback to localStorage messages
+      const fallbackMessages = loadBotMessages();
+      if (fallbackMessages.length > 0) {
+        setMessages(fallbackMessages);
       }
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [sessionKey]);
+  }, [sessionKey, loadLocalMessagesFromContext, syncMessages]);
 
   // Track the session key created from initialPrompt (to skip history loading for it)
   const newSessionKeyRef = useRef<string | null>(null);
@@ -547,6 +597,37 @@ function BotChatContent() {
     // Always load history when sessionKey changes
     loadChatHistory();
   }, [sessionKey, loadChatHistory]);
+
+  // Update messages when sync completes for current session
+  useEffect(() => {
+    if (
+      syncState.syncingSessionKey === null &&
+      syncState.lastSyncTime &&
+      sessionKey
+    ) {
+      // Sync just completed - check if we have updated messages from context
+      const session = botChats.find((s) => s.sessionKey === sessionKey);
+      if (session && session.messages && session.messages.length > 0) {
+        const updatedMessages: BotMessage[] = session.messages.map((m, index) => ({
+          id: `synced_${sessionKey}_${index}`,
+          role: m.role,
+          content: m.content ?? '',
+          timestamp: new Date(m.timestamp ?? Date.now()),
+          rawContent: m.rawContent,
+          toolCallId: m.toolCallId,
+          toolName: m.toolName,
+          details: m.details,
+          isError: m.isError,
+        }));
+        console.log(
+          '[BotChat] Updated messages from sync:',
+          updatedMessages.length
+        );
+        setMessages(updatedMessages);
+        saveBotMessages(updatedMessages);
+      }
+    }
+  }, [syncState.syncingSessionKey, syncState.lastSyncTime, sessionKey, botChats]);
 
   // Auto-scroll
   useEffect(() => {
@@ -760,6 +841,14 @@ function BotChatContent() {
         ) : (
           /* Normal Chat View */
           <>
+            {/* Sync indicator when syncing from cloud */}
+            {isCurrentSessionSyncing && (
+              <div className="bg-muted/50 flex items-center justify-center gap-2 px-4 py-1.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" />
+                <span>{t.common.loading || 'Loading...'}</span>
+              </div>
+            )}
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-6">
               {isLoadingHistory ? (
