@@ -18,6 +18,52 @@ import type { BotContentPart } from '@/shared/hooks/useBotChats';
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:2026';
 
 /**
+ * Default network timeout in milliseconds
+ */
+const DEFAULT_TIMEOUT = 30000;
+
+/**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout = DEFAULT_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Normalize role string to valid type
+ */
+function normalizeRole(role: string | undefined): 'user' | 'assistant' | 'toolResult' {
+  if (role === 'user' || role === 'assistant' || role === 'toolResult') {
+    return role;
+  }
+  // Default to assistant for unknown roles including 'system'
+  return 'assistant';
+}
+
+/**
+ * Safely parse JSON with fallback
+ */
+function safeParseJson<T>(json: string | undefined | null): T | undefined {
+  if (!json) return undefined;
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Sync state for UI
  */
 export interface BotSyncState {
@@ -31,14 +77,14 @@ export interface BotSyncState {
  * Fetch sessions from cloud
  */
 export async function fetchCloudSessions(): Promise<BotSessionRow[]> {
-  const response = await fetch(`${API_BASE}/openclaw/sessions`, {
+  const response = await fetchWithTimeout(`${API_BASE}/openclaw/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ includeLastMessage: true }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch sessions: ${response.statusText}`);
+    throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -78,14 +124,14 @@ export async function syncBotSessions(db: Database): Promise<BotSessionRow[]> {
  * Fetch messages from cloud for a specific session
  */
 export async function fetchCloudMessages(sessionKey: string): Promise<BotMessageRow[]> {
-  const response = await fetch(`${API_BASE}/openclaw/history`, {
+  const response = await fetchWithTimeout(`${API_BASE}/openclaw/history`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionKey }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch messages: ${response.statusText}`);
+    throw new Error(`Failed to fetch messages: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
@@ -94,7 +140,7 @@ export async function fetchCloudMessages(sessionKey: string): Promise<BotMessage
   return messages.map((m: any, index: number) => ({
     session_key: sessionKey,
     msg_id: m.__optimisticId ?? `${sessionKey}_${m.timestamp}_${index}`,
-    role: m.role === 'system' ? 'assistant' : (m.role ?? 'assistant'),
+    role: normalizeRole(m.role),
     content: extractMessageText(m.content),
     raw_content: m.content ? JSON.stringify(m.content) : undefined,
     tool_call_id: m.toolCallId,
@@ -143,10 +189,10 @@ export function rowToBotChatMessage(row: BotMessageRow) {
     role: row.role,
     content: row.content ?? '',
     timestamp: row.timestamp,
-    rawContent: row.raw_content ? JSON.parse(row.raw_content) as BotContentPart[] : undefined,
+    rawContent: safeParseJson<BotContentPart[]>(row.raw_content),
     toolCallId: row.tool_call_id,
     toolName: row.tool_name,
-    details: row.details ? JSON.parse(row.details) : undefined,
+    details: safeParseJson(row.details),
     isError: row.is_error,
   };
 }
