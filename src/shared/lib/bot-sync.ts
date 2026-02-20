@@ -192,7 +192,7 @@ export function rowToBotChatMessage(row: BotMessageRow) {
     rawContent: safeParseJson<BotContentPart[]>(row.raw_content),
     toolCallId: row.tool_call_id,
     toolName: row.tool_name,
-    details: safeParseJson(row.details),
+    details: safeParseJson<Record<string, unknown>>(row.details),
     isError: row.is_error,
   };
 }

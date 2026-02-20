@@ -790,6 +790,14 @@ export function isDatabaseAvailable(): boolean {
   return isTauriSync();
 }
 
+/**
+ * Get the SQLite database instance
+ * Returns null if not running in Tauri environment
+ */
+export async function getDatabase(): Promise<Database | null> {
+  return getSQLiteDatabase();
+}
+
 // ============ Library File Operations ============
 export async function createFile(input: CreateFileInput): Promise<LibraryFile> {
   const now = new Date().toISOString();
