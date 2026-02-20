@@ -179,6 +179,40 @@ pub fn run() {
             "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "create_bot_sessions_and_messages_tables",
+            sql: r#"
+CREATE TABLE IF NOT EXISTS bot_sessions (
+    session_key TEXT PRIMARY KEY,
+    friendly_id TEXT,
+    label TEXT,
+    last_message TEXT,
+    message_count INTEGER DEFAULT 0,
+    updated_at INTEGER,
+    synced_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS bot_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_key TEXT NOT NULL,
+    msg_id TEXT,
+    role TEXT NOT NULL,
+    content TEXT,
+    raw_content TEXT,
+    tool_call_id TEXT,
+    tool_name TEXT,
+    details TEXT,
+    is_error INTEGER DEFAULT 0,
+    timestamp INTEGER,
+    UNIQUE(session_key, msg_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bot_msgs_session ON bot_messages(session_key);
+CREATE INDEX IF NOT EXISTS idx_bot_msgs_timestamp ON bot_messages(timestamp);
+"#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     #[cfg(not(debug_assertions))]
