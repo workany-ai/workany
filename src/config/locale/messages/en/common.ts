@@ -52,6 +52,8 @@ export default {
       'AI model not configured. Please configure a custom model (API URL, API key, model name) before starting a conversation.',
     claudeCodeNotFound:
       'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
+    kimiCliNotFound:
+      'Kimi CLI is not installed or unavailable. Please configure a custom AI model in Settings, or install Kimi CLI (curl -L code.kimi.com/install.sh | bash)',
     configureModel: 'Configure Model',
     apiKeyError:
       'AI model request failed. Please check your model configuration (API URL, API key, model name, etc.)',

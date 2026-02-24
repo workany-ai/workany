@@ -6,6 +6,7 @@ import { DEFAULT_AGENT_PROVIDER, DEFAULT_WORK_DIR } from '@/config/constants';
 import { claudePlugin } from '@/extensions/agent/claude';
 import { codexPlugin } from '@/extensions/agent/codex';
 import { deepagentsPlugin } from '@/extensions/agent/deepagents';
+import { kimiPlugin } from '@/extensions/agent/kimi';
 
 /**
  * Agent SDK Abstraction Layer
@@ -89,6 +90,11 @@ export {
   deepagentsPlugin,
 } from '@/extensions/agent/deepagents';
 
+export {
+  KimiAgent,
+  createKimiAgent,
+  kimiPlugin,
+} from '@/extensions/agent/kimi';
 /**
  * All built-in agent plugins
  */
@@ -96,6 +102,7 @@ export const builtinAgentPlugins: AgentPlugin[] = [
   claudePlugin,
   codexPlugin,
   deepagentsPlugin,
+  kimiPlugin,
 ];
 
 /**
