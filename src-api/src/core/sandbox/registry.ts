@@ -16,6 +16,7 @@ import type {
   SandboxProviderRegistry,
   SandboxProviderType,
 } from '@/core/sandbox/types';
+import { isDeepEqualConfig } from '@/shared/utils/config';
 
 // ============================================================================
 // Sandbox Instance State
@@ -162,8 +163,20 @@ class SandboxRegistry implements SandboxProviderRegistry {
     let instanceData = this.instances.get(type);
 
     if (instanceData && instanceData.state === 'ready') {
-      instanceData.lastUsedAt = new Date();
-      return instanceData.provider;
+      if (isDeepEqualConfig(instanceData.config, config)) {
+        instanceData.lastUsedAt = new Date();
+        return instanceData.provider;
+      }
+      try {
+        await instanceData.provider.shutdown();
+      } catch (error) {
+        console.warn(
+          `[${this.registryName}] Failed to shutdown provider ${type}:`,
+          error
+        );
+      }
+      this.instances.delete(type);
+      instanceData = undefined;
     }
 
     // If instance exists but is in error state, try to recreate

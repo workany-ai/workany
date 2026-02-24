@@ -12,6 +12,7 @@ import type {
   AgentProvider,
   IAgent,
 } from '@/core/agent/types';
+import { isDeepEqualConfig } from '@/shared/utils/config';
 
 // ============================================================================
 // Agent Instance State
@@ -165,10 +166,31 @@ class AgentRegistry {
    */
   async getInstance(type: string, config?: AgentConfig): Promise<IAgent> {
     let instanceData = this.instances.get(type);
+    const effectiveConfig: AgentConfig = {
+      ...(config ?? {}),
+      provider: type as AgentProvider,
+    };
 
     if (instanceData && instanceData.state === 'ready') {
-      instanceData.lastUsedAt = new Date();
-      return instanceData.agent;
+      if (isDeepEqualConfig(instanceData.config, effectiveConfig)) {
+        instanceData.lastUsedAt = new Date();
+        return instanceData.agent;
+      }
+      try {
+        const agentWithShutdown = instanceData.agent as {
+          shutdown?: () => Promise<void>;
+        };
+        if (typeof agentWithShutdown.shutdown === 'function') {
+          await agentWithShutdown.shutdown();
+        }
+      } catch (error) {
+        console.warn(
+          `[${this.registryName}] Failed to shutdown provider ${type}:`,
+          error
+        );
+      }
+      this.instances.delete(type);
+      instanceData = undefined;
     }
 
     // If instance exists but is in error state, try to recreate
@@ -181,7 +203,6 @@ class AgentRegistry {
     }
 
     // Create new instance
-    const effectiveConfig = config || { provider: type as AgentProvider };
     const agent = this.create(type, effectiveConfig);
     instanceData = {
       agent,
