@@ -117,7 +117,10 @@ export class DeepAgentsAdapter extends BaseAgent {
     prompt: string,
     options?: AgentOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     console.log(`[DeepAgents ${session.id}] Direct execution started`);
@@ -191,7 +194,10 @@ export class DeepAgentsAdapter extends BaseAgent {
     prompt: string,
     _options?: PlanOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('planning');
+    const session = this.createSession('planning', {
+      id: _options?.sessionId,
+      abortController: _options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     console.log(`[DeepAgents ${session.id}] Planning phase started`);
@@ -259,7 +265,10 @@ export class DeepAgentsAdapter extends BaseAgent {
    * Execute an approved plan
    */
   async *execute(options: ExecuteOptions): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options.sessionId,
+      abortController: options.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     // Use the plan passed in options, or fall back to local lookup
