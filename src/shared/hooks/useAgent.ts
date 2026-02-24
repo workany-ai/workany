@@ -39,6 +39,11 @@ function getErrorMessages() {
   );
 }
 
+function getPreferredLanguage(): string | undefined {
+  const lang = getSettings().language;
+  return lang && lang.trim() !== '' ? lang : undefined;
+}
+
 console.log(
   `[API] Environment: ${import.meta.env.PROD ? 'production' : 'development'}, Port: ${API_PORT}`
 );
@@ -1780,6 +1785,7 @@ export function useAgent(): UseAgentReturn {
           const workDir = computedSessionFolder || (await getAppDataDir());
           const sandboxConfig = getSandboxConfig();
           const skillsConfig = getSkillsConfig();
+          const language = getPreferredLanguage();
 
           const mcpConfig = getMcpConfig();
 
@@ -1798,6 +1804,7 @@ export function useAgent(): UseAgentReturn {
               images,
               skillsConfig,
               mcpConfig,
+              language,
             }),
             signal: abortController.signal,
           });
@@ -1821,6 +1828,7 @@ export function useAgent(): UseAgentReturn {
             body: JSON.stringify({
               prompt,
               modelConfig,
+              language: getPreferredLanguage(),
             }),
             signal: abortController.signal,
           }
@@ -2032,6 +2040,7 @@ export function useAgent(): UseAgentReturn {
       const sandboxConfig = getSandboxConfig();
       const skillsConfig = getSkillsConfig();
       const mcpConfig = getMcpConfig();
+      const language = getPreferredLanguage();
 
       const response = await fetchWithRetry(
         `${AGENT_SERVER_URL}/agent/execute`,
@@ -2049,6 +2058,7 @@ export function useAgent(): UseAgentReturn {
             sandboxConfig,
             skillsConfig,
             mcpConfig,
+            language,
           }),
           signal: abortController.signal,
         }
