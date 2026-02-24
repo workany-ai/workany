@@ -933,7 +933,7 @@ function TaskDetailContent() {
             <div
               ref={messagesContainerRef}
               className={cn(
-                'relative flex-1 overflow-x-hidden overflow-y-auto',
+                'scrollbar-soft relative flex-1 overflow-x-hidden overflow-y-auto',
                 !isPreviewVisible &&
                   !isRightSidebarVisible &&
                   'flex justify-center'
