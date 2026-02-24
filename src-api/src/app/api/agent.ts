@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 
 import type { SandboxConfig } from '@/core/agent/types';
 import {
+  createJob,
   createSession,
   deleteSession,
+  getJob,
   getPlan,
   getSession,
   runAgent,
@@ -137,6 +139,7 @@ agent.post('/execute', async (c) => {
 });
 
 // Legacy: Direct execution (plan + execute in one call)
+// NOW: Returns { jobId, sessionId } immediately; SSE consumed via GET /stream/:jobId
 agent.post('/', async (c) => {
   const body = await c.req.json<AgentRequest>();
 
@@ -178,20 +181,100 @@ agent.post('/', async (c) => {
   }
 
   const session = createSession();
-  const readable = createSSEStream(
-    runAgent(
-      body.prompt,
-      session,
-      body.conversation,
-      body.workDir,
-      body.taskId,
-      body.modelConfig,
-      body.sandboxConfig,
-      body.images,
-      body.skillsConfig,
-      body.mcpConfig
-    )
+  const generator = runAgent(
+    body.prompt,
+    session,
+    body.conversation,
+    body.workDir,
+    body.taskId,
+    body.modelConfig,
+    body.sandboxConfig,
+    body.images,
+    body.skillsConfig,
+    body.mcpConfig
   );
+
+  // Create background job – generator runs asynchronously
+  const jobId = createJob(generator, session.id);
+
+  console.log('[AgentAPI] POST / created job:', jobId, 'sessionId:', session.id);
+
+  // Return immediately – client polls SSE via GET /stream/:jobId
+  return c.json({ jobId, sessionId: session.id });
+});
+
+// SSE stream for a background job
+agent.get('/stream/:jobId', async (c) => {
+  const jobId = c.req.param('jobId');
+  const job = getJob(jobId);
+
+  if (!job) {
+    return c.json({ error: 'Job not found or expired' }, 404);
+  }
+
+  const encoder = new TextEncoder();
+  let cursor = 0; // Next unread index in job.buffer
+
+  const readable = new ReadableStream({
+    async start(controller) {
+      const send = (msg: unknown) => {
+        const data = `data: ${JSON.stringify(msg)}\n\n`;
+        controller.enqueue(encoder.encode(data));
+      };
+
+      // SSE heartbeat – keeps WKWebView connection alive during Claude thinking
+      // WKWebView (macOS Tauri) disconnects idle SSE connections after ~60s
+      const HEARTBEAT_INTERVAL_MS = 15_000;
+      let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+      const startHeartbeat = () => {
+        heartbeatTimer = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(': heartbeat\n\n'));
+          } catch {
+            // Stream may have been closed
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+          }
+        }, HEARTBEAT_INTERVAL_MS);
+      };
+
+      const stopHeartbeat = () => {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+      };
+
+      startHeartbeat();
+
+      try {
+        // Stream all buffered + future messages
+        while (true) {
+          // Send all messages up to the current buffer length
+          while (cursor < job.buffer.length) {
+            send(job.buffer[cursor]);
+            cursor++;
+          }
+
+          if (job.isDone) {
+            // If there was an error, emit an error event
+            if (job.error) {
+              send({ type: 'error', message: job.error });
+            }
+            break;
+          }
+
+          // Wait for the next message from job.subscribers
+          await new Promise<void>((resolve) => {
+            job.subscribers.add(resolve);
+          });
+        }
+      } finally {
+        stopHeartbeat();
+        controller.close();
+      }
+    },
+  });
 
   return new Response(readable, { headers: SSE_HEADERS });
 });

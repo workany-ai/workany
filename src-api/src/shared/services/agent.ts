@@ -35,6 +35,86 @@ const activeSessions = new Map<string, { abortController: AbortController }>();
 // Global plan store (shared across all agent instances)
 const globalPlanStore = new Map<string, TaskPlan>();
 
+// ============================================================================
+// Job Store – supports decoupled POST (create) / GET (stream) pattern
+// Avoids WKWebView SSE timeout by separating job creation from SSE streaming
+// ============================================================================
+
+interface AgentJob {
+  sessionId: string;
+  buffer: AgentMessage[];
+  isDone: boolean;
+  error?: string;
+  createdAt: number;
+  /** Waiting subscribers get notified each time a new message arrives */
+  subscribers: Set<() => void>;
+}
+
+const jobStore = new Map<string, AgentJob>();
+
+/** Create a new job and start running the generator in the background */
+export function createJob(
+  generator: AsyncGenerator<AgentMessage>,
+  sessionId: string
+): string {
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const job: AgentJob = {
+    sessionId,
+    buffer: [],
+    isDone: false,
+    createdAt: Date.now(),
+    subscribers: new Set(),
+  };
+  jobStore.set(jobId, job);
+
+  // Run generator in background – do NOT await
+  (async () => {
+    try {
+      for await (const message of generator) {
+        job.buffer.push(message);
+        // Notify all waiting subscribers
+        for (const notify of job.subscribers) {
+          notify();
+        }
+      }
+    } catch (err) {
+      job.error = err instanceof Error ? err.message : String(err);
+    } finally {
+      job.isDone = true;
+      // Final notification so subscribers can finish
+      for (const notify of job.subscribers) {
+        notify();
+      }
+      job.subscribers.clear();
+    }
+  })();
+
+  return jobId;
+}
+
+/** Get an existing job */
+export function getJob(jobId: string): AgentJob | undefined {
+  return jobStore.get(jobId);
+}
+
+/** Delete a job */
+export function deleteJob(jobId: string): void {
+  jobStore.delete(jobId);
+}
+
+/** Clean up jobs older than maxAgeMs (default 30 min) */
+export function cleanupJobs(maxAgeMs = 30 * 60 * 1000): void {
+  const now = Date.now();
+  for (const [id, job] of jobStore) {
+    if (job.isDone && now - job.createdAt > maxAgeMs) {
+      jobStore.delete(id);
+    }
+  }
+}
+
+// Run cleanup every 10 minutes
+setInterval(cleanupJobs, 10 * 60 * 1000);
+
 /**
  * Get or create the global agent instance
  * If modelConfig is provided, creates a new agent with those settings

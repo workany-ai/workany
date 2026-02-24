@@ -1064,9 +1064,10 @@ export async function upsertBotMessage(
 }
 
 /**
- * Sync bot messages from cloud with deduplication
+ * Sync bot messages from cloud with deduplication (legacy, task-based API)
+ * @deprecated Use syncBotMessages from bot-sync.ts which operates on bot_messages table instead
  */
-export async function syncBotMessages(
+export async function syncBotTaskMessages(
   taskId: string,
   messages: Array<{
     role: string;
@@ -1122,7 +1123,10 @@ export async function syncBotMessages(
 /**
  * Upsert a bot session to the database
  */
-export async function upsertBotSession(db: Database, session: BotSessionRow): Promise<void> {
+export async function upsertBotSession(
+  db: Database,
+  session: BotSessionRow
+): Promise<void> {
   await db.execute(
     `INSERT OR REPLACE INTO bot_sessions
      (session_key, friendly_id, label, last_message, message_count, updated_at, synced_at)
@@ -1142,7 +1146,10 @@ export async function upsertBotSession(db: Database, session: BotSessionRow): Pr
 /**
  * Upsert multiple bot sessions
  */
-export async function upsertBotSessions(db: Database, sessions: BotSessionRow[]): Promise<void> {
+export async function upsertBotSessions(
+  db: Database,
+  sessions: BotSessionRow[]
+): Promise<void> {
   for (const session of sessions) {
     await upsertBotSession(db, session);
   }
@@ -1161,7 +1168,10 @@ export async function getBotSessions(db: Database): Promise<BotSessionRow[]> {
 /**
  * Get a single bot session by key
  */
-export async function getBotSession(db: Database, sessionKey: string): Promise<BotSessionRow | null> {
+export async function getBotSession(
+  db: Database,
+  sessionKey: string
+): Promise<BotSessionRow | null> {
   const result = await db.select<BotSessionRow[]>(
     'SELECT * FROM bot_sessions WHERE session_key = ?',
     [sessionKey]
@@ -1172,9 +1182,16 @@ export async function getBotSession(db: Database, sessionKey: string): Promise<B
 /**
  * Delete a bot session and its messages
  */
-export async function deleteBotSession(db: Database, sessionKey: string): Promise<void> {
-  await db.execute('DELETE FROM bot_messages WHERE session_key = ?', [sessionKey]);
-  await db.execute('DELETE FROM bot_sessions WHERE session_key = ?', [sessionKey]);
+export async function deleteBotSession(
+  db: Database,
+  sessionKey: string
+): Promise<void> {
+  await db.execute('DELETE FROM bot_messages WHERE session_key = ?', [
+    sessionKey,
+  ]);
+  await db.execute('DELETE FROM bot_sessions WHERE session_key = ?', [
+    sessionKey,
+  ]);
 }
 
 /**
@@ -1220,19 +1237,28 @@ export async function updateBotSessionMeta(
 /**
  * Generate a unique message ID for deduplication
  */
-export function generateBotMsgId(sessionKey: string, timestamp: number, role: string): string {
+export function generateBotMsgId(
+  sessionKey: string,
+  timestamp: number,
+  role: string
+): string {
   return `${sessionKey}_${timestamp}_${role}`;
 }
 
 /**
  * Upsert a bot message to the database
  */
-export async function upsertBotMessageRow(db: Database, message: BotMessageRow): Promise<void> {
-  const msgId = message.msg_id ?? generateBotMsgId(
-    message.session_key,
-    message.timestamp ?? Date.now(),
-    message.role
-  );
+export async function upsertBotMessageRow(
+  db: Database,
+  message: BotMessageRow
+): Promise<void> {
+  const msgId =
+    message.msg_id ??
+    generateBotMsgId(
+      message.session_key,
+      message.timestamp ?? Date.now(),
+      message.role
+    );
 
   await db.execute(
     `INSERT OR REPLACE INTO bot_messages
@@ -1256,7 +1282,10 @@ export async function upsertBotMessageRow(db: Database, message: BotMessageRow):
 /**
  * Upsert multiple bot messages
  */
-export async function upsertBotMessageRows(db: Database, messages: BotMessageRow[]): Promise<void> {
+export async function upsertBotMessageRows(
+  db: Database,
+  messages: BotMessageRow[]
+): Promise<void> {
   for (const message of messages) {
     await upsertBotMessageRow(db, message);
   }
@@ -1265,7 +1294,10 @@ export async function upsertBotMessageRows(db: Database, messages: BotMessageRow
 /**
  * Get all messages for a bot session
  */
-export async function getBotMessages(db: Database, sessionKey: string): Promise<BotMessageRow[]> {
+export async function getBotMessages(
+  db: Database,
+  sessionKey: string
+): Promise<BotMessageRow[]> {
   const result = await db.select<BotMessageRow[]>(
     'SELECT * FROM bot_messages WHERE session_key = ? ORDER BY timestamp ASC',
     [sessionKey]
@@ -1276,14 +1308,22 @@ export async function getBotMessages(db: Database, sessionKey: string): Promise<
 /**
  * Clear all messages for a bot session
  */
-export async function clearBotMessages(db: Database, sessionKey: string): Promise<void> {
-  await db.execute('DELETE FROM bot_messages WHERE session_key = ?', [sessionKey]);
+export async function clearBotMessages(
+  db: Database,
+  sessionKey: string
+): Promise<void> {
+  await db.execute('DELETE FROM bot_messages WHERE session_key = ?', [
+    sessionKey,
+  ]);
 }
 
 /**
  * Get message count for a session
  */
-export async function getBotMessageCount(db: Database, sessionKey: string): Promise<number> {
+export async function getBotMessageCount(
+  db: Database,
+  sessionKey: string
+): Promise<number> {
   const result = await db.select<{ count: number }[]>(
     'SELECT COUNT(*) as count FROM bot_messages WHERE session_key = ?',
     [sessionKey]

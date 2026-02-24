@@ -97,14 +97,21 @@ async function fetchWithRetry(
         throw lastError;
       }
 
-      // Only retry on network errors
+      // Only retry on network errors (not timeouts or abort)
       const isNetworkError =
         errorMessage === 'Load failed' ||
         errorMessage === 'Failed to fetch' ||
         errorMessage.includes('NetworkError') ||
         errorMessage.includes('ECONNREFUSED');
 
-      if (!isNetworkError) {
+      // Do NOT retry on timeout errors – these mean the server is busy,
+      // not that the connection was refused
+      const isTimeout =
+        errorMessage.includes('timed out') ||
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('Timeout');
+
+      if (!isNetworkError || isTimeout) {
         throw lastError;
       }
 
@@ -1796,24 +1803,47 @@ export function useAgent(): UseAgentReturn {
 
           const mcpConfig = getMcpConfig();
 
-          // Use direct execution endpoint with images
-          const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              prompt,
-              workDir,
-              taskId: currentTaskId,
-              modelConfig,
-              sandboxConfig,
-              images,
-              skillsConfig,
-              mcpConfig,
-            }),
-            signal: abortController.signal,
-          });
+          // Use direct execution endpoint with images (two-step: POST → GET SSE)
+          const jobResponse = await fetchWithRetry(
+            `${AGENT_SERVER_URL}/agent`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                prompt,
+                workDir,
+                taskId: currentTaskId,
+                modelConfig,
+                sandboxConfig,
+                images,
+                skillsConfig,
+                mcpConfig,
+              }),
+              signal: abortController.signal,
+            }
+          );
+
+          if (!jobResponse.ok) {
+            throw new Error(`Server error: ${jobResponse.status}`);
+          }
+
+          const jobData = (await jobResponse.json()) as {
+            jobId: string;
+            sessionId: string;
+          };
+          console.log('[useAgent] Got jobId:', jobData.jobId);
+          sessionIdRef.current = jobData.sessionId; // Set immediately so /stop can work
+
+          // Step 2: GET SSE stream (no WKWebView timeout for GET SSE)
+          const response = await fetch(
+            `${AGENT_SERVER_URL}/agent/stream/${jobData.jobId}`,
+            {
+              method: 'GET',
+              signal: abortController.signal,
+            }
+          );
 
           if (!response.ok) {
             throw new Error(`Server error: ${response.status}`);
@@ -2293,8 +2323,8 @@ export function useAgent(): UseAgentReturn {
           console.log('[useAgent] Valid images for API:', images?.length || 0);
         }
 
-        // Send conversation with full history
-        const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
+        // Step 1: POST to create job (returns immediately with jobId)
+        const jobResponse = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2312,6 +2342,29 @@ export function useAgent(): UseAgentReturn {
           }),
           signal: abortController.signal,
         });
+
+        if (!jobResponse.ok) {
+          throw new Error(`Server error: ${jobResponse.status}`);
+        }
+
+        const jobData = (await jobResponse.json()) as {
+          jobId: string;
+          sessionId: string;
+        };
+        console.log(
+          '[useAgent] continueConversation got jobId:',
+          jobData.jobId
+        );
+        sessionIdRef.current = jobData.sessionId; // Set immediately so /stop can work
+
+        // Step 2: GET SSE stream (avoids WKWebView timeout on long SSE connections)
+        const response = await fetch(
+          `${AGENT_SERVER_URL}/agent/stream/${jobData.jobId}`,
+          {
+            method: 'GET',
+            signal: abortController.signal,
+          }
+        );
 
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);

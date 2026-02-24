@@ -1,7 +1,6 @@
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -66,16 +65,6 @@ interface ToolSelectionContextType {
 const ToolSelectionContext = createContext<ToolSelectionContextType | null>(
   null
 );
-
-export function useToolSelection() {
-  const context = useContext(ToolSelectionContext);
-  if (!context) {
-    throw new Error(
-      'useToolSelection must be used within ToolSelectionContext'
-    );
-  }
-  return context;
-}
 
 export function TaskDetailPage() {
   return <TaskDetailContent />;

@@ -5,15 +5,16 @@
  */
 
 import {
-  getBotSessions,
-  upsertBotSessions,
   getBotMessages,
-  upsertBotMessageRows,
+  getBotSessions,
   updateBotSessionMeta,
+  upsertBotMessageRows,
+  upsertBotSessions,
 } from '@/shared/db/database';
 import type { Database } from '@/shared/db/database';
-import type { BotSessionRow, BotMessageRow } from '@/shared/db/types';
+import type { BotMessageRow, BotSessionRow } from '@/shared/db/types';
 import type { BotContentPart } from '@/shared/hooks/useBotChats';
+import { getOpenClawConfig } from '@/shared/lib/bot-storage';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:2026';
 
@@ -33,7 +34,10 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
     return response;
   } finally {
     clearTimeout(timeoutId);
@@ -43,11 +47,18 @@ async function fetchWithTimeout(
 /**
  * Normalize role string to valid type
  */
-function normalizeRole(role: string | undefined): 'user' | 'assistant' | 'toolResult' {
+function normalizeRole(
+  role: string | undefined
+): 'user' | 'assistant' | 'toolResult' {
   if (role === 'user' || role === 'assistant' || role === 'toolResult') {
     return role;
   }
-  // Default to assistant for unknown roles including 'system'
+  // Default to assistant for unknown roles - log warning for unexpected roles
+  if (role && role !== 'system') {
+    console.warn(
+      `[bot-sync] Unknown message role: "${role}", defaulting to "assistant"`
+    );
+  }
   return 'assistant';
 }
 
@@ -77,14 +88,21 @@ export interface BotSyncState {
  * Fetch sessions from cloud
  */
 export async function fetchCloudSessions(): Promise<BotSessionRow[]> {
+  const config = getOpenClawConfig();
   const response = await fetchWithTimeout(`${API_BASE}/openclaw/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ includeLastMessage: true }),
+    body: JSON.stringify({
+      gatewayUrl: config.gatewayUrl,
+      authToken: config.authToken,
+      includeLastMessage: true,
+    }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Failed to fetch sessions: ${response.status} ${response.statusText}`
+    );
   }
 
   const data = await response.json();
@@ -123,15 +141,24 @@ export async function syncBotSessions(db: Database): Promise<BotSessionRow[]> {
 /**
  * Fetch messages from cloud for a specific session
  */
-export async function fetchCloudMessages(sessionKey: string): Promise<BotMessageRow[]> {
+export async function fetchCloudMessages(
+  sessionKey: string
+): Promise<BotMessageRow[]> {
+  const config = getOpenClawConfig();
   const response = await fetchWithTimeout(`${API_BASE}/openclaw/history`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionKey }),
+    body: JSON.stringify({
+      sessionKey,
+      gatewayUrl: config.gatewayUrl,
+      authToken: config.authToken,
+    }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch messages: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Failed to fetch messages: ${response.status} ${response.statusText}`
+    );
   }
 
   const data = await response.json();
@@ -139,7 +166,10 @@ export async function fetchCloudMessages(sessionKey: string): Promise<BotMessage
 
   return messages.map((m: any, index: number) => ({
     session_key: sessionKey,
-    msg_id: m.__optimisticId ?? `${sessionKey}_${m.timestamp}_${index}`,
+    // Prefer server-provided id; fallback includes index to prevent same-timestamp collisions
+    msg_id:
+      m.__optimisticId ??
+      `${sessionKey}_${m.timestamp ?? Date.now()}_${m.role}_${index}`,
     role: normalizeRole(m.role),
     content: extractMessageText(m.content),
     raw_content: m.content ? JSON.stringify(m.content) : undefined,
@@ -200,7 +230,10 @@ export function rowToBotChatMessage(row: BotMessageRow) {
 /**
  * Convert BotSessionRow to BotChatSession format
  */
-export function rowToBotChatSession(row: BotSessionRow, messages: BotMessageRow[] = []) {
+export function rowToBotChatSession(
+  row: BotSessionRow,
+  messages: BotMessageRow[] = []
+) {
   return {
     sessionKey: row.session_key,
     friendlyId: row.friendly_id,

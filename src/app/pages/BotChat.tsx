@@ -78,13 +78,20 @@ function BotChatContent() {
   // Sidebar state
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
-  const { sessions: botChats, refreshSessions, syncState, syncMessages } = useBotChatContext();
+  const {
+    sessions: botChats,
+    refreshSessions,
+    syncState,
+    syncMessages,
+  } = useBotChatContext();
 
   // State for showing all bot chats (covers main content)
   const [showAllChatsPanel, setShowAllChatsPanel] = useState(false);
 
   // Track if current session is syncing from cloud
-  const isCurrentSessionSyncing = syncState.syncingSessionKey === sessionKey;
+  // Guard against empty sessionKey matching a null syncingSessionKey
+  const isCurrentSessionSyncing =
+    Boolean(sessionKey) && syncState.syncingSessionKey === sessionKey;
 
   // Set left sidebar to bot tab when this page loads
   useEffect(() => {
@@ -292,6 +299,12 @@ function BotChatContent() {
         setTimeout(async () => {
           try {
             const openclawConfig = getOpenClawConfig();
+            if (!openclawConfig?.gatewayUrl) {
+              console.warn(
+                '[BotChat] No OpenClaw config - skipping history fetch after lifecycle.end'
+              );
+              return;
+            }
             const response = await fetch(`${API_BASE_URL}/openclaw/history`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -511,6 +524,11 @@ function BotChatContent() {
     setIsLoadingHistory(true);
     try {
       const openclawConfig = getOpenClawConfig();
+      if (!openclawConfig?.gatewayUrl) {
+        console.warn('[BotChat] No OpenClaw config, skipping history fetch');
+        setIsLoadingHistory(false);
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/openclaw/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -600,25 +618,30 @@ function BotChatContent() {
 
   // Update messages when sync completes for current session
   useEffect(() => {
+    // Only react when a specific session's sync just completed (syncingSessionKey went null→null
+    // but lastSyncTime changed), AND that session is the one currently displayed.
+    // We track which session just finished by keeping a ref.
     if (
       syncState.syncingSessionKey === null &&
       syncState.lastSyncTime &&
       sessionKey
     ) {
-      // Sync just completed - check if we have updated messages from context
+      // Sync just completed - check if messages in context belong to THIS session
       const session = botChats.find((s) => s.sessionKey === sessionKey);
       if (session && session.messages && session.messages.length > 0) {
-        const updatedMessages: BotMessage[] = session.messages.map((m, index) => ({
-          id: `synced_${sessionKey}_${index}`,
-          role: m.role,
-          content: m.content ?? '',
-          timestamp: new Date(m.timestamp ?? Date.now()),
-          rawContent: m.rawContent,
-          toolCallId: m.toolCallId,
-          toolName: m.toolName,
-          details: m.details,
-          isError: m.isError,
-        }));
+        const updatedMessages: BotMessage[] = session.messages.map(
+          (m, index) => ({
+            id: `synced_${sessionKey}_${index}`,
+            role: m.role,
+            content: m.content ?? '',
+            timestamp: new Date(m.timestamp ?? Date.now()),
+            rawContent: m.rawContent,
+            toolCallId: m.toolCallId,
+            toolName: m.toolName,
+            details: m.details,
+            isError: m.isError,
+          })
+        );
         console.log(
           '[BotChat] Updated messages from sync:',
           updatedMessages.length
@@ -627,7 +650,10 @@ function BotChatContent() {
         saveBotMessages(updatedMessages);
       }
     }
-  }, [syncState.syncingSessionKey, syncState.lastSyncTime, sessionKey, botChats]);
+    // NOTE: Intentionally omit `botChats` from deps to avoid re-running on every session list update.
+    // We only care about synced messages for the current sessionKey when sync finishes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncState.syncingSessionKey, syncState.lastSyncTime, sessionKey]);
 
   // Auto-scroll
   useEffect(() => {
@@ -637,104 +663,104 @@ function BotChatContent() {
     }
   }, [messages.length, isLoading]);
 
-  const handleSubmit = async (
-    text: string,
-    _attachments?: MessageAttachment[]
-  ) => {
-    if (!text.trim() || isLoading) return;
+  const handleSubmit = useCallback(
+    async (text: string, _attachments?: MessageAttachment[]) => {
+      if (!text.trim() || isLoading) return;
 
-    const userMessage: BotMessage = {
-      id: `user_${Date.now()}`,
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
-    };
-
-    // Immediately add user message to UI
-    setMessages((prev) => [...prev, userMessage]);
-
-    setLoadingWithTimeout(true);
-
-    try {
-      const openclawConfig = getOpenClawConfig();
-
-      // Send message (async - returns immediately)
-      const response = await fetch(`${API_BASE_URL}/openclaw/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          sessionId: sessionKey,
-          gatewayUrl: openclawConfig.gatewayUrl,
-          authToken: openclawConfig.authToken,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      const data = await response.json();
-
-      if (data.status === 'accepted') {
-        console.log(
-          '[BotChat] Message accepted, waiting for WebSocket event...'
-        );
-        // The response will come via WebSocket event
-      } else if (data.message) {
-        // Fallback for sync response (backward compatibility)
-        const botChatMessage = convertOpenClawMessage(data.message);
-        const assistantMessage: BotMessage = {
-          id: `assistant_${Date.now()}`,
-          role: botChatMessage.role,
-          content: botChatMessage.content,
-          timestamp: new Date(botChatMessage.timestamp || Date.now()),
-          rawContent: botChatMessage.rawContent,
-          toolCallId: botChatMessage.toolCallId,
-          toolName: botChatMessage.toolName,
-          details: botChatMessage.details,
-          isError: botChatMessage.isError,
-        };
-        setMessages((prev) => {
-          const updated = [...prev, assistantMessage];
-          saveBotMessages(updated);
-          return updated;
-        });
-        setLoadingWithTimeout(false);
-      } else if (data.reply) {
-        // Fallback for older API response
-        const assistantMessage: BotMessage = {
-          id: `assistant_${Date.now()}`,
-          role: 'assistant',
-          content: data.reply,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => {
-          const updated = [...prev, assistantMessage];
-          saveBotMessages(updated);
-          return updated;
-        });
-        setLoadingWithTimeout(false);
-      } else if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Refresh sessions list to update sidebar
-      refreshSessions();
-    } catch (error) {
-      console.error('[BotChat] Error:', error);
-      const errorMessage: BotMessage = {
-        id: `error_${Date.now()}`,
-        role: 'assistant',
-        content:
-          t.common.botChatError ||
-          '抱歉，发生了错误。请确保 OpenClaw Gateway 正在运行。',
+      const userMessage: BotMessage = {
+        id: `user_${Date.now()}`,
+        role: 'user',
+        content: text.trim(),
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
-      setLoadingWithTimeout(false);
-    }
-  };
+
+      // Immediately add user message to UI
+      setMessages((prev) => [...prev, userMessage]);
+
+      setLoadingWithTimeout(true);
+
+      try {
+        const openclawConfig = getOpenClawConfig();
+
+        // Send message (async - returns immediately)
+        const response = await fetch(`${API_BASE_URL}/openclaw/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            sessionId: sessionKey,
+            gatewayUrl: openclawConfig.gatewayUrl,
+            authToken: openclawConfig.authToken,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to send message');
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'accepted') {
+          console.log(
+            '[BotChat] Message accepted, waiting for WebSocket event...'
+          );
+          // The response will come via WebSocket event
+        } else if (data.message) {
+          // Fallback for sync response (backward compatibility)
+          const botChatMessage = convertOpenClawMessage(data.message);
+          const assistantMessage: BotMessage = {
+            id: `assistant_${Date.now()}`,
+            role: botChatMessage.role,
+            content: botChatMessage.content,
+            timestamp: new Date(botChatMessage.timestamp || Date.now()),
+            rawContent: botChatMessage.rawContent,
+            toolCallId: botChatMessage.toolCallId,
+            toolName: botChatMessage.toolName,
+            details: botChatMessage.details,
+            isError: botChatMessage.isError,
+          };
+          setMessages((prev) => {
+            const updated = [...prev, assistantMessage];
+            saveBotMessages(updated);
+            return updated;
+          });
+          setLoadingWithTimeout(false);
+        } else if (data.reply) {
+          // Fallback for older API response
+          const assistantMessage: BotMessage = {
+            id: `assistant_${Date.now()}`,
+            role: 'assistant',
+            content: data.reply,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => {
+            const updated = [...prev, assistantMessage];
+            saveBotMessages(updated);
+            return updated;
+          });
+          setLoadingWithTimeout(false);
+        } else if (data.error) {
+          throw new Error(data.error);
+        }
+
+        // Refresh sessions list to update sidebar
+        refreshSessions();
+      } catch (error) {
+        console.error('[BotChat] Error:', error);
+        const errorMessage: BotMessage = {
+          id: `error_${Date.now()}`,
+          role: 'assistant',
+          content:
+            t.common.botChatError ||
+            '抱歉，发生了错误。请确保 OpenClaw Gateway 正在运行。',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        setLoadingWithTimeout(false);
+      }
+    },
+    [isLoading, sessionKey, setLoadingWithTimeout, refreshSessions, t]
+  );
 
   // Handle initial prompt - must be after handleSubmit definition
   useEffect(() => {
@@ -843,7 +869,7 @@ function BotChatContent() {
           <>
             {/* Sync indicator when syncing from cloud */}
             {isCurrentSessionSyncing && (
-              <div className="bg-muted/50 flex items-center justify-center gap-2 px-4 py-1.5 text-xs text-muted-foreground">
+              <div className="bg-muted/50 text-muted-foreground flex items-center justify-center gap-2 px-4 py-1.5 text-xs">
                 <Loader2 className="size-3 animate-spin" />
                 <span>{t.common.loading || 'Loading...'}</span>
               </div>

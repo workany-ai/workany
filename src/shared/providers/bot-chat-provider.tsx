@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -7,19 +8,18 @@ import {
   type ReactNode,
 } from 'react';
 import { API_BASE_URL } from '@/config';
+import { getBotSessions, getDatabase } from '@/shared/db/database';
 import { type BotChatSession } from '@/shared/hooks/useBotChats';
 import {
   convertOpenClawMessage,
   generateTitleFromContent,
   getLastMessagePreview,
 } from '@/shared/lib/bot-message-utils';
-import { getDatabase } from '@/shared/db/database';
-import { getBotSessions } from '@/shared/db/database';
 import {
-  syncBotSessions,
-  syncBotMessages,
-  rowToBotChatSession,
   rowToBotChatMessage,
+  rowToBotChatSession,
+  syncBotMessages,
+  syncBotSessions,
   type BotSyncState,
 } from '@/shared/lib/bot-sync';
 
@@ -99,84 +99,9 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Sync sessions from cloud to local database
-   */
-  const syncSessionsFromCloud = async function (): Promise<void> {
-    setSyncState((prev) => ({ ...prev, isSyncingSessions: true, syncError: null }));
-
-    try {
-      const db = await getDatabase();
-      if (!db) {
-        // No database available, fallback to cloud-only fetch
-        await fetchBotChatsFromCloud();
-        return;
-      }
-
-      const sessionRows = await syncBotSessions(db);
-      const chatSessions = sessionRows.map((row) => rowToBotChatSession(row));
-
-      // Sort by updatedAt
-      chatSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      setSessions(chatSessions);
-
-      setSyncState((prev) => ({
-        ...prev,
-        isSyncingSessions: false,
-        lastSyncTime: Date.now(),
-      }));
-    } catch (error) {
-      console.error('[BotChatProvider] Failed to sync sessions:', error);
-      setSyncState((prev) => ({
-        ...prev,
-        isSyncingSessions: false,
-        syncError: error instanceof Error ? error.message : 'Failed to sync sessions',
-      }));
-    }
-  };
-
-  /**
-   * Sync messages for a specific session from cloud to local database
-   */
-  const syncMessagesForSession = async function (sessionKey: string): Promise<void> {
-    setSyncState((prev) => ({ ...prev, syncingSessionKey: sessionKey, syncError: null }));
-
-    try {
-      const db = await getDatabase();
-      if (!db) {
-        return;
-      }
-
-      const messageRows = await syncBotMessages(db, sessionKey);
-
-      // Update the session with the synced messages
-      setSessions((prevSessions) =>
-        prevSessions.map((session) => {
-          if (session.sessionKey === sessionKey) {
-            return {
-              ...session,
-              messages: messageRows.map(rowToBotChatMessage),
-              messageCount: messageRows.length,
-            };
-          }
-          return session;
-        })
-      );
-
-      setSyncState((prev) => ({ ...prev, syncingSessionKey: null }));
-    } catch (error) {
-      console.error('[BotChatProvider] Failed to sync messages:', error);
-      setSyncState((prev) => ({
-        ...prev,
-        syncingSessionKey: null,
-        syncError: error instanceof Error ? error.message : 'Failed to sync messages',
-      }));
-    }
-  };
-
-  /**
    * Fetch sessions from cloud only (fallback when no database)
    */
-  const fetchBotChatsFromCloud = async function (): Promise<void> {
+  const fetchBotChatsFromCloud = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     try {
       const config = getOpenClawConfig();
@@ -244,7 +169,93 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  /**
+   * Sync sessions from cloud to local database
+   */
+  const syncSessionsFromCloud = useCallback(async (): Promise<void> => {
+    setSyncState((prev) => ({
+      ...prev,
+      isSyncingSessions: true,
+      syncError: null,
+    }));
+
+    try {
+      const db = await getDatabase();
+      if (!db) {
+        // No database available, fallback to cloud-only fetch
+        await fetchBotChatsFromCloud();
+        return;
+      }
+
+      const sessionRows = await syncBotSessions(db);
+      const chatSessions = sessionRows.map((row) => rowToBotChatSession(row));
+
+      chatSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      setSessions(chatSessions);
+
+      setSyncState((prev) => ({
+        ...prev,
+        isSyncingSessions: false,
+        lastSyncTime: Date.now(),
+      }));
+    } catch (error) {
+      console.error('[BotChatProvider] Failed to sync sessions:', error);
+      setSyncState((prev) => ({
+        ...prev,
+        isSyncingSessions: false,
+        syncError:
+          error instanceof Error ? error.message : 'Failed to sync sessions',
+      }));
+    }
+  }, [fetchBotChatsFromCloud]);
+
+  /**
+   * Sync messages for a specific session from cloud to local database
+   */
+  const syncMessagesForSession = useCallback(
+    async (sessionKey: string): Promise<void> => {
+      setSyncState((prev) => ({
+        ...prev,
+        syncingSessionKey: sessionKey,
+        syncError: null,
+      }));
+
+      try {
+        const db = await getDatabase();
+        if (!db) {
+          return;
+        }
+
+        const messageRows = await syncBotMessages(db, sessionKey);
+
+        setSessions((prevSessions) =>
+          prevSessions.map((session) => {
+            if (session.sessionKey === sessionKey) {
+              return {
+                ...session,
+                messages: messageRows.map(rowToBotChatMessage),
+                messageCount: messageRows.length,
+              };
+            }
+            return session;
+          })
+        );
+
+        setSyncState((prev) => ({ ...prev, syncingSessionKey: null }));
+      } catch (error) {
+        console.error('[BotChatProvider] Failed to sync messages:', error);
+        setSyncState((prev) => ({
+          ...prev,
+          syncingSessionKey: null,
+          syncError:
+            error instanceof Error ? error.message : 'Failed to sync messages',
+        }));
+      }
+    },
+    []
+  );
 
   /**
    * Initialize: Load local sessions first, then sync from cloud if configured
@@ -259,26 +270,25 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
       // First, try to load local sessions
       const localSessions = await loadLocalSessions();
       if (!isMounted) return;
+
       if (localSessions.length > 0) {
-        // Sort by updatedAt
+        // Show local sessions immediately
         localSessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
         setSessions(localSessions);
         setIsLoading(false);
-      }
 
-      // Then, sync from cloud in background if OpenClaw is configured
-      const config = getOpenClawConfig();
-      if (config) {
-        // If we had local sessions, sync in background without blocking UI
-        if (localSessions.length > 0) {
+        // Fire-and-forget background sync from cloud if configured
+        const config = getOpenClawConfig();
+        if (config) {
           syncSessionsFromCloud();
-        } else {
-          // No local sessions, need to wait for cloud fetch
-          await syncSessionsFromCloud();
-          if (!isMounted) return;
-          setIsLoading(false);
         }
       } else {
+        // No local cache - must fetch from cloud before showing UI
+        const config = getOpenClawConfig();
+        if (config) {
+          await syncSessionsFromCloud();
+        }
+        if (!isMounted) return;
         setIsLoading(false);
       }
     };
@@ -300,7 +310,13 @@ export function BotChatProvider({ children }: { children: ReactNode }) {
       syncSessions: syncSessionsFromCloud,
       syncMessages: syncMessagesForSession,
     }),
-    [sessions, isLoading, syncState]
+    [
+      sessions,
+      isLoading,
+      syncState,
+      syncSessionsFromCloud,
+      syncMessagesForSession,
+    ]
   );
 
   return (
