@@ -11,35 +11,86 @@ import { getSandboxRegistry } from '@/core/sandbox/registry';
 import { getConfigLoader } from '@/config/loader';
 import { getProviderManager } from '@/shared/provider/manager';
 
-const providersRoutes = new Hono();
+// ============================================================================
+// Constants
+// ============================================================================
+
+const API_TIMEOUT_MS = 60000;
+const DEFAULT_TEST_MODEL = 'gpt-3.5-turbo';
+const DETECT_TEST_MESSAGE = 'OK';
 
 // ============================================================================
-// Sandbox Provider Routes
+// Types
 // ============================================================================
+
+interface ProviderSwitchBody {
+  type: string;
+  config?: Record<string, unknown>;
+}
+
+interface ProviderMetadataWithStatus {
+  type: string;
+  name: string;
+  description: string;
+  available: boolean;
+  current: boolean;
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function formatProviderMetadata(
+  metadata: Array<{ type: string; name: string; description?: string }>,
+  availableTypes: string[],
+  currentType: string | null
+): ProviderMetadataWithStatus[] {
+  return metadata.map((m) => ({
+    ...m,
+    description: m.description || '',
+    available: availableTypes.includes(m.type),
+    current: currentType === m.type,
+  }));
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
+// ============================================================================
+// Routes
+// ============================================================================
+
+const providersRoutes = new Hono();
+
+// Global error handler for providers routes
+providersRoutes.onError((err, c) => {
+  console.error('[ProvidersAPI] Unhandled error:', err);
+  return c.json(
+    { error: err instanceof Error ? err.message : 'Internal server error' },
+    500
+  );
+});
+
+// ----------------------------------------------------------------------------
+// Sandbox Provider Routes
+// ----------------------------------------------------------------------------
 
 /**
  * GET /providers/sandbox
  * List all sandbox providers with their metadata
  */
 providersRoutes.get('/sandbox', async (c) => {
-  try {
-    const registry = getSandboxRegistry();
-    const metadata = registry.getAllSandboxMetadata();
-    const available = await registry.getAvailable();
-    const current = getProviderManager().getConfig().sandbox;
+  const registry = getSandboxRegistry();
+  const manager = getProviderManager();
 
-    return c.json({
-      providers: metadata.map((m) => ({
-        ...m,
-        available: available.includes(m.type),
-        current: current?.type === m.type,
-      })),
-      current: current?.type || null,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error listing sandbox providers:', error);
-    return c.json({ error: 'Failed to list sandbox providers' }, 500);
-  }
+  const metadata = registry.getAllSandboxMetadata();
+  const available = await registry.getAvailable();
+  const currentType = manager.getConfig().sandbox?.type || null;
+
+  const providers = formatProviderMetadata(metadata, available, currentType);
+
+  return c.json({ providers, current: currentType });
 });
 
 /**
@@ -47,18 +98,9 @@ providersRoutes.get('/sandbox', async (c) => {
  * List available sandbox providers (those that can actually run on this system)
  */
 providersRoutes.get('/sandbox/available', async (c) => {
-  try {
-    const registry = getSandboxRegistry();
-    const available = await registry.getAvailable();
-
-    return c.json({ available });
-  } catch (error) {
-    console.error(
-      '[ProvidersAPI] Error getting available sandbox providers:',
-      error
-    );
-    return c.json({ error: 'Failed to get available sandbox providers' }, 500);
-  }
+  const registry = getSandboxRegistry();
+  const available = await registry.getAvailable();
+  return c.json({ available });
 });
 
 /**
@@ -66,27 +108,22 @@ providersRoutes.get('/sandbox/available', async (c) => {
  * Get details about a specific sandbox provider
  */
 providersRoutes.get('/sandbox/:type', async (c) => {
-  try {
-    const type = c.req.param('type');
-    const registry = getSandboxRegistry();
-    const metadata = registry.getSandboxMetadata(type);
+  const type = c.req.param('type');
+  const registry = getSandboxRegistry();
+  const metadata = registry.getSandboxMetadata(type);
 
-    if (!metadata) {
-      return c.json({ error: `Sandbox provider not found: ${type}` }, 404);
-    }
-
-    const available = await registry.getAvailable();
-    const current = getProviderManager().getConfig().sandbox;
-
-    return c.json({
-      ...metadata,
-      available: available.includes(type),
-      current: current?.type === type,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error getting sandbox provider:', error);
-    return c.json({ error: 'Failed to get sandbox provider details' }, 500);
+  if (!metadata) {
+    return c.json({ error: `Sandbox provider not found: ${type}` }, 404);
   }
+
+  const available = await registry.getAvailable();
+  const currentType = getProviderManager().getConfig().sandbox?.type;
+
+  return c.json({
+    ...metadata,
+    available: available.includes(type),
+    current: currentType === type,
+  });
 });
 
 /**
@@ -94,71 +131,46 @@ providersRoutes.get('/sandbox/:type', async (c) => {
  * Switch to a different sandbox provider
  */
 providersRoutes.post('/sandbox/switch', async (c) => {
-  try {
-    const body = await c.req.json<{
-      type: string;
-      config?: Record<string, unknown>;
-    }>();
+  const body = await c.req.json<ProviderSwitchBody>();
 
-    if (!body.type) {
-      return c.json({ error: 'Provider type is required' }, 400);
-    }
-
-    const manager = getProviderManager();
-    await manager.switchSandboxProvider(body.type, body.config);
-
-    // Update config loader
-    getConfigLoader().updateFromSettings({
-      sandboxProvider: body.type,
-      sandboxConfig: body.config,
-    });
-
-    return c.json({
-      success: true,
-      current: body.type,
-      message: `Switched to sandbox provider: ${body.type}`,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error switching sandbox provider:', error);
-    return c.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to switch sandbox provider',
-      },
-      500
-    );
+  if (!body.type) {
+    return c.json({ error: 'Provider type is required' }, 400);
   }
+
+  const manager = getProviderManager();
+  await manager.switchSandboxProvider(body.type, body.config);
+
+  getConfigLoader().updateFromSettings({
+    sandboxProvider: body.type,
+    sandboxConfig: body.config,
+  });
+
+  return c.json({
+    success: true,
+    current: body.type,
+    message: `Switched to sandbox provider: ${body.type}`,
+  });
 });
 
-// ============================================================================
+// ----------------------------------------------------------------------------
 // Agent Provider Routes
-// ============================================================================
+// ----------------------------------------------------------------------------
 
 /**
  * GET /providers/agents
  * List all agent providers with their metadata
  */
 providersRoutes.get('/agents', async (c) => {
-  try {
-    const registry = getAgentRegistry();
-    const metadata = registry.getAllAgentMetadata();
-    const available = await registry.getAvailable();
-    const current = getProviderManager().getConfig().agent;
+  const registry = getAgentRegistry();
+  const manager = getProviderManager();
 
-    return c.json({
-      providers: metadata.map((m) => ({
-        ...m,
-        available: available.includes(m.type),
-        current: current?.type === m.type,
-      })),
-      current: current?.type || null,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error listing agent providers:', error);
-    return c.json({ error: 'Failed to list agent providers' }, 500);
-  }
+  const metadata = registry.getAllAgentMetadata();
+  const available = await registry.getAvailable();
+  const currentType = manager.getConfig().agent?.type || null;
+
+  const providers = formatProviderMetadata(metadata, available, currentType);
+
+  return c.json({ providers, current: currentType });
 });
 
 /**
@@ -166,18 +178,9 @@ providersRoutes.get('/agents', async (c) => {
  * List available agent providers
  */
 providersRoutes.get('/agents/available', async (c) => {
-  try {
-    const registry = getAgentRegistry();
-    const available = await registry.getAvailable();
-
-    return c.json({ available });
-  } catch (error) {
-    console.error(
-      '[ProvidersAPI] Error getting available agent providers:',
-      error
-    );
-    return c.json({ error: 'Failed to get available agent providers' }, 500);
-  }
+  const registry = getAgentRegistry();
+  const available = await registry.getAvailable();
+  return c.json({ available });
 });
 
 /**
@@ -185,27 +188,22 @@ providersRoutes.get('/agents/available', async (c) => {
  * Get details about a specific agent provider
  */
 providersRoutes.get('/agents/:type', async (c) => {
-  try {
-    const type = c.req.param('type');
-    const registry = getAgentRegistry();
-    const metadata = registry.getAgentMetadata(type);
+  const type = c.req.param('type');
+  const registry = getAgentRegistry();
+  const metadata = registry.getAgentMetadata(type);
 
-    if (!metadata) {
-      return c.json({ error: `Agent provider not found: ${type}` }, 404);
-    }
-
-    const available = await registry.getAvailable();
-    const current = getProviderManager().getConfig().agent;
-
-    return c.json({
-      ...metadata,
-      available: available.includes(type),
-      current: current?.type === type,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error getting agent provider:', error);
-    return c.json({ error: 'Failed to get agent provider details' }, 500);
+  if (!metadata) {
+    return c.json({ error: `Agent provider not found: ${type}` }, 404);
   }
+
+  const available = await registry.getAvailable();
+  const currentType = getProviderManager().getConfig().agent?.type;
+
+  return c.json({
+    ...metadata,
+    available: available.includes(type),
+    current: currentType === type,
+  });
 });
 
 /**
@@ -213,109 +211,75 @@ providersRoutes.get('/agents/:type', async (c) => {
  * Switch to a different agent provider
  */
 providersRoutes.post('/agents/switch', async (c) => {
-  try {
-    const body = await c.req.json<{
-      type: string;
-      config?: Record<string, unknown>;
-    }>();
+  const body = await c.req.json<ProviderSwitchBody>();
 
-    if (!body.type) {
-      return c.json({ error: 'Provider type is required' }, 400);
-    }
-
-    const manager = getProviderManager();
-    await manager.switchAgentProvider(body.type, body.config);
-
-    // Update config loader
-    getConfigLoader().updateFromSettings({
-      agentProvider: body.type,
-      agentConfig: body.config,
-    });
-
-    return c.json({
-      success: true,
-      current: body.type,
-      message: `Switched to agent provider: ${body.type}`,
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error switching agent provider:', error);
-    return c.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to switch agent provider',
-      },
-      500
-    );
+  if (!body.type) {
+    return c.json({ error: 'Provider type is required' }, 400);
   }
+
+  const manager = getProviderManager();
+  await manager.switchAgentProvider(body.type, body.config);
+
+  getConfigLoader().updateFromSettings({
+    agentProvider: body.type,
+    agentConfig: body.config,
+  });
+
+  return c.json({
+    success: true,
+    current: body.type,
+    message: `Switched to agent provider: ${body.type}`,
+  });
 });
 
-// ============================================================================
-// Settings Sync Route
-// ============================================================================
+// ----------------------------------------------------------------------------
+// Settings Routes
+// ----------------------------------------------------------------------------
+
+interface SettingsSyncBody {
+  sandboxProvider?: string;
+  sandboxConfig?: Record<string, unknown>;
+  agentProvider?: string;
+  agentConfig?: Record<string, unknown>;
+  defaultProvider?: string;
+  defaultModel?: string;
+}
 
 /**
  * POST /providers/settings/sync
  * Sync frontend settings with the backend
  */
 providersRoutes.post('/settings/sync', async (c) => {
-  try {
-    const body = await c.req.json<{
-      sandboxProvider?: string;
-      sandboxConfig?: Record<string, unknown>;
-      agentProvider?: string;
-      agentConfig?: Record<string, unknown>;
-      // AI Provider model configuration
-      defaultProvider?: string;
-      defaultModel?: string;
-    }>();
+  const body = await c.req.json<SettingsSyncBody>();
 
-    const manager = getProviderManager();
-    const configLoader = getConfigLoader();
+  const manager = getProviderManager();
+  const configLoader = getConfigLoader();
 
-    // Update sandbox provider if specified
-    if (body.sandboxProvider) {
-      await manager.switchSandboxProvider(
-        body.sandboxProvider,
-        body.sandboxConfig
-      );
-    }
-
-    // Update agent provider if specified
-    // The agentConfig now includes apiKey, baseUrl, and model from the selected AI provider
-    if (body.agentProvider) {
-      await manager.switchAgentProvider(body.agentProvider, body.agentConfig);
-    }
-
-    // Update config loader with full settings including model info
-    configLoader.updateFromSettings({
-      ...body,
-      agentConfig: body.agentConfig,
-    });
-
-    console.log('[ProvidersAPI] Settings synced:', {
-      agentProvider: body.agentProvider,
-      defaultProvider: body.defaultProvider,
-      defaultModel: body.defaultModel,
-      hasApiKey: !!body.agentConfig?.apiKey,
-      hasBaseUrl: !!body.agentConfig?.baseUrl,
-    });
-
-    return c.json({
-      success: true,
-      config: manager.getConfig(),
-    });
-  } catch (error) {
-    console.error('[ProvidersAPI] Error syncing settings:', error);
-    return c.json(
-      {
-        error:
-          error instanceof Error ? error.message : 'Failed to sync settings',
-      },
-      500
-    );
+  if (body.sandboxProvider) {
+    await manager.switchSandboxProvider(body.sandboxProvider, body.sandboxConfig);
   }
+
+  if (body.agentProvider) {
+    await manager.switchAgentProvider(body.agentProvider, body.agentConfig);
+  }
+
+  configLoader.updateFromSettings({
+    ...body,
+    agentConfig: body.agentConfig,
+  });
+
+  console.log('[ProvidersAPI] Settings synced:', {
+    agentProvider: body.agentProvider,
+    defaultProvider: body.defaultProvider,
+    defaultModel: body.defaultModel,
+    hasApiKey: !!body.agentConfig?.apiKey,
+    hasBaseUrl: !!body.agentConfig?.baseUrl,
+  });
+
+  return c.json({
+    success: true,
+    config: manager.getConfig(),
+  });
 });
 
 /**
@@ -323,12 +287,133 @@ providersRoutes.post('/settings/sync', async (c) => {
  * Get current provider configuration
  */
 providersRoutes.get('/config', (c) => {
+  const manager = getProviderManager();
+  return c.json(manager.getConfig());
+});
+
+// ----------------------------------------------------------------------------
+// Detection Routes
+// ----------------------------------------------------------------------------
+
+interface DetectBody {
+  baseUrl: string;
+  apiKey: string;
+  model?: string;
+}
+
+interface DetectSuccessResponse {
+  success: true;
+  message: string;
+  model: string;
+  response: unknown;
+}
+
+interface DetectErrorResponse {
+  success: false;
+  error: string;
+}
+
+// Union type for future use if needed
+// type DetectResponse = DetectSuccessResponse | DetectErrorResponse;
+
+/**
+ * Build API URL from base URL
+ * Handles various base URL formats and ensures proper /v1/messages path
+ */
+function buildApiUrl(baseUrl: string): string {
+  const normalized = baseUrl.replace(/\/$/, '');
+
+  if (normalized.includes('/messages')) {
+    return normalized;
+  }
+
+  if (normalized.endsWith('/v1')) {
+    return `${normalized}/messages`;
+  }
+
+  return `${normalized}/v1/messages`;
+}
+
+/**
+ * POST /providers/detect
+ * Detect if an OpenAI-compatible API configuration is valid
+ */
+providersRoutes.post('/detect', async (c) => {
+  const body = await c.req.json<DetectBody>();
+
+  if (!body.baseUrl || !body.apiKey) {
+    return c.json({ error: 'baseUrl and apiKey are required' }, 400);
+  }
+
+  const apiUrl = buildApiUrl(body.baseUrl);
+  const testModel = body.model || DEFAULT_TEST_MODEL;
+
+  console.log('[ProvidersAPI] Detecting API connection:', {
+    baseUrl: body.baseUrl,
+    apiUrl,
+    model: testModel,
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
   try {
-    const manager = getProviderManager();
-    return c.json(manager.getConfig());
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${body.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: testModel,
+        messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
+        max_tokens: 1,
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      const successResponse: DetectSuccessResponse = {
+        success: true,
+        message: 'Connection successful! Configuration valid',
+        model: testModel,
+        response: data,
+      };
+      return c.json(successResponse);
+    }
+
+    const errorData = await response.json().catch(() => ({}));
+    console.error('[ProvidersAPI] Detection failed:', {
+      status: response.status,
+      error: errorData,
+    });
+
+    const errorResponse: DetectErrorResponse = {
+      success: false,
+      error: errorData.error?.message || `HTTP ${response.status}`,
+    };
+    return c.json(errorResponse, 200);
   } catch (error) {
-    console.error('[ProvidersAPI] Error getting config:', error);
-    return c.json({ error: 'Failed to get configuration' }, 500);
+    clearTimeout(timeoutId);
+    console.error('[ProvidersAPI] Detection error:', error);
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      const timeoutResponse: DetectErrorResponse = {
+        success: false,
+        error: 'Connection timeout (60s)',
+      };
+      return c.json(timeoutResponse, 200);
+    }
+
+    const errorResponse: DetectErrorResponse = {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+    return c.json(errorResponse, 200);
   }
 });
 
