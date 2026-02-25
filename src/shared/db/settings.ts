@@ -15,6 +15,8 @@ export interface AIProvider {
   baseUrl: string;
   enabled: boolean;
   models: string[];
+  // API format: 'anthropic' uses /v1/messages, 'openai' uses /v1/chat/completions
+  apiFormat?: 'anthropic' | 'openai';
   // Extended fields for UI
   icon?: string;
   apiKeyUrl?: string;

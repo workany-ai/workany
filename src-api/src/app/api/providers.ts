@@ -299,6 +299,7 @@ interface DetectBody {
   baseUrl: string;
   apiKey: string;
   model?: string;
+  apiFormat?: 'anthropic' | 'openai';
 }
 
 interface DetectSuccessResponse {
@@ -317,10 +318,10 @@ interface DetectErrorResponse {
 // type DetectResponse = DetectSuccessResponse | DetectErrorResponse;
 
 /**
- * Build API URL from base URL
+ * Build API URL from base URL for Anthropic-compatible APIs
  * Handles various base URL formats and ensures proper /v1/messages path
  */
-function buildApiUrl(baseUrl: string): string {
+function buildAnthropicApiUrl(baseUrl: string): string {
   const normalized = baseUrl.replace(/\/$/, '');
 
   if (normalized.includes('/messages')) {
@@ -335,8 +336,26 @@ function buildApiUrl(baseUrl: string): string {
 }
 
 /**
+ * Build API URL from base URL for OpenAI-compatible APIs
+ * Ensures proper /v1/chat/completions path
+ */
+function buildOpenAIApiUrl(baseUrl: string): string {
+  const normalized = baseUrl.replace(/\/$/, '');
+
+  if (normalized.includes('/chat/completions')) {
+    return normalized;
+  }
+
+  if (normalized.endsWith('/v1')) {
+    return `${normalized}/chat/completions`;
+  }
+
+  return `${normalized}/v1/chat/completions`;
+}
+
+/**
  * POST /providers/detect
- * Detect if an OpenAI-compatible API configuration is valid
+ * Detect if an API configuration is valid (supports Anthropic and OpenAI formats)
  */
 providersRoutes.post('/detect', async (c) => {
   const body = await c.req.json<DetectBody>();
@@ -345,11 +364,16 @@ providersRoutes.post('/detect', async (c) => {
     return c.json({ error: 'baseUrl and apiKey are required' }, 400);
   }
 
-  const apiUrl = buildApiUrl(body.baseUrl);
+  const format = body.apiFormat || 'anthropic';
+  const apiUrl =
+    format === 'openai'
+      ? buildOpenAIApiUrl(body.baseUrl)
+      : buildAnthropicApiUrl(body.baseUrl);
   const testModel = body.model || DEFAULT_TEST_MODEL;
 
   console.log('[ProvidersAPI] Detecting API connection:', {
     baseUrl: body.baseUrl,
+    apiFormat: format,
     apiUrl,
     model: testModel,
   });
@@ -358,18 +382,30 @@ providersRoutes.post('/detect', async (c) => {
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
   try {
+    // Build request body based on API format
+    const requestBody =
+      format === 'openai'
+        ? {
+            model: testModel,
+            messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
+            max_tokens: 1,
+            stream: false,
+          }
+        : {
+            model: testModel,
+            messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
+            max_tokens: 1,
+            stream: false,
+          };
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${body.apiKey}`,
+        ...(format === 'anthropic' && { 'anthropic-version': '2023-06-01' }),
       },
-      body: JSON.stringify({
-        model: testModel,
-        messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
-        max_tokens: 1,
-        stream: false,
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 
@@ -394,7 +430,10 @@ providersRoutes.post('/detect', async (c) => {
 
     const errorResponse: DetectErrorResponse = {
       success: false,
-      error: errorData.error?.message || `HTTP ${response.status}`,
+      error:
+        errorData.error?.message ||
+        errorData.message ||
+        `HTTP ${response.status}`,
     };
     return c.json(errorResponse, 200);
   } catch (error) {

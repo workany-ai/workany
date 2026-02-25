@@ -129,6 +129,10 @@ export default {
   networkError: 'Network error',
   fillBaseUrlAndApiKey: 'Please fill in Base URL and API Key first',
   connectionError: 'Connection failed: {error}',
+  apiFormat: 'API Format',
+  anthropicCompatible: 'Anthropic Compatible',
+  openaiCompatible: 'OpenAI Compatible',
+  apiFormatHint: 'Select API compatibility format: Anthropic or OpenAI',
 
   // Skills
   skills: 'Skills',

@@ -62,6 +62,7 @@ export function ModelSettings({
     baseUrl: '',
     apiKey: '',
     models: '',
+    apiFormat: 'anthropic' as 'anthropic' | 'openai',
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
@@ -108,6 +109,7 @@ export function ModelSettings({
           baseUrl: newProvider.baseUrl,
           apiKey: newProvider.apiKey,
           model: testModel,
+          apiFormat: newProvider.apiFormat,
         }),
       });
 
@@ -164,6 +166,7 @@ export function ModelSettings({
           baseUrl: selectedProvider.baseUrl,
           apiKey: selectedProvider.apiKey,
           model: testModel,
+          apiFormat: selectedProvider.apiFormat ?? 'anthropic',
         }),
       });
 
@@ -251,6 +254,7 @@ export function ModelSettings({
       baseUrl: newProvider.baseUrl,
       enabled: true,
       models: models.length > 0 ? models : ['default'],
+      apiFormat: newProvider.apiFormat,
     };
 
     onSettingsChange({
@@ -258,7 +262,13 @@ export function ModelSettings({
       providers: [...settings.providers, provider],
     });
 
-    setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '' });
+    setNewProvider({
+      name: '',
+      baseUrl: '',
+      apiKey: '',
+      models: '',
+      apiFormat: 'anthropic',
+    });
     setShowAddProvider(false);
     setActiveSubTab(id);
   };
@@ -423,6 +433,52 @@ export function ModelSettings({
                   placeholder="https://api.example.com/v1"
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
+              </div>
+
+              {/* API Format */}
+              <div className="flex flex-col gap-2">
+                <label className="text-foreground block text-sm font-medium">
+                  {t.settings.apiFormat || 'API 格式'}
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="newProviderApiFormat"
+                      value="anthropic"
+                      checked={newProvider.apiFormat === 'anthropic'}
+                      onChange={() =>
+                        setNewProvider({
+                          ...newProvider,
+                          apiFormat: 'anthropic',
+                        })
+                      }
+                      className="accent-primary"
+                    />
+                    <span className="text-foreground">
+                      {t.settings.anthropicCompatible || 'Anthropic 兼容'}
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="newProviderApiFormat"
+                      value="openai"
+                      checked={newProvider.apiFormat === 'openai'}
+                      onChange={() =>
+                        setNewProvider({ ...newProvider, apiFormat: 'openai' })
+                      }
+                      className="accent-primary"
+                    />
+                    <span className="text-foreground">
+                      {t.settings.openaiCompatible || 'OpenAI 兼容'}
+                    </span>
+                  </label>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {t.settings.apiFormatHint ||
+                    '请选择 API 协议兼容格式：Anthropic 兼容或 OpenAI 兼容'}
+                </p>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -732,6 +788,56 @@ export function ModelSettings({
                   placeholder={t.settings.apiBaseUrl}
                   className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 />
+              </div>
+
+              {/* API Format */}
+              <div className="flex flex-col gap-2">
+                <label className="text-foreground block text-sm font-medium">
+                  {t.settings.apiFormat || 'API 格式'}
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name={`apiFormat-${selectedProvider.id}`}
+                      value="anthropic"
+                      checked={
+                        (selectedProvider.apiFormat ?? 'anthropic') ===
+                        'anthropic'
+                      }
+                      onChange={() =>
+                        handleProviderUpdate(selectedProvider.id, {
+                          apiFormat: 'anthropic',
+                        })
+                      }
+                      className="accent-primary"
+                    />
+                    <span className="text-foreground">
+                      {t.settings.anthropicCompatible || 'Anthropic 兼容'}
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name={`apiFormat-${selectedProvider.id}`}
+                      value="openai"
+                      checked={selectedProvider.apiFormat === 'openai'}
+                      onChange={() =>
+                        handleProviderUpdate(selectedProvider.id, {
+                          apiFormat: 'openai',
+                        })
+                      }
+                      className="accent-primary"
+                    />
+                    <span className="text-foreground">
+                      {t.settings.openaiCompatible || 'OpenAI 兼容'}
+                    </span>
+                  </label>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {t.settings.apiFormatHint ||
+                    '请选择 API 协议兼容格式：Anthropic 兼容或 OpenAI 兼容'}
+                </p>
               </div>
 
               {/* Models */}

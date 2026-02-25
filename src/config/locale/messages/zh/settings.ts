@@ -128,6 +128,10 @@ export default {
   networkError: '网络错误',
   fillBaseUrlAndApiKey: '请先填写 Base URL 和 API Key',
   connectionError: '连接失败: {error}',
+  apiFormat: 'API 格式',
+  anthropicCompatible: 'Anthropic 兼容',
+  openaiCompatible: 'OpenAI 兼容',
+  apiFormatHint: '请选择 API 协议兼容格式：Anthropic 兼容或 OpenAI 兼容',
 
   // Skills
   skills: 'Skills',
