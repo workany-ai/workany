@@ -17,14 +17,50 @@ export default {
   botInputPlaceholder: '输入消息开始与 Bot 对话...',
 
   allPrompts: [
-    "扫描 'Downloads' 文件夹，删除重复文件，并按类型整理到子文件夹中。",
-    '找出所有超过 500MB 且 6 个月未打开的视频文件，生成一份检查清单。',
-    "批量重命名 '~/Desktop/Project_Assets' 中的图片，格式为 YYYY-MM-DD_###。",
-    "分析 'Project_Proposal' 文件夹，生成一份 3 页的高端咨询风格 PPT (.pptx)。",
-    "从 'May_Tax_Returns' 中的 PDF 发票提取账单日期和总金额，整理为 Excel 表格。",
-    '汇总本周 Syncs 文件夹中的会议记录，按负责人生成行动项，输出 Word 文档。',
-    '写一个 Python 爬虫抓取 HackerNews 前 30 条标题，保存到 CSV 并立即运行。',
-    '查看 ProductHunt 本周前 3 个产品，提取名称和 tagline，生成 3:4 海报并保存。',
-    "读取桌面上的 'clients.csv'，自动搜索每家公司官网和联系邮箱，更新文件。",
+    {
+      title: '智能整理下载内容',
+      prompt:
+        "严格限制在我的 'Downloads' 文件夹内，仅扫描最近 30 天添加的顶层文件（忽略子文件夹和 .app 包）。删除重复文件，并按类型将剩余文件分类到新的子文件夹中。",
+    },
+    {
+      title: '清理大型视频文件',
+      prompt:
+        '找出我电脑上所有超过 500MB 且最近 6 个月未曾打开的视频文件，并生成一份清单表格供我审核。',
+    },
+    {
+      title: '批量重命名资产',
+      prompt:
+        "读取 '~/Desktop/Project_Assets' 文件夹，并根据创建日期批量重命名所有图像，使用格式 YYYY-MM-DD ProjectName_###。",
+    },
+    {
+      title: '生成咨询演示文稿',
+      prompt:
+        "分析 'Project_Proposal' 文件夹，生成一份 3 页的幻灯片 (.pptx)，采用高端咨询风格设计。专注于视觉叙事、整洁的排版以及连贯的逻辑流程。将演示文稿保存到我的桌面。",
+    },
+    {
+      title: '提取发票到 Excel',
+      prompt:
+        "查找 'May_Tax_Returns' 文件夹中的所有 PDF 发票，提取账单日期、公司名称和总金额，并将它们整理成一份格式化的 .xlsx 总结报告。",
+    },
+    {
+      title: '会议笔记转 Word',
+      prompt:
+        '总结本周 Syncs 文件夹中的会议笔记，按负责人生成行动项，并输出成格式整洁的执行摘要 Word 文档。',
+    },
+    {
+      title: '运行本地网页爬虫',
+      prompt:
+        '写一个 Python 网页爬虫从 HackerNews 抓取前 30 条新闻标题，将结果保存至 CSV 文件，并立即在本地运行该脚本。',
+    },
+    {
+      title: '自动设计产品海报',
+      prompt:
+        '查看 producthunt.com 本周排名前 3 的产品，提取它们的名称和宣传标语（tagline），生成时尚的 3:4 比例介绍海报，并保存到我的桌面。',
+    },
+    {
+      title: '自动扩充客户 CSV',
+      prompt:
+        "读取桌面上包含公司名称的 'clients.csv'。编写并运行一个脚本，自动在网络上搜索每家公司的官方网站和联系邮箱，并用这些新数据更新本地 CSV 文件。",
+    },
   ],
 };

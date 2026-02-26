@@ -16,28 +16,6 @@ import type { AgentRequest } from '@/shared/types/agent';
 
 const agent = new Hono();
 
-// Helper to create SSE stream
-function createSSEStream(generator: AsyncGenerator<unknown>) {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const message of generator) {
-          const data = `data: ${JSON.stringify(message)}\n\n`;
-          controller.enqueue(encoder.encode(data));
-        }
-      } catch (error) {
-        const errorData = `data: ${JSON.stringify({
-          type: 'error',
-          message: error instanceof Error ? error.message : String(error),
-        })}\n\n`;
-        controller.enqueue(encoder.encode(errorData));
-      } finally {
-        controller.close();
-      }
-    },
-  });
-}
 
 // SSE Response headers
 const SSE_HEADERS = {
@@ -47,7 +25,7 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 
-// Phase 1: Create a plan (no execution)
+// Phase 1: Create a plan — returns { jobId, sessionId } immediately; SSE via GET /stream/:jobId
 agent.post('/plan', async (c) => {
   const body = await c.req.json<AgentRequest>();
 
@@ -68,14 +46,18 @@ agent.post('/plan', async (c) => {
   }
 
   const session = createSession('plan');
-  const readable = createSSEStream(
-    runPlanningPhase(body.prompt, session, body.modelConfig)
-  );
+  const generator = runPlanningPhase(body.prompt, session, body.modelConfig);
 
-  return new Response(readable, { headers: SSE_HEADERS });
+  // Create background job – generator runs asynchronously
+  const jobId = createJob(generator, session.id);
+
+  console.log('[AgentAPI] POST /plan created job:', jobId, 'sessionId:', session.id);
+
+  // Return immediately – client polls SSE via GET /stream/:jobId
+  return c.json({ jobId, sessionId: session.id });
 });
 
-// Phase 2: Execute an approved plan
+// Phase 2: Execute an approved plan — returns { jobId, sessionId } immediately; SSE via GET /stream/:jobId
 agent.post('/execute', async (c) => {
   const body = await c.req.json<{
     planId: string;
@@ -121,21 +103,25 @@ agent.post('/execute', async (c) => {
   }
 
   const session = createSession('execute');
-  const readable = createSSEStream(
-    runExecutionPhase(
-      body.planId,
-      session,
-      body.prompt || '',
-      body.workDir,
-      body.taskId,
-      body.modelConfig,
-      body.sandboxConfig,
-      body.skillsConfig,
-      body.mcpConfig
-    )
+  const generator = runExecutionPhase(
+    body.planId,
+    session,
+    body.prompt || '',
+    body.workDir,
+    body.taskId,
+    body.modelConfig,
+    body.sandboxConfig,
+    body.skillsConfig,
+    body.mcpConfig
   );
 
-  return new Response(readable, { headers: SSE_HEADERS });
+  // Create background job – generator runs asynchronously
+  const jobId = createJob(generator, session.id);
+
+  console.log('[AgentAPI] POST /execute created job:', jobId, 'sessionId:', session.id);
+
+  // Return immediately – client polls SSE via GET /stream/:jobId
+  return c.json({ jobId, sessionId: session.id });
 });
 
 // Legacy: Direct execution (plan + execute in one call)

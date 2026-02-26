@@ -42,7 +42,7 @@ function HomeContent() {
   const { sessions: botChats, refreshSessions } = useBotChats();
 
   // Sample prompts state
-  const allPrompts = (t.home as any).allPrompts as string[] | undefined;
+  const allPrompts = (t.home as any).allPrompts as any[] | undefined;
   const BATCH_SIZE = 3;
   const [promptOffset, setPromptOffset] = useState(0);
   const visiblePrompts = allPrompts
@@ -777,17 +777,25 @@ function HomeContent() {
 
                   {/* Prompt Cards */}
                   <div className="grid grid-cols-3 gap-3">
-                    {visiblePrompts.map((prompt, i) => (
+                    {visiblePrompts.map((promptObj, i) => (
                       <button
                         key={`${promptOffset}-${i}`}
-                        onClick={() => setInputValue(prompt)}
+                        onClick={() =>
+                          setInputValue(
+                            typeof promptObj === 'string'
+                              ? promptObj
+                              : promptObj.prompt
+                          )
+                        }
                         className={cn(
-                          'group flex h-28 cursor-pointer flex-col overflow-hidden rounded-xl border px-3.5 py-3 text-left transition-all duration-150',
+                          'group flex cursor-pointer flex-col overflow-hidden rounded-xl border px-3.5 py-3 text-left transition-all duration-150',
                           'border-border bg-card hover:border-primary/25 hover:bg-accent/50 hover:shadow-sm'
                         )}
                       >
                         <p className="text-foreground/80 group-hover:text-foreground line-clamp-4 flex-1 text-sm leading-snug transition-colors">
-                          {prompt}
+                          {typeof promptObj === 'string'
+                            ? promptObj
+                            : promptObj.title}
                         </p>
                         <div className="mt-2 flex shrink-0 justify-end">
                           <span className="text-muted-foreground/40 group-hover:text-muted-foreground text-xs transition-colors">

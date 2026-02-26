@@ -1853,28 +1853,40 @@ export function useAgent(): UseAgentReturn {
           return currentTaskId;
         }
 
-        // Phase 1: Request planning (no images)
-        const response = await fetchWithRetry(
+        // Phase 1: Request planning — two-step: POST to get jobId, then GET SSE
+        const planJobResponse = await fetchWithRetry(
           `${AGENT_SERVER_URL}/agent/plan`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              prompt,
-              modelConfig,
-            }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, modelConfig }),
             signal: abortController.signal,
           }
         );
 
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
+        if (!planJobResponse.ok) {
+          throw new Error(`Server error: ${planJobResponse.status}`);
+        }
+
+        const planJobData = (await planJobResponse.json()) as {
+          jobId: string;
+          sessionId: string;
+        };
+        console.log('[useAgent] Plan jobId:', planJobData.jobId);
+        sessionIdRef.current = planJobData.sessionId;
+
+        // Step 2: GET SSE stream for planning phase
+        const planStreamResponse = await fetch(
+          `${AGENT_SERVER_URL}/agent/stream/${planJobData.jobId}`,
+          { method: 'GET', signal: abortController.signal }
+        );
+
+        if (!planStreamResponse.ok) {
+          throw new Error(`Server error: ${planStreamResponse.status}`);
         }
 
         // Process planning stream
-        const reader = response.body?.getReader();
+        const reader = planStreamResponse.body?.getReader();
         if (!reader) throw new Error('No response body');
 
         const decoder = new TextDecoder();
@@ -1886,9 +1898,6 @@ export function useAgent(): UseAgentReturn {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
-          // Note: We no longer cancel the reader when task switches.
-          // Planning streams continue in background, UI updates are skipped for inactive tasks.
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -2076,13 +2085,12 @@ export function useAgent(): UseAgentReturn {
       const skillsConfig = getSkillsConfig();
       const mcpConfig = getMcpConfig();
 
-      const response = await fetchWithRetry(
+      // Step 1: POST to /execute to get jobId
+      const execJobResponse = await fetchWithRetry(
         `${AGENT_SERVER_URL}/agent/execute`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             planId: plan.id,
             prompt: initialPrompt,
@@ -2097,11 +2105,28 @@ export function useAgent(): UseAgentReturn {
         }
       );
 
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+      if (!execJobResponse.ok) {
+        throw new Error(`Server error: ${execJobResponse.status}`);
       }
 
-      await processStream(response, taskId, abortController);
+      const execJobData = (await execJobResponse.json()) as {
+        jobId: string;
+        sessionId: string;
+      };
+      console.log('[useAgent] Execute jobId:', execJobData.jobId);
+      sessionIdRef.current = execJobData.sessionId;
+
+      // Step 2: GET SSE stream for execution phase (avoids WKWebView timeout)
+      const execStreamResponse = await fetch(
+        `${AGENT_SERVER_URL}/agent/stream/${execJobData.jobId}`,
+        { method: 'GET', signal: abortController.signal }
+      );
+
+      if (!execStreamResponse.ok) {
+        throw new Error(`Server error: ${execStreamResponse.status}`);
+      }
+
+      await processStream(execStreamResponse, taskId, abortController);
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         const errorMessage = formatFetchError(error, '/agent/execute');
