@@ -439,11 +439,51 @@ function TaskDetailContent() {
             seenPaths.add(filePath);
             const filename = filePath.split('/').pop() || filePath;
             const ext = filename.split('.').pop()?.toLowerCase();
+            const artifactType = getArtifactTypeFromExt(ext);
+
+            // Bug #3: Skip intermediate/script files from the artifacts panel.
+            // Only show actual user-facing deliverables (documents, spreadsheets,
+            // presentations, images, html, markdown, etc.)
+            const INTERMEDIATE_EXTENSIONS = new Set([
+              'py',
+              'js',
+              'ts',
+              'jsx',
+              'tsx',
+              'rs',
+              'go',
+              'java',
+              'c',
+              'cpp',
+              'h',
+              'hpp',
+              'rb',
+              'php',
+              'swift',
+              'kt',
+              'sh',
+              'bash',
+              'zsh',
+              'ps1',
+              'bat',
+              'cmd',
+              'sql',
+              'yaml',
+              'yml',
+              'toml',
+              'ini',
+              'cfg',
+              'conf',
+              'env',
+            ]);
+            if (ext && INTERMEDIATE_EXTENSIONS.has(ext)) {
+              return; // Skip script / config files from artifacts panel
+            }
 
             extractedArtifacts.push({
               id: filePath,
               name: filename,
-              type: getArtifactTypeFromExt(ext),
+              type: artifactType,
               content,
               path: filePath,
             });

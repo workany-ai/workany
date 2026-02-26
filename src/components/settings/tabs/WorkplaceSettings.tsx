@@ -130,9 +130,15 @@ export function WorkplaceSettings({
           {t.settings.workingDirectoryDescription}
         </p>
         <div className="flex items-center gap-2">
-          <div className="border-input bg-muted text-foreground flex h-10 max-w-md flex-1 items-center rounded-lg border px-3 text-sm">
-            {settings.workDir || defaultPaths.workDir || 'Loading...'}
-          </div>
+          <input
+            type="text"
+            value={settings.workDir || defaultPaths.workDir}
+            onChange={(e) =>
+              onSettingsChange({ ...settings, workDir: e.target.value })
+            }
+            placeholder={defaultPaths.workDir || 'Loading...'}
+            className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring flex h-10 max-w-md flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+          />
           <button
             onClick={() =>
               openFolderInSystem(settings.workDir || defaultPaths.workDir)
@@ -144,7 +150,10 @@ export function WorkplaceSettings({
           </button>
         </div>
         <p className="text-muted-foreground text-xs">
-          {t.settings.directoryStructure.replace('{path}', settings.workDir)}
+          {t.settings.directoryStructure.replace(
+            '{path}',
+            settings.workDir || defaultPaths.workDir
+          )}
         </p>
       </div>
 

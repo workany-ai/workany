@@ -1287,15 +1287,20 @@ User's request (answer this AFTER reading the images):
       options?.conversation
     );
 
+    // Language instruction: always respond in the user's language
+    const LANGUAGE_INSTRUCTION = `IMPORTANT: Respond in the SAME language as the user's request below. If the user writes in English, respond in English. If Chinese, respond in Chinese.\n\n`;
+
     // Add workspace instruction to prompt so skills know where to save files
     // If images are attached, put image instruction FIRST (highest priority)
     const enhancedPrompt = imageInstruction
-      ? imageInstruction +
+      ? LANGUAGE_INSTRUCTION +
+        imageInstruction +
         prompt +
         '\n\n' +
         getWorkspaceInstruction(sessionCwd, sandboxOpts) +
         conversationContext
-      : getWorkspaceInstruction(sessionCwd, sandboxOpts) +
+      : LANGUAGE_INSTRUCTION +
+        getWorkspaceInstruction(sessionCwd, sandboxOpts) +
         conversationContext +
         prompt;
 
@@ -1403,7 +1408,7 @@ User's request (answer this AFTER reading the images):
         prompt: enhancedPrompt,
         options: queryOptions,
       })) {
-        if (session.abortController.signal.aborted) break;
+        if (session.abortController.signal.aborted || options?.abortController?.signal.aborted) break;
 
         yield* this.processMessage(
           message,
@@ -1552,7 +1557,7 @@ If you need to create any files during planning, use this directory.
         prompt: planningPrompt,
         options: queryOptions,
       })) {
-        if (session.abortController.signal.aborted) break;
+        if (session.abortController.signal.aborted || options?.abortController?.signal.aborted) break;
 
         if (message.type === 'assistant' && message.message?.content) {
           for (const block of message.message.content) {
@@ -1744,7 +1749,7 @@ If you need to create any files during planning, use this directory.
         prompt: executionPrompt,
         options: queryOptions,
       })) {
-        if (session.abortController.signal.aborted) break;
+        if (session.abortController.signal.aborted || options?.abortController?.signal.aborted) break;
 
         yield* this.processMessage(
           message,
