@@ -22,7 +22,7 @@ import { convertOpenClawMessage } from '@/shared/lib/bot-message-utils';
 import { generateSessionId } from '@/shared/lib/session';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare, RefreshCw, X } from 'lucide-react';
 
 import { LeftSidebar, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
@@ -40,6 +40,20 @@ function HomeContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [backgroundTasks, setBackgroundTasks] = useState<BackgroundTask[]>([]);
   const { sessions: botChats, refreshSessions } = useBotChats();
+
+  // Sample prompts state
+  const allPrompts = (t.home as any).allPrompts as string[] | undefined;
+  const BATCH_SIZE = 3;
+  const [promptOffset, setPromptOffset] = useState(0);
+  const visiblePrompts = allPrompts
+    ? allPrompts.slice(promptOffset, promptOffset + BATCH_SIZE)
+    : [];
+  const handleRefreshPrompts = () => {
+    if (!allPrompts) return;
+    const next = promptOffset + BATCH_SIZE;
+    setPromptOffset(next >= allPrompts.length ? 0 : next);
+  };
+  const [inputValue, setInputValue] = useState('');
 
   // Provider selection state
   const [selectedProvider, setSelectedProvider] =
@@ -715,20 +729,15 @@ function HomeContent() {
             </div>
           </>
         ) : (
-          /* Normal Home View */
-          <div className="flex flex-1 flex-col items-center justify-center overflow-auto px-4">
+          /* Normal Home View — Manus style */
+          <div className="flex flex-1 flex-col items-center justify-center overflow-auto px-6 py-8">
             <div className="flex w-full max-w-2xl flex-col items-center gap-6">
               {/* Title */}
               <h1 className="text-foreground text-center font-serif text-4xl font-normal tracking-tight md:text-5xl">
                 {t.home.welcomeTitle}
               </h1>
 
-              {/* Description */}
-              <p className="text-muted-foreground text-center text-sm">
-                {t.home.welcomeSubtitle}
-              </p>
-
-              {/* Input Box - Using shared ChatInput component */}
+              {/* Input Box */}
               <ChatInput
                 variant="home"
                 placeholder={
@@ -744,7 +753,52 @@ function HomeContent() {
                 onProviderChange={setSelectedProvider}
                 isOpenClawConfigured={isOpenClawConfigured}
                 onOpenClawSettings={handleOpenClawSettings}
+                value={inputValue}
+                onValueChange={setInputValue}
               />
+
+              {/* Sample Prompts section */}
+              {visiblePrompts.length > 0 && (
+                <div className="w-full">
+                  {/* Header */}
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="text-foreground text-sm font-semibold">
+                      {(t.home as any).samplePrompts || 'Sample prompts'}
+                    </span>
+                    <button
+                      onClick={handleRefreshPrompts}
+                      title={(t.home as any).refreshPrompts || 'Refresh'}
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      <span>{(t.home as any).refreshPrompts || 'Refresh'}</span>
+                    </button>
+                  </div>
+
+                  {/* Prompt Cards */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {visiblePrompts.map((prompt, i) => (
+                      <button
+                        key={`${promptOffset}-${i}`}
+                        onClick={() => setInputValue(prompt)}
+                        className={cn(
+                          'group flex h-28 cursor-pointer flex-col overflow-hidden rounded-xl border px-3.5 py-3 text-left transition-all duration-150',
+                          'border-border bg-card hover:border-primary/25 hover:bg-accent/50 hover:shadow-sm'
+                        )}
+                      >
+                        <p className="text-foreground/80 group-hover:text-foreground line-clamp-4 flex-1 text-sm leading-snug transition-colors">
+                          {prompt}
+                        </p>
+                        <div className="mt-2 flex shrink-0 justify-end">
+                          <span className="text-muted-foreground/40 group-hover:text-muted-foreground text-xs transition-colors">
+                            ↗
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

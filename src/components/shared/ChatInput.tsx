@@ -75,6 +75,10 @@ export interface ChatInputProps {
   isOpenClawConfigured?: boolean;
   /** Callback to open OpenClaw settings */
   onOpenClawSettings?: () => void;
+  /** Controlled value (optional) */
+  value?: string;
+  /** Callback when value changes (optional, for controlled mode) */
+  onValueChange?: (value: string) => void;
 }
 
 // Generate unique ID for attachments
@@ -126,14 +130,27 @@ export function ChatInput({
   onProviderChange,
   isOpenClawConfigured = false,
   onOpenClawSettings,
+  value: externalValue,
+  onValueChange,
 }: ChatInputProps) {
   const { t } = useLanguage();
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(externalValue ?? '');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
   const prevIsRunningRef = useRef(isRunning);
+
+  // Sync external value changes into internal state
+  useEffect(() => {
+    if (externalValue !== undefined) {
+      setValue(externalValue);
+      // Focus the textarea when value is injected
+      if (externalValue) {
+        textareaRef.current?.focus();
+      }
+    }
+  }, [externalValue]);
 
   // Auto focus on mount if autoFocus is true
   useEffect(() => {
@@ -291,6 +308,7 @@ export function ChatInput({
       const messageAttachments = convertToMessageAttachments();
 
       setValue('');
+      onValueChange?.('');
       setAttachments([]);
       await onSubmit(
         text,
@@ -401,7 +419,10 @@ export function ChatInput({
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          onValueChange?.(e.target.value);
+        }}
         onKeyDown={handleKeyDown}
         onCompositionStart={handleCompositionStart}
         onCompositionEnd={handleCompositionEnd}
