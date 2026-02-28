@@ -19,6 +19,7 @@ import {
   type SkillsConfig,
   type TaskPlan,
 } from '@/core/agent';
+import { getProviderManager } from '@/shared/provider/manager';
 // ============================================================================
 // Logging - uses shared logger (writes to ~/.workany/logs/workany.log)
 // ============================================================================
@@ -39,13 +40,20 @@ const globalPlanStore = new Map<string, TaskPlan>();
  * Get or create the global agent instance
  * If modelConfig is provided, creates a new agent with those settings
  */
-export function getAgent(config?: Partial<AgentConfig>): IAgent {
+export async function getAgent(config?: Partial<AgentConfig>): Promise<IAgent> {
   console.log('[AgentService] getAgent called with config:', {
     hasConfig: !!config,
     hasApiKey: !!config?.apiKey,
     hasBaseUrl: !!config?.baseUrl,
     model: config?.model,
   });
+
+  // Get current active agent provider from ProviderManager
+  const providerManager = getProviderManager();
+  const currentAgentConfig = providerManager.getConfig().agent;
+  const currentProvider = currentAgentConfig?.type || 'claude';
+
+  console.log('[AgentService] Using current agent provider:', currentProvider);
 
   // If config with API credentials is provided, create a new agent instance
   // Don't cache it to allow different configs per request
@@ -55,15 +63,17 @@ export function getAgent(config?: Partial<AgentConfig>): IAgent {
       baseUrl: config.baseUrl,
       model: config.model,
     });
-    return createAgent({ provider: 'claude', ...config });
+    return createAgent({ provider: currentProvider as any, ...config });
   }
 
   // Use cached global agent for default configuration
   if (!globalAgent || config) {
-    console.log('[AgentService] Creating agent from environment variables');
-    globalAgent = config
-      ? createAgent({ provider: 'claude', ...config })
-      : createAgentFromEnv();
+    console.log('[AgentService] Creating agent with current provider:', currentProvider);
+    globalAgent = createAgent({
+      provider: currentProvider as any,
+      ...(config || {}),
+      workDir: config?.workDir || process.env.AGENT_WORK_DIR || '~/.workany'
+    });
   }
   return globalAgent;
 }
@@ -150,7 +160,7 @@ export async function* runPlanningPhase(
   session: AgentSession,
   modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }
 ): AsyncGenerator<AgentMessage> {
-  const agent = getAgent(modelConfig);
+  const agent = await getAgent(modelConfig);
 
   for await (const message of agent.plan(prompt, {
     sessionId: session.id,
@@ -178,7 +188,7 @@ export async function* runExecutionPhase(
   skillsConfig?: SkillsConfig,
   mcpConfig?: McpConfig
 ): AsyncGenerator<AgentMessage> {
-  const agent = getAgent(modelConfig);
+  const agent = await getAgent(modelConfig);
 
   // Get the plan from global store to pass to agent
   // This is necessary because each agent instance has its own plan store
@@ -231,7 +241,7 @@ export async function* runAgent(
   skillsConfig?: SkillsConfig,
   mcpConfig?: McpConfig
 ): AsyncGenerator<AgentMessage> {
-  const agent = getAgent(modelConfig);
+  const agent = await getAgent(modelConfig);
 
   // Log sandbox config for debugging - write to file for packaged app visibility
   serviceLogger.info('[AgentService] runAgent called with sandbox config:', {

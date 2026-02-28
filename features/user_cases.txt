@@ -1,0 +1,29 @@
+📁 Organize Files
+    1. Smart Organize Downloads
+    Strictly within my 'Downloads' folder, scan only top-level files added in the last 30 days (ignoring subfolders and .app bundles). Remove duplicates, and categorize the rest by type into new subfolders here.
+
+    2. Audit Heavy Video Files
+    Find all video files on my computer larger than 500MB that haven't been opened in the last 6 months, and generate a checklist spreadsheet for me to review.
+
+    3. Batch Rename Assets
+    Read the '~/Desktop/Project_Assets' folder and batch rename all images based on their creation dates, using the format YYYY-MM-DD ProjectName_###.
+
+📊 Generate Docs
+    1. Create Consulting Deck
+    Analyze the 'Project_Proposal' folder and generate a 3-slide presentation (.pptx) with a sophisticated, high-end consulting design. Focus on visual storytelling, clean typography, and a cohesive logical flow. Save the presentation to my Desktop.
+
+    2. Extract Invoices to Excel
+    Find all PDF invoices in my 'May_Tax_Returns' folder, extract the billing date, company name, and total amount, and compile them into a formatted .xlsx summary.
+
+    3. Meeting Notes to Word
+    Summarize this week’s meeting notes from the Syncs folder, generate action items by owner, and output a cleanly formatted executive summary in Word.
+
+⚙️ Automate Tasks
+    1. Run Local Web Scraper
+    Write a Python web scraper to fetch the top 30 news titles from HackerNews, save the results to a CSV file, and run the script locally right now.
+
+    2. Auto-design Product Posters
+    Check the top 3 products of the week from producthunt.com, extract their names and taglines, and generate a sleek, 3:4 aspect ratio introductory poster, saving it to my desktop.
+
+    3. Auto-enrich Client CSV
+    Read the 'clients.csv' containing company names on my desktop. Write and run a script to automatically search the web for each company's official website and contact email, and update the local CSV file with this new data.
