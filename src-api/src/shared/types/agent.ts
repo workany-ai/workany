@@ -90,7 +90,7 @@ export interface AgentRequest {
   // MCP configuration
   mcpConfig?: McpConfigRequest;
   // Provider selection (optional, defaults to env config)
-  provider?: 'claude' | 'deepagents';
+  provider?: 'claude' | 'deepagents'|'kimi';
   // Custom model configuration
   modelConfig?: ModelConfig;
   // Sandbox configuration for isolated execution

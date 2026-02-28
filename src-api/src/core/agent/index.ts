@@ -7,6 +7,7 @@ import { claudePlugin } from '@/extensions/agent/claude';
 import { codexPlugin } from '@/extensions/agent/codex';
 import { deepagentsPlugin } from '@/extensions/agent/deepagents';
 import { openclawPlugin } from '@/extensions/agent/openclaw';
+import { kimiPlugin } from '@/extensions/agent/kimi';
 
 /**
  * Agent SDK Abstraction Layer
@@ -95,6 +96,11 @@ export {
   openclawPlugin,
 } from '@/extensions/agent/openclaw';
 
+export {
+  KimiAgent,
+  createKimiAgent,
+  kimiPlugin,
+} from '@/extensions/agent/kimi';
 /**
  * All built-in agent plugins
  */
@@ -103,6 +109,7 @@ export const builtinAgentPlugins: AgentPlugin[] = [
   codexPlugin,
   deepagentsPlugin,
   openclawPlugin,
+  kimiPlugin,
 ];
 
 /**
