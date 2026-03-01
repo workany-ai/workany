@@ -1224,7 +1224,7 @@ export function RightSidebar({
   };
 
   return (
-    <div className="bg-background flex h-full flex-col overflow-x-hidden overflow-y-auto">
+    <div className="scrollbar-blend bg-background flex h-full flex-col overflow-x-hidden overflow-y-auto">
       {/* 1. Workspace Section */}
       <CollapsibleSection
         title={t.task.workspace || 'Workspace'}

@@ -79,6 +79,8 @@ export interface AgentRequest {
     role: 'user' | 'assistant';
     content: string;
   }>;
+  /** Preferred response language (e.g., en-US, zh-CN) */
+  language?: string;
   // Two-phase execution control
   phase?: 'plan' | 'execute';
   planId?: string; // Reference to approved plan

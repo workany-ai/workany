@@ -139,6 +139,8 @@ export interface AgentOptions {
   sessionId?: string;
   /** Conversation history */
   conversation?: ConversationMessage[];
+  /** Preferred response language (e.g., en-US, zh-CN) */
+  language?: string;
   /** Working directory */
   cwd?: string;
   /** Allowed tools */

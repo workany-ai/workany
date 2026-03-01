@@ -13,6 +13,7 @@ import { join } from 'path';
 
 import {
   BaseAgent,
+  buildLanguageInstruction,
   formatPlanForExecution,
   getWorkspaceInstruction,
   parsePlanFromResponse,
@@ -299,7 +300,10 @@ export class CodexAgent extends BaseAgent {
     prompt: string,
     options?: AgentOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     const sessionCwd = await getSessionWorkDir(
@@ -319,9 +323,15 @@ export class CodexAgent extends BaseAgent {
         }
       : undefined;
 
+    const languageInstruction = buildLanguageInstruction(
+      options?.language,
+      prompt
+    );
     // Add workspace instruction to prompt
     const enhancedPrompt =
-      getWorkspaceInstruction(sessionCwd, sandboxOpts) + prompt;
+      getWorkspaceInstruction(sessionCwd, sandboxOpts) +
+      languageInstruction +
+      prompt;
 
     // Ensure Codex CLI is installed
     const codexPath = await ensureCodex();
@@ -382,7 +392,10 @@ export class CodexAgent extends BaseAgent {
     prompt: string,
     options?: PlanOptions
   ): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('planning');
+    const session = this.createSession('planning', {
+      id: options?.sessionId,
+      abortController: options?.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     const sessionCwd = await getSessionWorkDir(
@@ -395,7 +408,11 @@ export class CodexAgent extends BaseAgent {
 
     // For Codex, we'll use a simplified planning approach
     // Since Codex doesn't have a native planning mode, we'll ask it to generate a plan
-    const planningPrompt = `${PLANNING_INSTRUCTION}${prompt}
+    const languageInstruction = buildLanguageInstruction(
+      options?.language,
+      prompt
+    );
+    const planningPrompt = `${PLANNING_INSTRUCTION}${languageInstruction}${prompt}
 
 Please respond ONLY with JSON in this exact format, no other text:
 {
@@ -483,7 +500,10 @@ Please respond ONLY with JSON in this exact format, no other text:
    * Execute an approved plan
    */
   async *execute(options: ExecuteOptions): AsyncGenerator<AgentMessage> {
-    const session = this.createSession('executing');
+    const session = this.createSession('executing', {
+      id: options.sessionId,
+      abortController: options.abortController,
+    });
     yield { type: 'session', sessionId: session.id };
 
     // Use the plan passed in options, or fall back to local lookup
@@ -514,7 +534,13 @@ Please respond ONLY with JSON in this exact format, no other text:
       : undefined;
 
     const executionPrompt =
-      formatPlanForExecution(plan, sessionCwd, sandboxOpts) +
+      formatPlanForExecution(
+        plan,
+        sessionCwd,
+        sandboxOpts,
+        options.language,
+        options.originalPrompt
+      ) +
       '\n\nOriginal request: ' +
       options.originalPrompt;
 
