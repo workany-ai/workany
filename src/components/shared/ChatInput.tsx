@@ -34,6 +34,12 @@ export interface Attachment {
   preview?: string; // Data URL for image preview
 }
 
+export interface CategoryTag {
+  icon: React.ReactNode;
+  label: string;
+  onClose: () => void;
+}
+
 export interface ChatInputProps {
   /** Placeholder text */
   placeholder?: string;
@@ -51,6 +57,12 @@ export interface ChatInputProps {
   disabled?: boolean;
   /** Auto focus on mount */
   autoFocus?: boolean;
+  /** Externally controlled value */
+  externalValue?: string;
+  /** Callback when external value is consumed */
+  onExternalValueConsumed?: () => void;
+  /** Category tag shown next to the + button */
+  categoryTag?: CategoryTag;
 }
 
 // Generate unique ID for attachments
@@ -96,6 +108,9 @@ export function ChatInput({
   className,
   disabled = false,
   autoFocus = false,
+  externalValue,
+  onExternalValueConsumed,
+  categoryTag,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
@@ -104,6 +119,22 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
   const prevIsRunningRef = useRef(isRunning);
+
+  // Sync external value into the input
+  useEffect(() => {
+    if (externalValue !== undefined && externalValue !== '') {
+      setValue(externalValue);
+      onExternalValueConsumed?.();
+      // Focus and move cursor to end
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.selectionStart = externalValue.length;
+          textareaRef.current.selectionEnd = externalValue.length;
+        }
+      }, 0);
+    }
+  }, [externalValue, onExternalValueConsumed]);
 
   // Auto focus on mount if autoFocus is true
   useEffect(() => {
@@ -393,13 +424,13 @@ export function ChatInput({
           isHome ? 'mt-3' : 'mt-2'
         )}
       >
-        {/* Add Button with Dropdown */}
-        <div className="flex items-center gap-1">
+        {/* Add Button + Category Tag */}
+        <div className="flex items-center gap-2">
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               disabled={isRunning || disabled}
               className={cn(
-                'flex items-center justify-center transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                'flex shrink-0 items-center justify-center transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                 isHome
                   ? 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground size-8 rounded-full border'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground size-7 rounded-md'
@@ -421,6 +452,26 @@ export function ChatInput({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Category Tag */}
+          {categoryTag && (
+            <span
+              className={cn(
+                'bg-primary/10 text-primary inline-flex items-center gap-1.5 rounded-full font-medium',
+                isHome ? 'h-8 px-3 text-xs' : 'h-7 px-2.5 text-xs'
+              )}
+            >
+              {categoryTag.icon}
+              {categoryTag.label}
+              <button
+                type="button"
+                onClick={categoryTag.onClose}
+                className="text-primary/60 hover:text-primary -mr-0.5 rounded-full transition-colors"
+              >
+                <X className="size-3.5" />
+              </button>
+            </span>
+          )}
         </div>
 
         {/* Submit/Stop Button */}
