@@ -44,6 +44,36 @@ function getPreferredLanguage(): string | undefined {
   return lang && lang.trim() !== '' ? lang : undefined;
 }
 
+/**
+ * Detect if a prompt is a simple conversational query that can use the fast chat path.
+ * Returns true for greetings, simple questions, etc.
+ * Returns false for task-oriented prompts that need agent capabilities.
+ */
+function isFastChatQuery(prompt: string): boolean {
+  const trimmed = prompt.trim();
+  // Long prompts are likely task descriptions
+  if (trimmed.length > 200) return false;
+  // Check for task-oriented keywords
+  const taskKeywords = [
+    // File operations
+    '创建', '生成', '写入', '删除', '修改', '编辑', '保存',
+    'create', 'generate', 'write', 'delete', 'modify', 'edit', 'save',
+    // Development
+    '开发', '构建', '部署', '编译', '运行', '安装',
+    'develop', 'build', 'deploy', 'compile', 'run', 'install',
+    // File paths
+    '文件', '文件夹', '目录', 'file', 'folder', 'directory', 'path',
+    // Code
+    '代码', '脚本', '函数', 'code', 'script', 'function',
+    // Analysis
+    '分析', '扫描', '搜索', '查找', 'analyze', 'scan', 'search', 'find',
+    // Web
+    '网站', '网页', '爬取', 'website', 'webpage', 'scrape', 'fetch',
+  ];
+  const lower = trimmed.toLowerCase();
+  return !taskKeywords.some((kw) => lower.includes(kw));
+}
+
 console.log(
   `[API] Environment: ${import.meta.env.PROD ? 'production' : 'development'}, Port: ${API_PORT}`
 );
@@ -436,13 +466,15 @@ export interface UseAgentReturn {
     prompt: string,
     existingTaskId?: string,
     sessionInfo?: SessionInfo,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    mode?: 'auto' | 'chat' | 'task'
   ) => Promise<string>;
   approvePlan: () => Promise<void>;
   rejectPlan: () => void;
   continueConversation: (
     reply: string,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    mode?: 'auto' | 'chat' | 'task'
   ) => Promise<void>;
   stopAgent: () => Promise<void>;
   clearMessages: () => void;
@@ -1629,7 +1661,8 @@ export function useAgent(): UseAgentReturn {
       prompt: string,
       existingTaskId?: string,
       sessionInfo?: SessionInfo,
-      attachments?: MessageAttachment[]
+      attachments?: MessageAttachment[],
+      mode?: 'auto' | 'chat' | 'task'
     ): Promise<string> => {
       // If there's already a running task, move it to background
       if (isRunning && abortControllerRef.current && taskId) {
@@ -1735,6 +1768,107 @@ export function useAgent(): UseAgentReturn {
         // The backend will check if Claude Code is available locally.
         // If Claude Code is available, it will use it even without explicit model configuration.
         // If Claude Code is not available and no model is configured, the backend will return an error.
+
+        // Fast chat detection: short text, no attachments, no file/code intent
+        const shouldUseFastChat =
+          mode === 'chat' ||
+          (mode !== 'task' && !hasImages && isFastChatQuery(prompt));
+
+        if (shouldUseFastChat) {
+          console.log('[useAgent] Using fast chat for simple query, mode:', mode);
+          setPhase('executing');
+
+          const language = getPreferredLanguage();
+
+          const response = await fetchWithRetry(
+            `${AGENT_SERVER_URL}/agent/chat`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt,
+                modelConfig,
+                language,
+              }),
+              signal: abortController.signal,
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+
+          // Process fast chat SSE stream
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error('No response body');
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let fullContent = '';
+          const isActiveTask = () =>
+            activeTaskIdRef.current === currentTaskId;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6)) as AgentMessage;
+
+                  if (data.type === 'text' && data.content) {
+                    fullContent += data.content;
+                    if (isActiveTask()) {
+                      setMessages((prev) => {
+                        // Append to existing text message or create new one
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === 'text') {
+                          return [
+                            ...prev.slice(0, -1),
+                            { ...last, content: (last.content || '') + data.content },
+                          ];
+                        }
+                        return [...prev, { type: 'text', content: data.content }];
+                      });
+                    }
+                  } else if (data.type === 'done') {
+                    if (isActiveTask()) {
+                      setPhase('idle');
+                    }
+                  } else if (data.type === 'error') {
+                    if (isActiveTask()) {
+                      setMessages((prev) => [...prev, data]);
+                      setPhase('idle');
+                    }
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+
+          // Save to database
+          try {
+            if (fullContent) {
+              await createMessage({
+                task_id: currentTaskId,
+                type: 'text',
+                content: fullContent,
+              });
+            }
+            await updateTask(currentTaskId, { status: 'completed' });
+          } catch (dbError) {
+            console.error('Failed to save fast chat response:', dbError);
+          }
+
+          return currentTaskId;
+        }
 
         // If images are attached, use direct execution (skip planning)
         // because images need to be processed during execution, not planning
@@ -2208,7 +2342,7 @@ export function useAgent(): UseAgentReturn {
 
   // Continue conversation with context
   const continueConversation = useCallback(
-    async (reply: string, attachments?: MessageAttachment[]): Promise<void> => {
+    async (reply: string, attachments?: MessageAttachment[], mode?: 'auto' | 'chat' | 'task'): Promise<void> => {
       if (isRunning || !taskId) return;
 
       // Add user message to UI immediately (with attachments if any)
@@ -2276,6 +2410,8 @@ export function useAgent(): UseAgentReturn {
             mimeType: a.mimeType || 'image/png',
           }));
 
+        const hasImages = images && images.length > 0;
+
         // Debug logging for image attachments
         if (attachments && attachments.length > 0) {
           console.log(
@@ -2290,7 +2426,106 @@ export function useAgent(): UseAgentReturn {
           console.log('[useAgent] Valid images for API:', images?.length || 0);
         }
 
-        // Send conversation with full history
+        // Fast chat detection for follow-up messages
+        const shouldUseFastChat =
+          mode === 'chat' ||
+          (mode !== 'task' && !hasImages && isFastChatQuery(reply));
+
+        if (shouldUseFastChat) {
+          console.log('[useAgent] continueConversation: Using fast chat, mode:', mode);
+          setPhase('executing');
+
+          const language = getPreferredLanguage();
+
+          const response = await fetchWithRetry(
+            `${AGENT_SERVER_URL}/agent/chat`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                prompt: reply,
+                modelConfig,
+                language,
+                conversation: conversationHistory,
+              }),
+              signal: abortController.signal,
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+
+          // Process fast chat SSE stream
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error('No response body');
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let fullContent = '';
+          const isActiveTask = () => activeTaskIdRef.current === taskId;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6)) as AgentMessage;
+
+                  if (data.type === 'text' && data.content) {
+                    fullContent += data.content;
+                    if (isActiveTask()) {
+                      setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === 'text' && last !== userMessage) {
+                          return [
+                            ...prev.slice(0, -1),
+                            { ...last, content: (last.content || '') + data.content },
+                          ];
+                        }
+                        return [...prev, { type: 'text', content: data.content }];
+                      });
+                    }
+                  } else if (data.type === 'done') {
+                    if (isActiveTask()) {
+                      setPhase('idle');
+                    }
+                  } else if (data.type === 'error') {
+                    if (isActiveTask()) {
+                      setMessages((prev) => [...prev, data]);
+                      setPhase('idle');
+                    }
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+
+          // Save to database
+          try {
+            if (fullContent) {
+              await createMessage({
+                task_id: taskId,
+                type: 'text',
+                content: fullContent,
+              });
+            }
+          } catch (dbError) {
+            console.error('Failed to save fast chat response:', dbError);
+          }
+
+          return;
+        }
+
+        // Send conversation with full history (agent SDK path)
         const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
           method: 'POST',
           headers: {
@@ -2303,7 +2538,7 @@ export function useAgent(): UseAgentReturn {
             taskId,
             modelConfig,
             sandboxConfig,
-            images: images && images.length > 0 ? images : undefined,
+            images: hasImages ? images : undefined,
             skillsConfig,
             mcpConfig,
           }),

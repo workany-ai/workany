@@ -10,6 +10,7 @@ import {
   runExecutionPhase,
   runPlanningPhase,
 } from '@/shared/services/agent';
+import { runChat } from '@/shared/services/chat';
 import type { AgentRequest } from '@/shared/types/agent';
 
 const agent = new Hono();
@@ -44,6 +45,28 @@ const SSE_HEADERS = {
   Connection: 'keep-alive',
   'X-Accel-Buffering': 'no',
 };
+
+// Lightweight chat endpoint (bypasses Agent SDK for simple queries)
+agent.post('/chat', async (c) => {
+  const body = await c.req.json<AgentRequest>();
+
+  console.log('[AgentAPI] POST /chat received:', {
+    hasPrompt: !!body.prompt,
+    hasModelConfig: !!body.modelConfig,
+    hasConversation: !!(body.conversation && body.conversation.length > 0),
+  });
+
+  if (!body.prompt) {
+    return c.json({ error: 'prompt is required' }, 400);
+  }
+
+  const abortController = new AbortController();
+  const readable = createSSEStream(
+    runChat(body.prompt, body.modelConfig, body.language, body.conversation, abortController)
+  );
+
+  return new Response(readable, { headers: SSE_HEADERS });
+});
 
 // Phase 1: Create a plan (no execution)
 agent.post('/plan', async (c) => {

@@ -4,6 +4,13 @@ export default {
   welcomeTitle: '有什么可以帮到你？',
   welcomeSubtitle: '我可以帮你完成编程、写作、分析等各种任务。',
   addFilesOrPhotos: '添加文件或图片',
+  modeAuto: '自动',
+  modeChat: '对话',
+  modeTask: '任务',
+  modeAutoDesc: '自动识别意图',
+  modeChatDesc: '快速对话',
+  modeTaskDesc: '完整 Agent 能力',
+  modeLabel: '模式',
   examplePrompts: {
     categories: {
       organizeFiles: {

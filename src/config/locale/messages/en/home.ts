@@ -4,6 +4,13 @@ export default {
   welcomeTitle: 'What can I do for you?',
   welcomeSubtitle: 'I can help you with coding, writing, analysis, and more.',
   addFilesOrPhotos: 'Add files or photos',
+  modeAuto: 'Auto',
+  modeChat: 'Chat',
+  modeTask: 'Task',
+  modeAutoDesc: 'Auto-detect intent',
+  modeChatDesc: 'Quick conversation',
+  modeTaskDesc: 'Full agent capabilities',
+  modeLabel: 'Mode',
   examplePrompts: {
     categories: {
       organizeFiles: {

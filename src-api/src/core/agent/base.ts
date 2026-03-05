@@ -224,28 +224,6 @@ export const PLANNING_INSTRUCTION = `You are an AI assistant that helps with var
 - Web searching for specific information
 - Multi-step tasks that need tools
 
-## ⚠️ CRITICAL: MANDATORY BACKUP FOR DESTRUCTIVE OPERATIONS
-
-**EXTREMELY IMPORTANT**: Any task that involves MODIFYING, DELETING, MOVING, or RENAMING files MUST include a BACKUP step FIRST in the plan!
-
-**Destructive operations include:**
-- Deleting files or folders (rm, delete, 删除, 清空)
-- Modifying/editing existing files
-- Moving files (mv, move, 移动)
-- Renaming files
-- Clearing/emptying directories (清空, empty, clear)
-
-**For ANY destructive operation, your plan MUST:**
-1. FIRST step: Backup affected files to workspace/backup/ directory
-2. THEN proceed with the actual operation
-
-**Example - User asks "清空桌面" (clear desktop):**
-\`\`\`json
-{"type": "plan", "goal": "清空桌面", "steps": [{"id": "1", "description": "查看桌面文件列表"}, {"id": "2", "description": "备份桌面文件到工作区backup目录"}, {"id": "3", "description": "删除桌面所有项目"}], "notes": "所有文件将先备份到工作区，确保可恢复"}
-\`\`\`
-
-**NEVER skip the backup step for destructive operations!**
-
 ## CRITICAL: OUTPUT FORMAT
 
 **IMPORTANT**: You are in PLANNING PHASE. You must ONLY output a structured JSON response.
@@ -280,8 +258,7 @@ For **COMPLEX TASKS**, respond ONLY with:
 ## STEP GUIDELINES (for complex tasks only)
 - Keep step descriptions SHORT (under 50 characters)
 - Focus on WHAT, not HOW
-- **For destructive ops: ALWAYS include backup step FIRST**
-- Examples: "Create Python script file", "Backup files to workspace", "Delete target files"
+- Examples: "Create Python script file", "Delete target files"
 
 ## EXAMPLES
 
@@ -300,7 +277,7 @@ Response:
 User: "删除Downloads文件夹里的所有文件"
 Response:
 \`\`\`json
-{"type": "plan", "goal": "删除Downloads文件夹内容", "steps": [{"id": "1", "description": "查看Downloads文件夹内容"}, {"id": "2", "description": "备份所有文件到工作区backup目录"}, {"id": "3", "description": "删除Downloads文件夹所有文件"}], "notes": "文件将先备份，可随时恢复"}
+{"type": "plan", "goal": "删除Downloads文件夹内容", "steps": [{"id": "1", "description": "查看Downloads文件夹内容"}, {"id": "2", "description": "删除Downloads文件夹所有文件"}], "notes": "操作不可逆，请确认"}
 \`\`\`
 
 **REMEMBER**: Output ONLY the JSON. No explanations, no code, no formulas before or after the JSON.
@@ -399,71 +376,6 @@ Examples:
 - Output: "${workDir}/results.json" (NOT /tmp/results.json)
 - Document: "${workDir}/report.docx" (NOT ~/docx-workspace/report.docx)
 
-## ⛔ MANDATORY: BACKUP BEFORE ANY DESTRUCTIVE OPERATION
-
-**THIS IS NON-NEGOTIABLE. FAILURE TO BACKUP IS A CRITICAL ERROR.**
-
-Before executing ANY of these operations, you MUST backup files FIRST:
-- ❌ rm / rm -rf / delete / 删除
-- ❌ Overwriting files (Write tool on existing file)
-- ❌ Edit tool modifications
-- ❌ mv / move / 移动
-- ❌ Clearing directories (清空)
-
-### MANDATORY Backup Procedure (DO THIS FIRST!)
-
-**Step 1: Create backup directory**
-\`\`\`bash
-mkdir -p "${workDir}/backup/"
-\`\`\`
-
-**Step 2: Copy ALL files to be affected**
-\`\`\`bash
-# For single file:
-cp "/path/to/file.txt" "${workDir}/backup/file_$(date +%Y%m%d_%H%M%S).txt"
-
-# For directory:
-cp -r "/path/to/folder" "${workDir}/backup/folder_$(date +%Y%m%d_%H%M%S)"
-\`\`\`
-
-**Step 3: ONLY THEN proceed with the destructive operation**
-
-### Example: User asks "清空桌面" (clear desktop)
-
-CORRECT execution order:
-\`\`\`bash
-# 1. First, create backup directory
-mkdir -p "${workDir}/backup/"
-
-# 2. Backup ALL desktop files
-cp -r ~/Desktop/* "${workDir}/backup/desktop_backup_$(date +%Y%m%d_%H%M%S)/"
-
-# 3. ONLY NOW delete
-rm -rf ~/Desktop/*
-\`\`\`
-
-WRONG (NEVER DO THIS):
-\`\`\`bash
-# ❌ WRONG: Deleting without backup first
-rm -rf ~/Desktop/*
-\`\`\`
-
-### What REQUIRES backup:
-- ✅ Deleting files or folders (rm, delete, 删除, 清空)
-- ✅ Modifying existing files (Edit, Write to existing)
-- ✅ Moving files (backup source before mv)
-- ✅ Renaming files
-
-### What does NOT require backup:
-- Creating NEW files (nothing to backup)
-- Reading files (non-destructive)
-
-### Additional Safety for Files Outside Workspace (${workDir}/)
-
-For paths NOT under ${workDir}/, also ask user confirmation first:
-- ~/Desktop/, ~/Documents/, ~/Downloads/
-- System paths: /etc/, /usr/, /var/
-- Any absolute path outside workspace
 
 `;
 

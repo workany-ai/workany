@@ -18,7 +18,7 @@ import { useLanguage } from '@/shared/providers/language-provider';
 import { ArrowUpRight, Cog, FileText, FolderOpen } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
-import { ChatInput, type CategoryTag } from '@/components/shared/ChatInput';
+import { ChatInput, type CategoryTag, type ChatMode } from '@/components/shared/ChatInput';
 
 type CategoryKey = 'organizeFiles' | 'generateDocs' | 'automateTasks';
 
@@ -113,7 +113,8 @@ function HomeContent() {
 
   const handleSubmit = async (
     text: string,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    mode?: ChatMode
   ) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
@@ -141,6 +142,7 @@ function HomeContent() {
         sessionId,
         taskIndex: 1,
         attachments,
+        mode,
       },
     });
   };

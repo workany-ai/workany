@@ -11,10 +11,13 @@ import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
 import {
   ArrowUp,
+  Cpu,
   FileText,
+  MessageCircle,
   Paperclip,
   Plus,
   Send,
+  Sparkles,
   Square,
   X,
 } from 'lucide-react';
@@ -23,8 +26,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+export type ChatMode = 'auto' | 'chat' | 'task';
 
 // Attachment type for files and images
 export interface Attachment {
@@ -45,8 +54,8 @@ export interface ChatInputProps {
   placeholder?: string;
   /** Whether the agent is running */
   isRunning?: boolean;
-  /** Callback when submitting with text and attachments */
-  onSubmit: (text: string, attachments?: MessageAttachment[]) => Promise<void>;
+  /** Callback when submitting with text, attachments, and mode */
+  onSubmit: (text: string, attachments?: MessageAttachment[], mode?: ChatMode) => Promise<void>;
   /** Callback when stop button is clicked */
   onStop?: () => void;
   /** Variant: 'home' for larger home page style, 'reply' for compact reply style */
@@ -63,6 +72,8 @@ export interface ChatInputProps {
   onExternalValueConsumed?: () => void;
   /** Category tag shown next to the + button */
   categoryTag?: CategoryTag;
+  /** Default mode for the mode selector */
+  defaultMode?: ChatMode;
 }
 
 // Generate unique ID for attachments
@@ -111,9 +122,11 @@ export function ChatInput({
   externalValue,
   onExternalValueConsumed,
   categoryTag,
+  defaultMode = 'auto',
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
+  const [chatMode, setChatMode] = useState<ChatMode>(defaultMode);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -293,7 +306,7 @@ export function ChatInput({
 
       setValue('');
       setAttachments([]);
-      await onSubmit(text, messageAttachments);
+      await onSubmit(text, messageAttachments, chatMode);
     }
   };
 
@@ -450,6 +463,58 @@ export function ChatInput({
                 <Paperclip className="size-4" />
                 <span>{t.home.addFilesOrPhotos}</span>
               </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Mode Selector */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger
+              disabled={isRunning || disabled}
+              className={cn(
+                'flex shrink-0 items-center gap-1 rounded-full border transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                'border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
+                isHome ? 'h-8 px-2.5 text-xs' : 'h-7 px-2 text-xs'
+              )}
+            >
+              {chatMode === 'auto' && <Sparkles className="size-3.5" />}
+              {chatMode === 'chat' && <MessageCircle className="size-3.5" />}
+              {chatMode === 'task' && <Cpu className="size-3.5" />}
+              <span>
+                {chatMode === 'auto' && t.home.modeAuto}
+                {chatMode === 'chat' && t.home.modeChat}
+                {chatMode === 'task' && t.home.modeTask}
+              </span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              sideOffset={8}
+              className="z-50 w-48"
+            >
+              <DropdownMenuLabel>{t.home.modeLabel}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuRadioGroup
+                value={chatMode}
+                onValueChange={(v) => setChatMode(v as ChatMode)}
+              >
+                <DropdownMenuRadioItem value="auto" className="cursor-pointer">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="size-3.5" />
+                    <span>{t.home.modeAuto}</span>
+                  </div>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="chat" className="cursor-pointer">
+                  <div className="flex items-center gap-1.5">
+                    <MessageCircle className="size-3.5" />
+                    <span>{t.home.modeChat}</span>
+                  </div>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="task" className="cursor-pointer">
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="size-3.5" />
+                    <span>{t.home.modeTask}</span>
+                  </div>
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
 
