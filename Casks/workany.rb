@@ -2,11 +2,11 @@
 # frozen_string_literal: true
 
 cask "workany" do
-  arch arm: "aarch64", intel: "474195668fa93d9bffad26127fe1de8bf0464390a149c36aaf42ee15de8c4878"
+  arch arm: "aarch64", intel: "f737a59b284c09e01193d1a236bf11777114b10070f5957aad5b4197a10a0b96"
 
-  version "0.1.17"
-  sha256 arm:   "5c88b77d93e21fe0aa4c3a581c29013fcf3166ab5d7f1fcfcb6f8e226f1c58c9",
-         intel: "474195668fa93d9bffad26127fe1de8bf0464390a149c36aaf42ee15de8c4878"
+  version "0.1.18"
+  sha256 arm:   "98afbda6cb1c3f583e54a8bb8ec1894379af50b767ddc091f07b05f83e8e0ca6",
+         intel: "f737a59b284c09e01193d1a236bf11777114b10070f5957aad5b4197a10a0b96"
 
   url "https://github.com/workany-ai/workany/releases/download/v#{version}/WorkAny_#{version}_#{arch}.dmg",
       verified: "github.com/workany-ai/workany/"
