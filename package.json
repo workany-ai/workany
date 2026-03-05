@@ -1,7 +1,7 @@
 {
   "name": "workany",
   "private": true,
-  "version": "0.1.16",
+  "version": "0.1.18",
   "type": "module",
   "scripts": {
     "ver": "./scripts/version.sh",

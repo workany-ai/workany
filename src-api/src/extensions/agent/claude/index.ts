@@ -1550,6 +1550,7 @@ User's request (answer this AFTER reading the images):
       model: this.config.model,
       pathToClaudeCodeExecutable: claudeCodePath,
       maxTurns: 200, // Allow more agentic turns before stopping
+      thinking: { type: 'adaptive' }, // Explicitly configure thinking to avoid API errors
       // Capture stderr for debugging
       stderr: (data: string) => {
         logger.error(`[Claude ${session.id}] STDERR: ${data}`);
@@ -1768,6 +1769,7 @@ If you need to create any files during planning, use this directory.
       env: this.buildEnvConfig(),
       model: this.config.model,
       pathToClaudeCodeExecutable: claudeCodePath,
+      thinking: { type: 'adaptive' }, // Explicitly configure thinking to avoid API errors
     };
 
     try {
@@ -1936,6 +1938,7 @@ If you need to create any files during planning, use this directory.
       model: this.config.model,
       pathToClaudeCodeExecutable: claudeCodePath,
       maxTurns: 200, // Allow more agentic turns before stopping
+      thinking: { type: 'adaptive' }, // Explicitly configure thinking to avoid API errors
       // Capture stderr for debugging
       stderr: (data: string) => {
         logger.error(`[Claude ${session.id}] STDERR: ${data}`);

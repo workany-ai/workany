@@ -1,6 +1,6 @@
 {
   "name": "workany-api",
-  "version": "0.1.16",
+  "version": "0.1.18",
   "type": "module",
   "scripts": {
     "dev": "node --import tsx --watch src/index.ts",
@@ -17,8 +17,9 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.7",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.69",
     "@anthropic-ai/sandbox-runtime": "^0.0.28",
+    "@anthropic-ai/sdk": "^0.78.0",
     "@hono/node-server": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "hono": "^4.7.10",

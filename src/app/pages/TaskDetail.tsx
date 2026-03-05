@@ -42,7 +42,7 @@ import {
 import { Logo } from '@/components/common/logo';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
-import { ChatInput } from '@/components/shared/ChatInput';
+import { ChatInput, type ChatMode } from '@/components/shared/ChatInput';
 import { LazyImage } from '@/components/shared/LazyImage';
 import { PlanApproval } from '@/components/task/PlanApproval';
 import { QuestionInput } from '@/components/task/QuestionInput';
@@ -54,6 +54,7 @@ interface LocationState {
   sessionId?: string;
   taskIndex?: number;
   attachments?: MessageAttachment[];
+  mode?: ChatMode;
 }
 
 // Context for tool selection - allows child components to select tools
@@ -95,6 +96,7 @@ function TaskDetailContent() {
   const initialSessionId = state?.sessionId;
   const initialTaskIndex = state?.taskIndex || 1;
   const initialAttachments = state?.attachments;
+  const initialMode = state?.mode;
 
   const {
     messages,
@@ -771,7 +773,7 @@ function TaskDetailContent() {
         const sessionInfo = initialSessionId
           ? { sessionId: initialSessionId, taskIndex: initialTaskIndex }
           : undefined;
-        await runAgent(initialPrompt, taskId, sessionInfo, initialAttachments);
+        await runAgent(initialPrompt, taskId, sessionInfo, initialAttachments, initialMode);
         const newTask = await loadTask(taskId);
         setTask(newTask);
       } else {
@@ -786,14 +788,14 @@ function TaskDetailContent() {
 
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
-    async (text: string, messageAttachments?: MessageAttachment[]) => {
+    async (text: string, messageAttachments?: MessageAttachment[], mode?: ChatMode) => {
       if (
         (text.trim() ||
           (messageAttachments && messageAttachments.length > 0)) &&
         !isRunning &&
         taskId
       ) {
-        await continueConversation(text.trim(), messageAttachments);
+        await continueConversation(text.trim(), messageAttachments, mode);
       }
     },
     [isRunning, taskId, continueConversation]
@@ -1017,6 +1019,7 @@ function TaskDetailContent() {
                   isRunning={isRunning}
                   onSubmit={handleReply}
                   onStop={stopAgent}
+                  defaultMode={initialMode}
                 />
               </div>
             </div>
