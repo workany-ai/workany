@@ -4,6 +4,7 @@ export default {
   welcomeTitle: '有什么可以帮到你？',
   welcomeSubtitle: '我可以帮你完成编程、写作、分析等各种任务。',
   addFilesOrPhotos: '添加文件或图片',
+  dropFilesHere: '拖放文件到此处',
   modeAuto: '自动',
   modeChat: '对话',
   modeTask: '任务',

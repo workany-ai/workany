@@ -196,6 +196,9 @@ function guessMimeType(filePath: string): string {
     svg: 'image/svg+xml',
     pdf: 'application/pdf',
     txt: 'text/plain',
+    csv: 'text/csv',
+    tsv: 'text/tab-separated-values',
+    md: 'text/markdown',
     json: 'application/json',
   };
   return extToMime[ext || ''] || 'application/octet-stream';

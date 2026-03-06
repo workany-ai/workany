@@ -41,6 +41,7 @@ export interface Attachment {
   file: File;
   type: 'image' | 'file';
   preview?: string; // Data URL for image preview
+  nativePath?: string; // Native file path from Tauri drag-drop
 }
 
 export interface CategoryTag {
@@ -79,6 +80,9 @@ export interface ChatInputProps {
 // Generate unique ID for attachments
 const generateId = () =>
   `attachment_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+// Module-level guard: prevent the same drop event from being handled by multiple ChatInput instances
+let lastDropTimestamp = 0;
 
 // Check if file is an image (by MIME type or file extension)
 const isImageFile = (file: File) => {
@@ -128,8 +132,10 @@ export function ChatInput({
   const [value, setValue] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(defaultMode);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
   const prevIsRunningRef = useRef(isRunning);
 
@@ -248,45 +254,178 @@ export function ChatInput({
     [addFiles]
   );
 
+  // Add files from native file paths (Tauri drag-drop)
+  const addFilesFromPaths = useCallback(
+    async (paths: string[]) => {
+      if (isRunning || disabled) return;
+
+      const newAttachments: Attachment[] = [];
+      for (const filePath of paths) {
+        const name = filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+        const isImage = imageExts.includes(ext);
+
+        // Create a minimal File object with the path stored in name
+        // The actual content will be read later via Tauri FS when converting to MessageAttachment
+        const mimeType = isImage
+          ? `image/${ext === 'jpg' ? 'jpeg' : ext}`
+          : ext === 'pdf' ? 'application/pdf'
+          : ext === 'json' ? 'application/json'
+          : ext === 'csv' ? 'text/csv'
+          : 'application/octet-stream';
+
+        const attachment: Attachment = {
+          id: generateId(),
+          file: new File([], name, { type: mimeType }),
+          type: isImage ? 'image' : 'file',
+          nativePath: filePath,
+        };
+
+        if (isImage) {
+          try {
+            const { readFile } = await import('@tauri-apps/plugin-fs');
+            const bytes = await readFile(filePath);
+            const blob = new Blob([bytes], { type: mimeType });
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob);
+            });
+            attachment.preview = dataUrl;
+            // Also create a proper File object with data for later use
+            attachment.file = new File([bytes], name, { type: mimeType });
+          } catch (error) {
+            console.error('[ChatInput] Failed to read image:', error);
+          }
+        } else {
+          try {
+            const { readFile } = await import('@tauri-apps/plugin-fs');
+            const bytes = await readFile(filePath);
+            attachment.file = new File([bytes], name, { type: mimeType });
+          } catch (error) {
+            console.error('[ChatInput] Failed to read file:', error);
+          }
+        }
+
+        newAttachments.push(attachment);
+      }
+
+      if (newAttachments.length > 0) {
+        setAttachments((prev) => [...prev, ...newAttachments]);
+      }
+    },
+    [isRunning, disabled]
+  );
+
+  // Tauri native drag-drop event listener
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupDragDrop = async () => {
+      // Only in Tauri environment
+      if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+
+      try {
+        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+        const webview = getCurrentWebview();
+
+        unlisten = await webview.onDragDropEvent((event) => {
+          const container = containerRef.current;
+          if (!container) return;
+
+          const rect = container.getBoundingClientRect();
+
+          if (event.payload.type === 'enter') {
+            // Files are being dragged into the window — no position check needed yet
+            setIsDragging(true);
+          } else if (event.payload.type === 'over') {
+            const { x, y } = event.payload.position;
+            const isOver =
+              x >= rect.left && x <= rect.right &&
+              y >= rect.top && y <= rect.bottom;
+            setIsDragging(isOver);
+          } else if (event.payload.type === 'drop') {
+            setIsDragging(false);
+            const now = Date.now();
+            const { x, y } = event.payload.position;
+            const isOver =
+              x >= rect.left && x <= rect.right &&
+              y >= rect.top && y <= rect.bottom;
+            // Guard: only one ChatInput instance handles each drop
+            if (isOver && event.payload.paths.length > 0 && now - lastDropTimestamp > 100) {
+              lastDropTimestamp = now;
+              addFilesFromPaths(event.payload.paths);
+            }
+          } else if (event.payload.type === 'leave') {
+            setIsDragging(false);
+          }
+        });
+      } catch (error) {
+        console.error('[ChatInput] Failed to setup Tauri drag-drop:', error);
+      }
+    };
+
+    setupDragDrop();
+    return () => { unlisten?.(); };
+  }, [addFilesFromPaths]);
+
   // Open file picker
   const openFilePicker = () => {
     fileInputRef.current?.click();
   };
 
+  // Read a File object as base64 data URL
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Convert attachments to MessageAttachment format
-  const convertToMessageAttachments = (): MessageAttachment[] | undefined => {
+  const convertToMessageAttachments = async (): Promise<MessageAttachment[] | undefined> => {
     if (attachments.length === 0) return undefined;
 
-    const result = attachments
-      .filter((a) => {
-        // For images, only include if preview exists and has data
-        if (a.type === 'image') {
-          const hasPreview = a.preview && a.preview.length > 0;
-          if (!hasPreview) {
-            console.warn(
-              `[ChatInput] Skipping image ${a.file.name}: no preview data`
-            );
-          }
-          return hasPreview;
-        }
-        return true; // Keep non-image files
-      })
-      .map((a) => {
-        // Determine mimeType with fallback for clipboard pastes where file.type might be empty
-        let mimeType = a.file.type;
-        if (!mimeType && a.type === 'image') {
-          // Default to png for images without type (common for clipboard pastes)
-          mimeType = 'image/png';
-        }
+    const result: MessageAttachment[] = [];
 
-        return {
-          id: a.id,
-          type: a.type,
-          name: a.file.name,
-          data: a.preview || '',
-          mimeType,
-        };
+    for (const a of attachments) {
+      // For images, only include if preview exists and has data
+      if (a.type === 'image') {
+        if (!a.preview || a.preview.length === 0) {
+          console.warn(`[ChatInput] Skipping image ${a.file.name}: no preview data`);
+          continue;
+        }
+      }
+
+      // Determine mimeType
+      let mimeType = a.file.type;
+      if (!mimeType && a.type === 'image') {
+        mimeType = 'image/png';
+      }
+
+      // Read file content as base64 for file attachments
+      let data = a.preview || '';
+      if (a.type === 'file' && !data) {
+        try {
+          data = await readFileAsBase64(a.file);
+          console.log(`[ChatInput] Read file ${a.file.name}: ${data.length} chars`);
+        } catch (error) {
+          console.error(`[ChatInput] Failed to read file ${a.file.name}:`, error);
+        }
+      }
+
+      result.push({
+        id: a.id,
+        type: a.type,
+        name: a.file.name,
+        data,
+        mimeType,
       });
+    }
 
     // Debug logging
     console.log('[ChatInput] Converting attachments:', result.length);
@@ -302,7 +441,7 @@ export function ChatInput({
   const handleSubmit = async () => {
     if ((value.trim() || attachments.length > 0) && !isRunning && !disabled) {
       const text = value.trim();
-      const messageAttachments = convertToMessageAttachments();
+      const messageAttachments = await convertToMessageAttachments();
 
       setValue('');
       setAttachments([]);
@@ -355,14 +494,25 @@ export function ChatInput({
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        'w-full',
+        'relative w-full transition-colors',
         isHome
           ? 'border-border/50 bg-background rounded-2xl border p-4 shadow-lg'
           : 'border-border/60 bg-background rounded-xl border p-3 shadow-sm',
+        isDragging && 'border-primary/50 bg-primary/5 border-2',
         className
       )}
     >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[inherit]">
+          <div className="text-primary/70 flex items-center gap-2 text-sm font-medium">
+            <Paperclip className="size-4" />
+            <span>{t.home.dropFilesHere || 'Drop files here'}</span>
+          </div>
+        </div>
+      )}
       {/* Hidden file input */}
       <input
         ref={fileInputRef}

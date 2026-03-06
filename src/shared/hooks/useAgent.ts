@@ -1785,15 +1785,66 @@ export function useAgent(): UseAgentReturn {
 
       const hasImages = images && images.length > 0;
 
-      // Debug logging for image attachments
+      // Save file attachments to disk and augment prompt with file paths
+      const fileAttachments = attachments?.filter((a) => a.type === 'file') || [];
+      let augmentedPrompt = prompt;
+      let savedFileRefs: AttachmentReference[] = [];
+
+      if (fileAttachments.length > 0) {
+        // Ensure we have a folder to save attachments to
+        let saveFolder = computedSessionFolder;
+        if (!saveFolder) {
+          try {
+            const appDir = await getAppDataDir();
+            saveFolder = `${appDir}/sessions/temp-${Date.now()}`;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (saveFolder) {
+          try {
+            savedFileRefs = await saveAttachments(saveFolder, fileAttachments);
+            console.log('[useAgent] Saved file attachments:', savedFileRefs.map((r) => r.path));
+            setFilesVersion((v) => v + 1);
+
+            // Append file paths to prompt so the agent knows about them
+            const filePaths = savedFileRefs.map((r) => r.path).join('\n');
+            augmentedPrompt = `${prompt}\n\n[Attached files]\n${filePaths}`;
+          } catch (error) {
+            console.error('[useAgent] Failed to save file attachments:', error);
+          }
+        } else {
+          // Can't save to disk — include file content inline for small text files
+          console.warn('[useAgent] No folder available, embedding file content in prompt');
+          const fileInfo = fileAttachments.map((a) => {
+            // For text-based files, decode and include content
+            if (a.data && (a.mimeType?.startsWith('text/') || a.name.match(/\.(csv|txt|json|xml|tsv|md|log)$/i))) {
+              try {
+                const content = atob(a.data.includes(',') ? a.data.split(',')[1] : a.data);
+                return `[File: ${a.name}]\n${content}`;
+              } catch {
+                return `[File: ${a.name}] (unable to decode)`;
+              }
+            }
+            return `[File: ${a.name}] (binary file, unable to include inline)`;
+          }).join('\n\n');
+          augmentedPrompt = `${prompt}\n\n${fileInfo}`;
+        }
+      }
+
+      // Debug logging for attachments
       if (attachments && attachments.length > 0) {
         console.log('[useAgent] Attachments received:', attachments.length);
         attachments.forEach((a, i) => {
           console.log(
-            `[useAgent] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
+            `[useAgent] Attachment ${i}: type=${a.type}, name=${a.name}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
           );
         });
         console.log('[useAgent] Valid images for API:', images?.length || 0);
+        console.log('[useAgent] File attachments:', fileAttachments.length);
+        console.log('[useAgent] computedSessionFolder:', computedSessionFolder);
+        console.log('[useAgent] augmentedPrompt:', augmentedPrompt.slice(0, 200));
       }
 
       try {
@@ -1808,8 +1859,10 @@ export function useAgent(): UseAgentReturn {
         // Only use fast chat when modelConfig is available (custom provider with API key).
         // Default provider has no API key on the backend chat service — it relies on
         // Claude Code CLI which has its own config, so we must fall through to the agent endpoint.
+        const hasFileAttachments = fileAttachments.length > 0;
         const shouldUseFastChat =
           modelConfig &&
+          !hasFileAttachments &&
           (mode === 'chat' ||
             (mode !== 'task' && !hasImages && isFastChatQuery(prompt)));
 
@@ -1825,7 +1878,7 @@ export function useAgent(): UseAgentReturn {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                prompt,
+                prompt: augmentedPrompt,
                 modelConfig,
                 language,
               }),
@@ -1894,6 +1947,14 @@ export function useAgent(): UseAgentReturn {
 
           // Save to database
           try {
+            // Save user message with attachment refs
+            const allRefs = [...savedFileRefs];
+            await createMessage({
+              task_id: currentTaskId,
+              type: 'user',
+              content: prompt,
+              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+            });
             if (fullContent) {
               await createMessage({
                 task_id: currentTaskId,
@@ -1923,32 +1984,30 @@ export function useAgent(): UseAgentReturn {
           };
           setMessages([userMessage]);
 
-          // Save user message to database (save attachments to files first)
+          // Save user message to database (save image attachments to files;
+          // file attachments were already saved earlier)
           try {
-            let attachmentRefs: string | undefined;
+            const allRefs: AttachmentReference[] = [...savedFileRefs];
+            const imageAttachments = attachments?.filter((a) => a.type === 'image') || [];
             if (
-              attachments &&
-              attachments.length > 0 &&
+              imageAttachments.length > 0 &&
               computedSessionFolder
             ) {
-              // Save attachments to file system and get references
-              const refs = await saveAttachments(
+              const imageRefs = await saveAttachments(
                 computedSessionFolder,
-                attachments
+                imageAttachments
               );
-              attachmentRefs = JSON.stringify(refs);
+              allRefs.push(...imageRefs);
               console.log(
-                '[useAgent] Saved attachments to files:',
-                refs.length
+                '[useAgent] Saved image attachments to files:',
+                imageRefs.length
               );
-              // Trigger working files refresh
-              setFilesVersion((v) => v + 1);
             }
             await createMessage({
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: attachmentRefs,
+              attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
             });
           } catch (error) {
             console.error('Failed to save user message:', error);
@@ -1969,7 +2028,7 @@ export function useAgent(): UseAgentReturn {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              prompt,
+              prompt: augmentedPrompt,
               workDir,
               taskId: currentTaskId,
               modelConfig,
@@ -1990,6 +2049,19 @@ export function useAgent(): UseAgentReturn {
           return currentTaskId;
         }
 
+        // Save user message to database (for plan path)
+        try {
+          const allRefs = [...savedFileRefs];
+          await createMessage({
+            task_id: currentTaskId,
+            type: 'user',
+            content: prompt,
+            attachments: allRefs.length > 0 ? JSON.stringify(allRefs) : undefined,
+          });
+        } catch (error) {
+          console.error('Failed to save user message:', error);
+        }
+
         // Phase 1: Request planning (no images)
         const response = await fetchWithRetry(
           `${AGENT_SERVER_URL}/agent/plan`,
@@ -1999,7 +2071,7 @@ export function useAgent(): UseAgentReturn {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              prompt,
+              prompt: augmentedPrompt,
               modelConfig,
               language: getPreferredLanguage(),
             }),
@@ -2467,8 +2539,10 @@ export function useAgent(): UseAgentReturn {
 
         // Fast chat detection for follow-up messages
         // Only use fast chat when modelConfig is available (see runAgent comment for details)
+        const hasFileAttachments = attachments?.some((a) => a.type === 'file') || false;
         const shouldUseFastChat =
           modelConfig &&
+          !hasFileAttachments &&
           (mode === 'chat' ||
             (mode !== 'task' && !hasImages && isFastChatQuery(reply)));
 
