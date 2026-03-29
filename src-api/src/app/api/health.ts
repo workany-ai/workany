@@ -239,6 +239,8 @@ function getExtendedPath(): string {
       // yarn
       `${localAppData}\\Yarn\\bin`,
       `${appData}\\Yarn\\bin`,
+      // bun
+      `${userProfile}\\.bun\\bin`,
       // volta
       `${userProfile}\\.volta\\bin`,
       `${localAppData}\\Volta\\bin`,
@@ -284,6 +286,9 @@ function getExtendedPath(): string {
       '/opt/homebrew/bin',
       `${home}/.local/bin`,
       `${home}/.npm-global/bin`,
+      `${home}/.bun/bin`,
+      `${home}/.yarn/bin`,
+      `${home}/.pnpm-global/bin`,
       `${home}/.volta/bin`,
       `${home}/code/node/npm_global/bin`
     );
@@ -327,16 +332,39 @@ async function checkCommandInWsl(command: string): Promise<boolean> {
 }
 
 async function checkCommand(command: string): Promise<boolean> {
+  const extendedEnv = {
+    ...process.env,
+    PATH: getExtendedPath(),
+  };
+
   try {
     await execAsync(command, {
-      env: {
-        ...process.env,
-        PATH: getExtendedPath(),
-      },
+      env: extendedEnv,
       shell: isWindows ? 'cmd.exe' : '/bin/sh',
     });
     return true;
   } catch {
+    // Fallback: try login shell to pick up user's full PATH (e.g. from .bashrc, .zshrc)
+    if (!isWindows) {
+      const binaryName = command.split(' ').pop() || '';
+      try {
+        await execAsync(`bash -l -c "which ${binaryName}"`, {
+          env: extendedEnv,
+          stdio: 'pipe',
+        } as Parameters<typeof execAsync>[1]);
+        return true;
+      } catch {
+        try {
+          await execAsync(`zsh -l -c "which ${binaryName}"`, {
+            env: extendedEnv,
+            stdio: 'pipe',
+          } as Parameters<typeof execAsync>[1]);
+          return true;
+        } catch {
+          // Not found in any shell
+        }
+      }
+    }
     return false;
   }
 }

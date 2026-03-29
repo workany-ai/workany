@@ -327,6 +327,7 @@ function getExtendedPath(): string {
     paths.push(
       join(home, 'AppData', 'Roaming', 'npm'),
       join(home, 'AppData', 'Local', 'Programs', 'nodejs'),
+      join(home, '.bun', 'bin'),
       join(home, '.volta', 'bin'),
       'C:\\Program Files\\nodejs',
       'C:\\Program Files (x86)\\nodejs'
@@ -338,6 +339,9 @@ function getExtendedPath(): string {
       '/opt/homebrew/bin',
       `${home}/.local/bin`,
       `${home}/.npm-global/bin`,
+      `${home}/.bun/bin`,
+      `${home}/.yarn/bin`,
+      `${home}/.pnpm-global/bin`,
       `${home}/.volta/bin`,
       `${home}/code/node/npm_global/bin`
     );
