@@ -9,10 +9,38 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Mac-friendly overlay scrollbar: thin, transparent track, subtle thumb */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+  }
+  .dark * {
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Global webkit scrollbar styling for Mac */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
 .container {
