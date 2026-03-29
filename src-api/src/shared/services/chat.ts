@@ -17,6 +17,10 @@ const logger = createLogger('ChatService');
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 
+// Maximum number of conversation messages to include in API calls
+// to prevent excessive token usage. Each "turn" is a user+assistant pair.
+const MAX_CONTEXT_MESSAGES = 40; // 20 turns × 2 messages
+
 function isAnthropicModel(model: string): boolean {
   return model.startsWith('claude-') || model.includes('claude');
 }
@@ -249,7 +253,16 @@ export async function* runChat(
 
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   if (conversation && conversation.length > 0) {
-    for (const msg of conversation) {
+    // Limit conversation history to prevent excessive token usage
+    const trimmedConversation = conversation.length > MAX_CONTEXT_MESSAGES
+      ? conversation.slice(-MAX_CONTEXT_MESSAGES)
+      : conversation;
+
+    if (trimmedConversation.length < conversation.length) {
+      logger.info(`[ChatService] Truncated conversation history from ${conversation.length} to ${trimmedConversation.length} messages`);
+    }
+
+    for (const msg of trimmedConversation) {
       messages.push({ role: msg.role, content: msg.content });
     }
   }
