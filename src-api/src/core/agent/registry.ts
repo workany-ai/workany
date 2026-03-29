@@ -12,7 +12,7 @@ import type {
   AgentProvider,
   IAgent,
 } from '@/core/agent/types';
-import { isDeepEqualConfig } from '@/shared/utils/config';
+import { stableStringify } from '@/shared/utils/config';
 
 // ============================================================================
 // Agent Instance State
@@ -97,7 +97,12 @@ class AgentRegistry {
    */
   unregister(type: string): void {
     this.plugins.delete(type);
-    this.instances.delete(type);
+    // Remove all cached instances for this type (any config)
+    for (const key of this.instances.keys()) {
+      if (key === type || key.startsWith(`${type}:`)) {
+        this.instances.delete(key);
+      }
+    }
   }
 
   /**
@@ -162,35 +167,54 @@ class AgentRegistry {
   }
 
   /**
+   * Build a cache key from type and config
+   */
+  private buildCacheKey(type: string, config?: AgentConfig): string {
+    if (!config) return type;
+    return `${type}:${stableStringify(config)}`;
+  }
+
+  /**
+   * Shutdown and remove all cached instances for a given type
+   */
+  private async shutdownInstancesByType(type: string): Promise<void> {
+    for (const [key, instance] of this.instances) {
+      if (key === type || key.startsWith(`${type}:`)) {
+        if (instance.state === 'ready') {
+          try {
+            const agentWithShutdown = instance.agent as {
+              shutdown?: () => Promise<void>;
+            };
+            if (typeof agentWithShutdown.shutdown === 'function') {
+              await agentWithShutdown.shutdown();
+            }
+          } catch (error) {
+            console.warn(
+              `[${this.registryName}] Failed to shutdown provider ${type}:`,
+              error
+            );
+          }
+        }
+        this.instances.delete(key);
+      }
+    }
+  }
+
+  /**
    * Get or create a singleton instance
    */
   async getInstance(type: string, config?: AgentConfig): Promise<IAgent> {
-    let instanceData = this.instances.get(type);
     const effectiveConfig: AgentConfig = {
       ...(config ?? {}),
       provider: type as AgentProvider,
     };
+    const cacheKey = this.buildCacheKey(type, effectiveConfig);
+
+    let instanceData = this.instances.get(cacheKey);
 
     if (instanceData && instanceData.state === 'ready') {
-      if (isDeepEqualConfig(instanceData.config, effectiveConfig)) {
-        instanceData.lastUsedAt = new Date();
-        return instanceData.agent;
-      }
-      try {
-        const agentWithShutdown = instanceData.agent as {
-          shutdown?: () => Promise<void>;
-        };
-        if (typeof agentWithShutdown.shutdown === 'function') {
-          await agentWithShutdown.shutdown();
-        }
-      } catch (error) {
-        console.warn(
-          `[${this.registryName}] Failed to shutdown provider ${type}:`,
-          error
-        );
-      }
-      this.instances.delete(type);
-      instanceData = undefined;
+      instanceData.lastUsedAt = new Date();
+      return instanceData.agent;
     }
 
     // If instance exists but is in error state, try to recreate
@@ -198,9 +222,11 @@ class AgentRegistry {
       console.log(
         `[${this.registryName}] Recreating provider ${type} after error`
       );
-      this.instances.delete(type);
-      instanceData = undefined;
+      this.instances.delete(cacheKey);
     }
+
+    // Shutdown any existing instances for this type before creating a new one
+    await this.shutdownInstancesByType(type);
 
     // Create new instance
     const agent = this.create(type, effectiveConfig);
@@ -211,7 +237,7 @@ class AgentRegistry {
       createdAt: new Date(),
       lastUsedAt: new Date(),
     };
-    this.instances.set(type, instanceData);
+    this.instances.set(cacheKey, instanceData);
 
     return agent;
   }
