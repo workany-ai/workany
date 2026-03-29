@@ -188,7 +188,7 @@ export const KIMI_CONFIG_SCHEMA = {
     baseUrl: {
       type: 'string',
       description: 'Kimi Code API base URL',
-      default: 'https://api.kimi.com/coding/v1',
+      default: 'https://api.moonshot.cn/v1',
     },
     model: {
       type: 'string',

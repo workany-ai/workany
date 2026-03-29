@@ -119,7 +119,7 @@ export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
     name: 'Kimi Code (Moonshot)',
     enabled: true,
     config: {
-      model: 'kimi-for-coding',
+      model: 'moonshot-v1-128k',
     },
   },
 ];
@@ -334,11 +334,11 @@ export const defaultProviders: AIProvider[] = [
     id: 'kimi',
     name: 'Kimi (Moonshot)',
     apiKey: '',
-    baseUrl: 'https://api.kimi.com/coding/v1',
+    baseUrl: 'https://api.moonshot.cn/v1',
     enabled: true,
-    models: ['kimi-for-coding'],
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     icon: 'K',
-    apiKeyUrl: 'https://www.kimi.com/code/docs/en/',
+    apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
     canDelete: true,
   },
 ];
@@ -372,6 +372,7 @@ export const customProviderModels: Record<string, string[]> = {
     'deepseek-v3-250324',
   ],
   deepseek: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+  kimi: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
   moonshot: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
   zhipu: ['glm-4-plus', 'glm-4-flash', 'glm-4-long'],
   qwen: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
