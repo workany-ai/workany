@@ -89,7 +89,7 @@ export interface PlanStep {
 // Agent Configuration
 // ============================================================================
 
-export type AgentProvider = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'custom';
+export type AgentProvider = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'shipany' | 'custom';
 
 export interface AgentConfig {
   /** Agent provider to use */

@@ -269,6 +269,57 @@ export const DEEPAGENTS_METADATA: AgentProviderMetadata = {
  
 
 /**
+ * JSON Schema for ShipAny Code agent configuration
+ */
+export const SHIPANY_CONFIG_SCHEMA = {
+  type: 'object',
+  properties: {
+    apiKey: {
+      type: 'string',
+      description: 'Anthropic API key or third-party API key',
+    },
+    baseUrl: {
+      type: 'string',
+      description: 'Custom API base URL (e.g. OpenRouter)',
+    },
+    model: {
+      type: 'string',
+      default: DEFAULT_AGENT_MODEL,
+      description: 'Model to use',
+    },
+    workDir: {
+      type: 'string',
+      default: DEFAULT_WORK_DIR,
+      description: 'Working directory for file operations',
+    },
+  },
+};
+
+/**
+ * Metadata for built-in ShipAny Code agent
+ */
+export const SHIPANY_METADATA: AgentProviderMetadata = {
+  type: 'shipany',
+  name: 'ShipAny Code',
+  version: '1.0.0',
+  description:
+    'Open-source agent runtime based on @shipany/open-agent-sdk. Drop-in replacement for Claude Code that runs in-process — no external CLI binary required.',
+  configSchema: SHIPANY_CONFIG_SCHEMA,
+  builtin: true,
+  supportsPlan: true,
+  supportsStreaming: true,
+  supportsSandbox: true,
+  supportedModels: [
+    'claude-sonnet-4-20250514',
+    'claude-opus-4-20250514',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022',
+  ],
+  defaultModel: 'claude-sonnet-4-20250514',
+  tags: ['shipany', 'open-agent', 'in-process', 'planning', 'streaming'],
+};
+
+/**
  * JSON Schema for Pi agent configuration
  */
 export const PI_CONFIG_SCHEMA = {

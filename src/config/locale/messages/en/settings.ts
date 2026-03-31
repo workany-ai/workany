@@ -38,6 +38,8 @@ export default {
   runtimeKimiCodeDescription: 'Powered by Kimi CLI to orchestrate tasks',
   runtimePiAgent: 'Pi Agent',
   runtimePiAgentDescription: 'Pi SDK embedded agent runtime, supports multiple LLM providers',
+  runtimeShipAnyCode: 'ShipAny Code',
+  runtimeShipAnyCodeDescription: 'Open-source agent runtime, no CLI binary required',
   installClaudeCode: 'Claude Code not installed',
   installClaudeCodeHint: 'Run: npm install -g @anthropic-ai/claude-code',
   installKimiCode: 'Kimi CLI not installed',

@@ -78,7 +78,7 @@ export const defaultSandboxProviders: SandboxProviderSetting[] = [
 // Agent Runtime Settings
 // ============================================================================
 
-export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'custom';
+export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'shipany' | 'custom';
 
 export interface AgentRuntimeSetting {
   id: string;
@@ -126,6 +126,15 @@ export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
     id: 'pi',
     type: 'pi',
     name: 'Pi Agent',
+    enabled: true,
+    config: {
+      model: 'claude-sonnet-4-20250514',
+    },
+  },
+  {
+    id: 'shipany',
+    type: 'shipany',
+    name: 'ShipAny Code',
     enabled: true,
     config: {
       model: 'claude-sonnet-4-20250514',

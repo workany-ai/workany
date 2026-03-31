@@ -8,6 +8,7 @@ import { codexPlugin } from '@/extensions/agent/codex';
 import { deepagentsPlugin } from '@/extensions/agent/deepagents';
 import { kimiPlugin } from '@/extensions/agent/kimi';
 import { piPlugin } from '@/extensions/agent/pi';
+import { shipanyPlugin } from '@/extensions/agent/shipany';
 
 /**
  * Agent SDK Abstraction Layer
@@ -112,6 +113,7 @@ export const builtinAgentPlugins: AgentPlugin[] = [
   deepagentsPlugin,
   kimiPlugin,
   piPlugin,
+  shipanyPlugin,
 ];
 
 /**

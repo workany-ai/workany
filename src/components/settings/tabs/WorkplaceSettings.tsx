@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getPathSeparator } from '@/shared/lib/paths';
 import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { Bot, FileText, FolderOpen, Shield, ShieldOff, Sparkles, Terminal } from 'lucide-react';
+import { Bot, Code, FileText, FolderOpen, Shield, ShieldOff, Sparkles, Terminal } from 'lucide-react';
 
 import { API_BASE_URL } from '../constants';
 import type { WorkplaceSettingsProps } from '../types';
@@ -59,6 +59,12 @@ const agentRuntimeOptions = [
     icon: Bot,
     nameKey: 'runtimeKimiCode',
     descKey: 'runtimeKimiCodeDescription',
+  },
+  {
+    id: 'shipany',
+    icon: Code,
+    nameKey: 'runtimeShipAnyCode',
+    descKey: 'runtimeShipAnyCodeDescription',
   },
 ] as const;
 
@@ -151,7 +157,7 @@ export function WorkplaceSettings({
         <p className="text-muted-foreground text-xs">
           {t.settings.agentRuntimeDescription}
         </p>
-        <div className="grid max-w-lg grid-cols-3 gap-2">
+        <div className="grid max-w-xl grid-cols-2 gap-2">
           {agentRuntimeOptions.map((option) => {
             const Icon = option.icon;
             const isSelected = settings.defaultAgentRuntime === option.id;
