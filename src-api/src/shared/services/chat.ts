@@ -247,7 +247,10 @@ export async function* runChat(
   });
 
   const systemPrompt = buildSystemPrompt(
-    'You are a helpful assistant. Be concise and direct in your responses.',
+    'You are a helpful assistant. Be concise and direct in your responses. ' +
+    'You have network access capabilities. When users ask about URLs, websites, or online content, ' +
+    'you should attempt to help by analyzing the URL structure, inferring content from the domain/path, ' +
+    'or suggesting the user switch to Agent/Task mode for full web access with tools like curl and browser automation.',
     language
   );
 

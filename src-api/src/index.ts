@@ -108,6 +108,10 @@ async function start() {
   // Load configuration
   await loadConfig();
 
+  // Install built-in skills to ~/.workany/skills/
+  const { installBuiltinSkills } = await import('@/shared/skills/loader');
+  await installBuiltinSkills();
+
   // Initialize provider manager
   await initProviderManager();
 

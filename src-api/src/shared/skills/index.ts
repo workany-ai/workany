@@ -7,6 +7,8 @@
 
 export {
   loadSkills,
+  loadAllSkills,
+  installBuiltinSkills,
   getSkillsPath,
   getSkillNames,
   findSkill,

@@ -36,6 +36,8 @@ export default {
   runtimeClaudeCodeDescription: '由 Claude Code 驱动任务流程',
   runtimeKimiCode: 'Kimi Code',
   runtimeKimiCodeDescription: '由 Kimi CLI 驱动任务流程',
+  runtimePiAgent: 'Pi Agent',
+  runtimePiAgentDescription: 'Pi SDK 内嵌智能体运行时，支持多种大模型',
   installClaudeCode: 'Claude Code 未安装',
   installClaudeCodeHint: '运行: npm install -g @anthropic-ai/claude-code',
   installKimiCode: 'Kimi CLI 未安装',

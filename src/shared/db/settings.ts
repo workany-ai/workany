@@ -78,7 +78,7 @@ export const defaultSandboxProviders: SandboxProviderSetting[] = [
 // Agent Runtime Settings
 // ============================================================================
 
-export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'custom';
+export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'custom';
 
 export interface AgentRuntimeSetting {
   id: string;
@@ -120,6 +120,15 @@ export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
     enabled: true,
     config: {
       model: 'moonshot-v1-128k',
+    },
+  },
+  {
+    id: 'pi',
+    type: 'pi',
+    name: 'Pi Agent',
+    enabled: true,
+    config: {
+      model: 'claude-sonnet-4-20250514',
     },
   },
 ];
@@ -421,7 +430,7 @@ export const defaultSettings: Settings = {
   sandboxProviders: defaultSandboxProviders,
   defaultSandboxProvider: 'codex', // Default to Codex sandbox, fallback to native
   agentRuntimes: defaultAgentRuntimes,
-  defaultAgentRuntime: 'claude', // Default to Claude Code
+  defaultAgentRuntime: 'pi', // Default to Pi Agent
   maxConversationTurns: 20, // Default: 20 conversation turns
   maxHistoryTokens: 2000, // Default: 2000 tokens for history
   theme: 'system',

@@ -14,6 +14,7 @@ import type {
   ProviderMetadata,
   ProvidersConfig,
 } from '@/shared/provider/types';
+import { DEFAULT_AGENT_PROVIDER } from '@/config/constants';
 
 // ============================================================================
 // Provider Manager
@@ -402,7 +403,7 @@ class ProviderManagerImpl {
     }
 
     if (!this.config.agent) {
-      const agentType = process.env.AGENT_PROVIDER || 'claude';
+      const agentType = process.env.AGENT_PROVIDER || DEFAULT_AGENT_PROVIDER;
       this.config.agent = { category: 'agent', type: agentType };
     }
 

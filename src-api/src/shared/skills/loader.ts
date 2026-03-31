@@ -9,9 +9,11 @@
  */
 
 import fs from 'fs/promises';
-import { join, basename } from 'path';
+import { existsSync } from 'fs';
+import { join, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-import { getClaudeSkillsDir } from '@/config/constants';
+import { getClaudeSkillsDir, getWorkanySkillsDir } from '@/config/constants';
 
 /**
  * Skill metadata from SKILL.md frontmatter
@@ -210,4 +212,136 @@ export function getSkillNames(skills: LoadedSkill[]): string[] {
  */
 export function findSkill(skills: LoadedSkill[], name: string): LoadedSkill | undefined {
   return skills.find((s) => s.name.toLowerCase() === name.toLowerCase());
+}
+
+// ============================================================================
+// Built-in Skills Installation
+// ============================================================================
+
+/**
+ * Get the path to bundled built-in skills in the project resources
+ */
+function getBuiltinSkillsSourceDir(): string {
+  // Resolve relative to this file: src/shared/skills/loader.ts -> resources/skills/
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  // In dev: src-api/src/shared/skills/ -> src-api/resources/skills/
+  // In prod: dist/shared/skills/ -> resources/skills/
+  const devPath = join(thisDir, '..', '..', '..', 'resources', 'skills');
+  if (existsSync(devPath)) return devPath;
+  const prodPath = join(thisDir, '..', '..', 'resources', 'skills');
+  if (existsSync(prodPath)) return prodPath;
+  return devPath; // fallback
+}
+
+/**
+ * Recursively copy a directory
+ */
+async function copyDir(src: string, dest: string): Promise<void> {
+  await fs.mkdir(dest, { recursive: true });
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else {
+      await fs.copyFile(srcPath, destPath);
+    }
+  }
+}
+
+/**
+ * Install built-in skills from project resources to ~/.workany/skills/
+ * Only copies if the destination doesn't exist or is outdated.
+ */
+export async function installBuiltinSkills(): Promise<void> {
+  const sourceDir = getBuiltinSkillsSourceDir();
+  const targetDir = getWorkanySkillsDir();
+
+  try {
+    await fs.access(sourceDir);
+  } catch {
+    console.log('[Skills] No built-in skills source directory found');
+    return;
+  }
+
+  try {
+    await fs.mkdir(targetDir, { recursive: true });
+
+    const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+
+      const srcSkillDir = join(sourceDir, entry.name);
+      const destSkillDir = join(targetDir, entry.name);
+      const srcSkillFile = join(srcSkillDir, 'SKILL.md');
+      const destSkillFile = join(destSkillDir, 'SKILL.md');
+
+      // Check if source has SKILL.md
+      try {
+        await fs.access(srcSkillFile);
+      } catch {
+        continue;
+      }
+
+      // Check if needs update by comparing modification times
+      let needsInstall = false;
+      try {
+        const srcStat = await fs.stat(srcSkillFile);
+        const destStat = await fs.stat(destSkillFile);
+        needsInstall = srcStat.mtimeMs > destStat.mtimeMs;
+      } catch {
+        needsInstall = true; // Destination doesn't exist
+      }
+
+      if (needsInstall) {
+        console.log(`[Skills] Installing built-in skill: ${entry.name}`);
+        await copyDir(srcSkillDir, destSkillDir);
+      }
+    }
+  } catch (err) {
+    console.error('[Skills] Failed to install built-in skills:', err);
+  }
+}
+
+/**
+ * Load skills from all directories (both ~/.claude/skills/ and ~/.workany/skills/)
+ */
+export async function loadAllSkills(
+  skillsConfig?: SkillsConfig
+): Promise<LoadedSkill[]> {
+  if (skillsConfig && !skillsConfig.enabled) {
+    return [];
+  }
+
+  const skills: LoadedSkill[] = [];
+  const dirs = [getClaudeSkillsDir(), getWorkanySkillsDir()];
+  const loadedNames = new Set<string>();
+
+  for (const skillsDir of dirs) {
+    try {
+      await fs.access(skillsDir);
+      const entries = await fs.readdir(skillsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || !entry.isDirectory()) continue;
+
+        const skillDir = join(skillsDir, entry.name);
+        const skill = await loadSkillFromDir(skillDir);
+        if (skill && !loadedNames.has(skill.name)) {
+          skills.push(skill);
+          loadedNames.add(skill.name);
+          console.log(`[Skills] Loaded skill: ${skill.name} from ${skillsDir}`);
+        }
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+  }
+
+  if (skills.length > 0) {
+    console.log(`[Skills] Total loaded: ${skills.length} skill(s)`);
+  }
+
+  return skills;
 }

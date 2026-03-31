@@ -30,9 +30,14 @@ import type {
   PlanOptions,
 } from '@/core/agent/types';
 import { DEFAULT_WORK_DIR } from '@/config/constants';
+import { loadAllSkills } from '@/shared/skills/loader';
+import type { LoadedSkill } from '@/shared/skills/loader';
 import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('PiAgent');
+
+// Cached skills content
+let cachedSkillsContent: string | null = null;
 
 // ============================================================================
 // Type for Pi SDK session (avoid importing concrete types to keep dynamic import)
@@ -66,16 +71,62 @@ function inferPiProvider(config: AgentConfig): string {
   const model = config.model || '';
   const baseUrl = config.baseUrl || '';
 
+  // Check baseUrl first for third-party API gateways
+  if (baseUrl.includes('openrouter')) {
+    return 'openrouter';
+  }
   if (model.startsWith('claude') || baseUrl.includes('anthropic')) {
     return 'anthropic';
   }
-  if (model.startsWith('gpt')) {
+  if (model.startsWith('gpt') || baseUrl.includes('openai')) {
     return 'openai';
   }
-  if (model.startsWith('gemini')) {
+  if (model.startsWith('gemini') || baseUrl.includes('google')) {
     return 'google';
   }
   return 'anthropic';
+}
+
+/**
+ * Load skills content for injection into Pi Agent prompts.
+ * Replaces $SKILL_DIR with actual skill paths.
+ */
+async function getSkillsInstruction(): Promise<string> {
+  if (cachedSkillsContent !== null) return cachedSkillsContent;
+
+  try {
+    const skills = await loadAllSkills();
+    if (skills.length === 0) {
+      cachedSkillsContent = '';
+      return '';
+    }
+
+    const parts: string[] = [];
+    for (const skill of skills) {
+      // Extract content after frontmatter
+      const content = skill.content.replace(/^---[\s\S]*?---\n*/, '');
+      // Replace $SKILL_DIR and $CLAUDE_SKILL_DIR with actual skill path
+      const resolved = content
+        .replace(/\$SKILL_DIR/g, skill.path)
+        .replace(/\$CLAUDE_SKILL_DIR/g, skill.path);
+      parts.push(resolved);
+    }
+
+    cachedSkillsContent = parts.join('\n\n---\n\n');
+    logger.info(`[PiAgent] Loaded ${skills.length} skill(s) for prompt injection`);
+    return cachedSkillsContent;
+  } catch (err) {
+    logger.error('[PiAgent] Failed to load skills:', err);
+    cachedSkillsContent = '';
+    return '';
+  }
+}
+
+/**
+ * Reset cached skills (useful for hot reload)
+ */
+export function resetSkillsCache(): void {
+  cachedSkillsContent = null;
 }
 
 /**
@@ -158,9 +209,30 @@ export class PiAgent extends BaseAgent {
     try {
       model = piAi.getModel(piProvider as 'anthropic', modelId as 'claude-sonnet-4-20250514');
     } catch {
-      // Fallback: construct model-like object if getModel doesn't recognize it
-      logger.warn(`[PiAgent] getModel failed for ${piProvider}/${modelId}, using registry fallback`);
-      model = { provider: piProvider, modelId };
+      // Fallback: construct a full Model object for custom/unknown models
+      logger.warn(`[PiAgent] getModel failed for ${piProvider}/${modelId}, constructing model manually`);
+
+      // Determine API type and baseUrl based on provider
+      const providerDefaults: Record<string, { api: string; baseUrl: string }> = {
+        openrouter: { api: 'openai-completions', baseUrl: 'https://openrouter.ai/api/v1' },
+        openai: { api: 'openai-completions', baseUrl: 'https://api.openai.com/v1' },
+        anthropic: { api: 'anthropic', baseUrl: 'https://api.anthropic.com' },
+        google: { api: 'google', baseUrl: 'https://generativelanguage.googleapis.com' },
+      };
+      const defaults = providerDefaults[piProvider] || providerDefaults.openai;
+
+      model = {
+        id: modelId,
+        name: modelId,
+        api: defaults.api,
+        provider: piProvider,
+        baseUrl: this.config.baseUrl || defaults.baseUrl,
+        reasoning: false,
+        input: ['text', 'image'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 8192,
+      };
     }
 
     // Create session and settings managers (in-memory for isolation)
@@ -339,7 +411,8 @@ export class PiAgent extends BaseAgent {
       const languageInstruction = options?.language
         ? buildLanguageInstruction(options.language)
         : '';
-      const fullPrompt = [workspaceInstruction, languageInstruction, prompt]
+      const skillsInstruction = await getSkillsInstruction();
+      const fullPrompt = [skillsInstruction, workspaceInstruction, languageInstruction, prompt]
         .filter(Boolean)
         .join('\n\n');
 
@@ -383,8 +456,10 @@ export class PiAgent extends BaseAgent {
       const languageInstruction = options?.language
         ? buildLanguageInstruction(options.language)
         : '';
+      const skillsInstruction = await getSkillsInstruction();
       const planningPrompt = [
         PLANNING_INSTRUCTION,
+        skillsInstruction,
         workspaceInstruction,
         languageInstruction,
         prompt,
@@ -479,7 +554,8 @@ export class PiAgent extends BaseAgent {
         ? buildLanguageInstruction(options.language)
         : '';
       const executionInstruction = formatPlanForExecution(plan, options.originalPrompt);
-      const fullPrompt = [workspaceInstruction, languageInstruction, executionInstruction]
+      const skillsInstruction = await getSkillsInstruction();
+      const fullPrompt = [skillsInstruction, workspaceInstruction, languageInstruction, executionInstruction]
         .filter(Boolean)
         .join('\n\n');
 

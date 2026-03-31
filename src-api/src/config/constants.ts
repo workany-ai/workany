@@ -74,7 +74,7 @@ export const CONFIG_SEARCH_PATHS = [
 export const DEFAULT_SANDBOX_PROVIDER = 'codex';
 
 /** Default agent provider type */
-export const DEFAULT_AGENT_PROVIDER = 'claude';
+export const DEFAULT_AGENT_PROVIDER = 'pi';
 
 /** Default agent model */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-20250514';

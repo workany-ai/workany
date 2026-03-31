@@ -21,6 +21,7 @@ import {
 } from '@/core/agent';
 
 import { getProviderManager } from '@/shared/provider/manager';
+import { DEFAULT_AGENT_PROVIDER } from '@/config/constants';
 import { nanoid } from 'nanoid';
 
 // ============================================================================
@@ -54,7 +55,7 @@ export async function getAgent(config?: Partial<AgentConfig>): Promise<IAgent> {
   // Get current active agent provider from ProviderManager
   const providerManager = getProviderManager();
   const currentAgentConfig = providerManager.getConfig().agent;
-  const currentProvider = currentAgentConfig?.type || 'claude';
+  const currentProvider = currentAgentConfig?.type || DEFAULT_AGENT_PROVIDER;
 
   console.log('[AgentService] Using current agent provider:', currentProvider);
 

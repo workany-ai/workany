@@ -53,6 +53,8 @@ function isFastChatQuery(prompt: string): boolean {
   const trimmed = prompt.trim();
   // Long prompts are likely task descriptions
   if (trimmed.length > 200) return false;
+  // URLs require agent mode for web access (curl, CDP, etc.)
+  if (/https?:\/\//.test(trimmed)) return false;
   // Check for task-oriented keywords
   const taskKeywords = [
     // File operations
@@ -68,7 +70,8 @@ function isFastChatQuery(prompt: string): boolean {
     // Analysis
     '分析', '扫描', '搜索', '查找', 'analyze', 'scan', 'search', 'find',
     // Web
-    '网站', '网页', '爬取', 'website', 'webpage', 'scrape', 'fetch',
+    '网站', '网页', '爬取', '联网', '访问', '打开', '下载',
+    'website', 'webpage', 'scrape', 'fetch', 'browse', 'download', 'visit',
   ];
   const lower = trimmed.toLowerCase();
   return !taskKeywords.some((kw) => lower.includes(kw));
