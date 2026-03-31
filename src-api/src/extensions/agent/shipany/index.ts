@@ -11,12 +11,9 @@ import { mkdir, writeFile } from 'fs/promises';
 import { homedir, platform } from 'os';
 import { join } from 'path';
 import {
-  createSdkMcpServer,
-  Options,
   query,
-  tool,
 } from '@shipany/open-agent-sdk';
-import { z } from 'zod';
+import type { Options } from '@shipany/open-agent-sdk';
 
 import {
   BaseAgent,
@@ -179,145 +176,8 @@ const ALLOWED_TOOLS = [
   'TodoWrite',
 ];
 
-function createSandboxMcpServerInstance(sandboxProvider?: string) {
-  return createSdkMcpServer({
-    name: 'sandbox',
-    version: '1.0.0',
-    tools: [
-      tool(
-        'sandbox_run_script',
-        `Run a script file in an isolated sandbox container. Automatically detects the runtime (Python, Node.js, Bun) based on file extension.
-
-IMPORTANT: The sandbox is isolated and CANNOT write files to the host filesystem.
-- Scripts should output results to stdout (print/console.log)
-- After execution, use the Write tool to save stdout content to files if needed
-- Do NOT write files inside the script - it will fail with PermissionError`,
-        {
-          filePath: z.string().describe('Absolute path to the script file to execute'),
-          workDir: z.string().describe('Working directory containing the script'),
-          args: z.array(z.string()).optional().describe('Optional command line arguments'),
-          packages: z.array(z.string()).optional().describe('Optional packages to install'),
-          timeout: z.number().optional().describe('Execution timeout in milliseconds (default: 120000)'),
-        },
-        async (args) => {
-          try {
-            const response = await fetch(`${SANDBOX_API_URL}/sandbox/run/file`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...args, provider: sandboxProvider }),
-            });
-
-            if (!response.ok) {
-              return {
-                content: [{ type: 'text' as const, text: `Sandbox service error: HTTP ${response.status}.` }],
-                isError: true,
-              };
-            }
-
-            const result = (await response.json()) as {
-              success: boolean; exitCode: number; runtime?: string;
-              duration?: number; stdout?: string; stderr?: string; error?: string;
-            } | null;
-
-            if (!result) {
-              return {
-                content: [{ type: 'text' as const, text: 'Sandbox service returned empty response.' }],
-                isError: true,
-              };
-            }
-
-            let output = '';
-            if (result.success) {
-              output = `Script executed successfully (exit code: ${result.exitCode})\n`;
-              output += `Runtime: ${result.runtime || 'unknown'}\nDuration: ${result.duration || 0}ms\n\n`;
-              if (result.stdout) output += `--- stdout ---\n${result.stdout}\n`;
-              if (result.stderr) output += `--- stderr ---\n${result.stderr}\n`;
-            } else {
-              output = `Script execution failed (exit code: ${result.exitCode})\n`;
-              if (result.error) output += `Error: ${result.error}\n`;
-              if (result.stderr) output += `--- stderr ---\n${result.stderr}\n`;
-              if (result.stdout) output += `--- stdout ---\n${result.stdout}\n`;
-            }
-
-            return { content: [{ type: 'text' as const, text: output }], isError: !result.success };
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            return {
-              content: [{ type: 'text' as const, text: `Sandbox service unavailable: ${errorMsg}.` }],
-              isError: true,
-            };
-          }
-        }
-      ),
-      tool(
-        'sandbox_run_command',
-        `Execute a shell command in an isolated sandbox container.
-
-IMPORTANT: The sandbox is isolated and CANNOT write files to the host filesystem.
-- Commands should output results to stdout
-- Use Write tool to save any output to files after execution`,
-        {
-          command: z.string().describe("The command to execute"),
-          args: z.array(z.string()).optional().describe('Arguments for the command'),
-          workDir: z.string().describe('Working directory for command execution'),
-          image: z.string().optional().describe('Container image'),
-          timeout: z.number().optional().describe('Execution timeout in milliseconds'),
-        },
-        async (args) => {
-          try {
-            const response = await fetch(`${SANDBOX_API_URL}/sandbox/exec`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                command: args.command, args: args.args, cwd: args.workDir,
-                image: args.image, timeout: args.timeout, provider: sandboxProvider,
-              }),
-            });
-
-            if (!response.ok) {
-              return {
-                content: [{ type: 'text' as const, text: `Sandbox service error: HTTP ${response.status}.` }],
-                isError: true,
-              };
-            }
-
-            const result = (await response.json()) as {
-              success: boolean; exitCode: number; duration?: number;
-              stdout?: string; stderr?: string; error?: string;
-            } | null;
-
-            if (!result) {
-              return {
-                content: [{ type: 'text' as const, text: 'Sandbox service returned empty response.' }],
-                isError: true,
-              };
-            }
-
-            let output = '';
-            if (result.success) {
-              output = `Command executed successfully (exit code: ${result.exitCode})\n`;
-              output += `Duration: ${result.duration || 0}ms\n\n`;
-              if (result.stdout) output += `--- stdout ---\n${result.stdout}\n`;
-              if (result.stderr) output += `--- stderr ---\n${result.stderr}\n`;
-            } else {
-              output = `Command failed (exit code: ${result.exitCode})\n`;
-              if (result.error) output += `Error: ${result.error}\n`;
-              if (result.stderr) output += `--- stderr ---\n${result.stderr}\n`;
-            }
-
-            return { content: [{ type: 'text' as const, text: output }], isError: !result.success };
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            return {
-              content: [{ type: 'text' as const, text: `Sandbox service unavailable: ${errorMsg}.` }],
-              isError: true,
-            };
-          }
-        }
-      ),
-    ],
-  });
-}
+// Note: @shipany/open-agent-sdk runs tools in-process (Bash, Read, Write, etc.)
+// Sandbox MCP server is not supported — use the built-in Bash tool for script execution.
 
 // ============================================================================
 // ShipAny Agent class
@@ -611,22 +471,10 @@ User's request (answer this AFTER reading the images):
     };
 
     // Initialize MCP servers
-    const mcpServers: Record<string, McpServerConfig | ReturnType<typeof createSandboxMcpServerInstance>> = {
-      ...userMcpServers,
-    };
-
-    if (options?.sandbox?.enabled) {
-      mcpServers.sandbox = createSandboxMcpServerInstance(options.sandbox.provider);
-      queryOptions.allowedTools = [
-        ...(options?.allowedTools || ALLOWED_TOOLS),
-        'sandbox_run_script',
-        'sandbox_run_command',
-      ];
-    }
-
-    if (Object.keys(mcpServers).length > 0) {
-      queryOptions.mcpServers = mcpServers;
-      logger.info(`[ShipAny ${session.id}] MCP servers: ${Object.keys(mcpServers).join(', ')}`);
+    // Note: sandbox MCP tools not supported in open-agent-sdk — use built-in Bash tool
+    if (Object.keys(userMcpServers).length > 0) {
+      queryOptions.mcpServers = userMcpServers;
+      logger.info(`[ShipAny ${session.id}] MCP servers: ${Object.keys(userMcpServers).join(', ')}`);
     }
 
     logger.info(`[ShipAny ${session.id}] ========== AGENT START ==========`);
@@ -788,21 +636,8 @@ User's request (answer this AFTER reading the images):
       },
     };
 
-    const mcpServers: Record<string, McpServerConfig | ReturnType<typeof createSandboxMcpServerInstance>> = {
-      ...userMcpServers,
-    };
-
-    if (options.sandbox?.enabled) {
-      mcpServers.sandbox = createSandboxMcpServerInstance(options.sandbox.provider);
-      queryOptions.allowedTools = [
-        ...(options.allowedTools || ALLOWED_TOOLS),
-        'sandbox_run_script',
-        'sandbox_run_command',
-      ];
-    }
-
-    if (Object.keys(mcpServers).length > 0) {
-      queryOptions.mcpServers = mcpServers;
+    if (Object.keys(userMcpServers).length > 0) {
+      queryOptions.mcpServers = userMcpServers;
     }
 
     try {
