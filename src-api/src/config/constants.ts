@@ -74,12 +74,13 @@ export const CONFIG_SEARCH_PATHS = [
 export const DEFAULT_SANDBOX_PROVIDER = 'codex';
 
 /** Default agent provider type */
-export const DEFAULT_AGENT_PROVIDER = 'pi';
+export const DEFAULT_AGENT_PROVIDER = 'codeany';
 
 /** Default agent model */
 export const DEFAULT_AGENT_MODEL = 'claude-sonnet-4-20250514';
 
-export const DEFAULT_KIMI_MODEL = 'moonshot-v1-128k';
+/** Default CodeAny agent model */
+export const DEFAULT_CODEANY_MODEL = 'claude-sonnet-4-20250514';
 
 // ============================================================================
 // Timeouts and Limits

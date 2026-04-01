@@ -3,43 +3,20 @@ import type { AgentPlugin } from '@/core/agent/plugin';
 import { getAgentRegistry } from '@/core/agent/registry';
 import type { AgentConfig, AgentProvider, IAgent } from '@/core/agent/types';
 import { DEFAULT_AGENT_PROVIDER, DEFAULT_WORK_DIR } from '@/config/constants';
-import { claudePlugin } from '@/extensions/agent/claude';
-import { codexPlugin } from '@/extensions/agent/codex';
-import { deepagentsPlugin } from '@/extensions/agent/deepagents';
-import { kimiPlugin } from '@/extensions/agent/kimi';
-import { piPlugin } from '@/extensions/agent/pi';
-import { shipanyPlugin } from '@/extensions/agent/shipany';
+import { codeanyPlugin } from '@/extensions/agent/codeany';
 
 /**
  * Agent SDK Abstraction Layer
  *
- * This module provides a unified interface for different AI agent implementations.
- * Currently supported providers:
- * - Claude Agent SDK (default)
- * - Codex CLI (OpenAI)
- * - DeepAgents.js (optional)
+ * Provides a unified interface for AI agent implementations.
+ * Default provider: CodeAny Agent (@codeany/open-agent-sdk)
  *
  * Usage:
  * ```typescript
- * import { createAgent, AgentConfig } from "./agents";
+ * import { createAgent } from "./agents";
  *
- * // Use Claude (default)
- * const agent = createAgent({ provider: "claude" });
+ * const agent = createAgent({ provider: "codeany" });
  *
- * // Use Codex CLI
- * const agent = createAgent({
- *   provider: "codex",
- *   apiKey: "your-openai-key"
- * });
- *
- * // Use DeepAgents.js
- * const agent = createAgent({
- *   provider: "deepagents",
- *   apiKey: "your-api-key",
- *   model: "claude-sonnet-4-20250514"
- * });
- *
- * // Run agent
  * for await (const message of agent.run("Hello!")) {
  *   console.log(message);
  * }
@@ -77,43 +54,16 @@ export {
 
 // Export provider implementations
 export {
-  ClaudeAgent,
-  createClaudeAgent,
-  claudePlugin,
-} from '@/extensions/agent/claude';
-export {
-  CodexAgent,
-  createCodexAgent,
-  codexPlugin,
-} from '@/extensions/agent/codex';
-export {
-  DeepAgentsAdapter,
-  createDeepAgentsAdapter,
-  deepagentsPlugin,
-} from '@/extensions/agent/deepagents';
-
-export {
-  KimiAgent,
-  createKimiAgent,
-  kimiPlugin,
-} from '@/extensions/agent/kimi';
-
-export {
-  PiAgent,
-  createPiAgent,
-  piPlugin,
-} from '@/extensions/agent/pi';
+  CodeAnyAgent,
+  createCodeAnyAgent,
+  codeanyPlugin,
+} from '@/extensions/agent/codeany';
 
 /**
  * All built-in agent plugins
  */
 export const builtinAgentPlugins: AgentPlugin[] = [
-  claudePlugin,
-  codexPlugin,
-  deepagentsPlugin,
-  kimiPlugin,
-  piPlugin,
-  shipanyPlugin,
+  codeanyPlugin,
 ];
 
 /**
@@ -132,7 +82,7 @@ export function registerBuiltinAgentProviders(): void {
 }
 
 /**
- * Get list of available providers (legacy compatibility)
+ * Get list of available providers
  */
 export function getAvailableProviders(): AgentProvider[] {
   return getAgentRegistry().getRegistered() as AgentProvider[];
@@ -140,34 +90,10 @@ export function getAvailableProviders(): AgentProvider[] {
 
 /**
  * Create an agent instance
- *
- * @param config - Agent configuration
- * @returns An IAgent implementation
- * @throws Error if the provider is not registered
- *
- * @example
- * ```typescript
- * // Create a Claude agent (default)
- * const agent = createAgent({ provider: "claude" });
- *
- * // Create with specific working directory
- * const agent = createAgent({
- *   provider: "claude",
- *   workDir: "/path/to/workspace"
- * });
- *
- * // Create DeepAgents.js agent
- * const agent = createAgent({
- *   provider: "deepagents",
- *   apiKey: process.env.ANTHROPIC_API_KEY,
- *   model: "claude-sonnet-4-20250514"
- * });
- * ```
  */
 export function createAgent(config: AgentConfig): IAgent {
   const registry = getAgentRegistry();
 
-  // Ensure built-in providers are registered
   if (registry.getRegistered().length === 0) {
     registerBuiltinAgentProviders();
   }
@@ -184,7 +110,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
 };
 
 /**
- * Create a default agent (Claude)
+ * Create a default agent (CodeAny)
  */
 export function createDefaultAgent(overrides?: Partial<AgentConfig>): IAgent {
   return createAgent({
@@ -200,7 +126,6 @@ export function getProviderFromEnv(): AgentProvider {
   const provider = process.env.AGENT_PROVIDER as AgentProvider | undefined;
   const registry = getAgentRegistry();
 
-  // Ensure built-in providers are registered
   if (registry.getRegistered().length === 0) {
     registerBuiltinAgentProviders();
   }
@@ -208,7 +133,7 @@ export function getProviderFromEnv(): AgentProvider {
   if (provider && registry.has(provider)) {
     return provider;
   }
-  return 'claude';
+  return 'codeany';
 }
 
 /**

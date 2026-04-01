@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPathSeparator } from '@/shared/lib/paths';
-import { cn } from '@/shared/lib/utils';
 import { useLanguage } from '@/shared/providers/language-provider';
-import { Bot, Code, FileText, FolderOpen, Shield, ShieldOff, Sparkles, Terminal } from 'lucide-react';
+import { FileText, FolderOpen } from 'lucide-react';
 
 import { API_BASE_URL } from '../constants';
 import type { WorkplaceSettingsProps } from '../types';
@@ -23,50 +22,6 @@ const openFolderInSystem = async (folderPath: string) => {
     console.error('[Workspace] Error opening folder:', err);
   }
 };
-
-// Sandbox options (only codex and native, others hidden)
-const sandboxOptions = [
-  {
-    id: 'codex',
-    icon: Shield,
-    nameKey: 'sandboxCodex',
-    descKey: 'sandboxCodexDescription',
-  },
-  {
-    id: 'native',
-    icon: ShieldOff,
-    nameKey: 'sandboxNative',
-    descKey: 'sandboxNativeDescription',
-  },
-] as const;
-
-// Agent runtime options (enabled runtimes only)
-const agentRuntimeOptions = [
-  {
-    id: 'claude',
-    icon: Terminal,
-    nameKey: 'runtimeClaudeCode',
-    descKey: 'runtimeClaudeCodeDescription',
-  },
-  {
-    id: 'pi',
-    icon: Sparkles,
-    nameKey: 'runtimePiAgent',
-    descKey: 'runtimePiAgentDescription',
-  },
-  {
-    id: 'kimi',
-    icon: Bot,
-    nameKey: 'runtimeKimiCode',
-    descKey: 'runtimeKimiCodeDescription',
-  },
-  {
-    id: 'shipany',
-    icon: Code,
-    nameKey: 'runtimeShipAnyCode',
-    descKey: 'runtimeShipAnyCodeDescription',
-  },
-] as const;
 
 export function WorkplaceSettings({
   settings,
@@ -92,115 +47,6 @@ export function WorkplaceSettings({
         <p className="text-muted-foreground text-sm">
           {t.settings.workplaceDescription}
         </p>
-      </div>
-
-      {/* Default Sandbox */}
-      <div className="flex flex-col gap-2">
-        <label className="text-foreground block text-sm font-medium">
-          {t.settings.defaultSandbox}
-        </label>
-        <p className="text-muted-foreground text-xs">
-          {t.settings.defaultSandboxDescription}
-        </p>
-        <div className="grid max-w-md grid-cols-2 gap-2">
-          {sandboxOptions.map((option) => {
-            const Icon = option.icon;
-            const isSelected = settings.defaultSandboxProvider === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() =>
-                  onSettingsChange({
-                    ...settings,
-                    sandboxEnabled: true, // Always enable sandbox when selecting a provider
-                    defaultSandboxProvider: option.id,
-                  })
-                }
-                className={cn(
-                  'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
-                  isSelected
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:bg-accent'
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'size-5 shrink-0',
-                    isSelected ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                />
-                <div className="min-w-0">
-                  <div
-                    className={cn(
-                      'text-sm font-medium',
-                      isSelected ? 'text-primary' : 'text-foreground'
-                    )}
-                  >
-                    {t.settings[option.nameKey as keyof typeof t.settings]}
-                  </div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {t.settings[option.descKey as keyof typeof t.settings]}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Agent Runtime */}
-      <div className="flex flex-col gap-2">
-        <label className="text-foreground block text-sm font-medium">
-          {t.settings.agentRuntime}
-        </label>
-        <p className="text-muted-foreground text-xs">
-          {t.settings.agentRuntimeDescription}
-        </p>
-        <div className="grid max-w-xl grid-cols-2 gap-2">
-          {agentRuntimeOptions.map((option) => {
-            const Icon = option.icon;
-            const isSelected = settings.defaultAgentRuntime === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() =>
-                  onSettingsChange({
-                    ...settings,
-                    defaultAgentRuntime: option.id,
-                  })
-                }
-                className={cn(
-                  'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors',
-                  isSelected
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:bg-accent'
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'size-5 shrink-0',
-                    isSelected ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                />
-                <div className="min-w-0">
-                  <div
-                    className={cn(
-                      'text-sm font-medium',
-                      isSelected ? 'text-primary' : 'text-foreground'
-                    )}
-                  >
-                    {t.settings[option.nameKey as keyof typeof t.settings]}
-                  </div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {t.settings[option.descKey as keyof typeof t.settings]}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Working Directory */}

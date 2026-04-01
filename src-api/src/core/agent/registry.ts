@@ -333,7 +333,7 @@ class AgentRegistry {
    * Priority: claude > codex > deepagents
    */
   async getDefaultProvider(): Promise<string | undefined> {
-    const priority = ['claude', 'codex', 'deepagents'];
+    const priority = ['codeany'];
     const available = await this.getAvailable();
 
     for (const type of priority) {

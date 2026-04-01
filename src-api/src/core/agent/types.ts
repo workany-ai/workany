@@ -89,7 +89,7 @@ export interface PlanStep {
 // Agent Configuration
 // ============================================================================
 
-export type AgentProvider = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'shipany' | 'custom';
+export type AgentProvider = 'codeany' | 'custom';
 
 export interface AgentConfig {
   /** Agent provider to use */
@@ -286,7 +286,7 @@ export interface AgentRequest {
   workDir?: string; // Working directory for session outputs
   taskId?: string; // Task ID for session folder
   // Provider selection (optional, defaults to env config)
-  provider?: 'claude' | 'deepagents' | 'kimi';
+  provider?: 'codeany' | 'kimi';
   // Custom model configuration
   modelConfig?: ModelConfig;
   // Sandbox configuration for isolated execution

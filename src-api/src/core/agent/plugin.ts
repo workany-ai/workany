@@ -6,7 +6,7 @@
  */
 
 import type { AgentConfig, IAgent } from '@/core/agent/types';
-import { DEFAULT_AGENT_MODEL, DEFAULT_WORK_DIR, DEFAULT_KIMI_MODEL } from '@/config/constants';
+import { DEFAULT_WORK_DIR, DEFAULT_CODEANY_MODEL } from '@/config/constants';
 import type { ProviderMetadata } from '@/shared/provider/types';
 
 // ============================================================================
@@ -47,28 +47,7 @@ export interface AgentPlugin {
 // Plugin Definition Helper
 // ============================================================================
 
-/**
- * Define an agent plugin with type safety
- *
- * @example
- * ```typescript
- * export default defineAgentPlugin({
- *   metadata: {
- *     type: "claude",
- *     name: "Claude Agent",
- *     version: "1.0.0",
- *     description: "Claude Agent SDK integration",
- *     configSchema: {...},
- *     supportsPlan: true,
- *     supportsStreaming: true,
- *     supportsSandbox: true,
- *   },
- *   factory: (config) => new ClaudeAgent(config),
- * });
- * ```
- */
 export function defineAgentPlugin(plugin: AgentPlugin): AgentPlugin {
-  // Validate required fields
   if (!plugin.metadata.type) {
     throw new Error('Agent plugin must have a type');
   }
@@ -86,9 +65,6 @@ export function defineAgentPlugin(plugin: AgentPlugin): AgentPlugin {
 // Base Agent Class
 // ============================================================================
 
-/**
- * Re-export BaseAgent from base.ts for convenience
- */
 export {
   BaseAgent,
   PLANNING_INSTRUCTION,
@@ -98,185 +74,18 @@ export {
 } from '@/core/agent/base';
 
 // ============================================================================
-// Default Config Schemas
+// Config Schemas & Metadata
 // ============================================================================
 
 /**
- * JSON Schema for Claude agent configuration
+ * JSON Schema for CodeAny agent configuration
  */
-export const CLAUDE_CONFIG_SCHEMA = {
+export const CODEANY_CONFIG_SCHEMA = {
   type: 'object',
   properties: {
     apiKey: {
       type: 'string',
-      description: 'Anthropic API key',
-    },
-    baseUrl: {
-      type: 'string',
-      description: 'Custom API base URL',
-    },
-    model: {
-      type: 'string',
-      default: DEFAULT_AGENT_MODEL,
-      description: 'Claude model to use',
-    },
-    workDir: {
-      type: 'string',
-      default: DEFAULT_WORK_DIR,
-      description: 'Working directory for file operations',
-    },
-  },
-};
-
-/**
- * JSON Schema for Codex agent configuration
- */
-export const CODEX_CONFIG_SCHEMA = {
-  type: 'object',
-  properties: {
-    apiKey: {
-      type: 'string',
-      description: 'OpenAI API key',
-    },
-    codexPath: {
-      type: 'string',
-      description: 'Path to codex CLI executable',
-    },
-    model: {
-      type: 'string',
-      default: 'gpt-4',
-      description: 'OpenAI model to use',
-    },
-    workDir: {
-      type: 'string',
-      default: DEFAULT_WORK_DIR,
-      description: 'Working directory for file operations',
-    },
-  },
-};
-
-/**
- * JSON Schema for DeepAgents configuration
- */
-export const DEEPAGENTS_CONFIG_SCHEMA = {
-  type: 'object',
-  properties: {
-    apiKey: {
-      type: 'string',
-      description: 'API key for the underlying LLM provider',
-    },
-    model: {
-      type: 'string',
-      default: DEFAULT_AGENT_MODEL,
-      description: 'Model to use',
-    },
-    workDir: {
-      type: 'string',
-      default: DEFAULT_WORK_DIR,
-      description: 'Working directory for file operations',
-    },
-  },
-};
-
-export const KIMI_CONFIG_SCHEMA = {
-  type: 'object',
-  properties: {
-    apiKey: {
-      type: 'string',
-      description: 'Kimi Code API key (optional if using OAuth)',
-    },
-    baseUrl: {
-      type: 'string',
-      description: 'Kimi Code API base URL',
-      default: 'https://api.moonshot.cn/v1',
-    },
-    model: {
-      type: 'string',
-      default: DEFAULT_KIMI_MODEL,
-      description: 'Kimi model to use',
-    },
-    workDir: {
-      type: 'string',
-      default: DEFAULT_WORK_DIR,
-      description: 'Working directory for file operations',
-    },
-  },
-};
-
-// ============================================================================
-// Built-in Plugin Metadata
-// ============================================================================
-
-/**
- * Metadata for built-in Claude agent
- */
-export const CLAUDE_METADATA: AgentProviderMetadata = {
-  type: 'claude',
-  name: 'Claude Agent',
-  version: '1.0.0',
-  description:
-    'Claude Agent SDK integration with full planning and execution support. Uses Anthropic Claude models.',
-  configSchema: CLAUDE_CONFIG_SCHEMA,
-  builtin: true,
-  supportsPlan: true,
-  supportsStreaming: true,
-  supportsSandbox: true,
-  supportedModels: [
-    'claude-sonnet-4-20250514',
-    'claude-opus-4-20250514',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022',
-  ],
-  defaultModel: 'claude-sonnet-4-20250514',
-  tags: ['anthropic', 'claude', 'planning', 'streaming'],
-};
-
-/**
- * Metadata for built-in Codex agent
- */
-export const CODEX_METADATA: AgentProviderMetadata = {
-  type: 'codex',
-  name: 'Codex CLI',
-  version: '1.0.0',
-  description:
-    'OpenAI Codex CLI integration. Uses OpenAI models through the codex command-line tool.',
-  configSchema: CODEX_CONFIG_SCHEMA,
-  builtin: true,
-  supportsPlan: true,
-  supportsStreaming: true,
-  supportsSandbox: true,
-  supportedModels: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  defaultModel: 'gpt-4',
-  tags: ['openai', 'codex', 'cli'],
-};
-
-/**
- * Metadata for built-in DeepAgents adapter
- */
-export const DEEPAGENTS_METADATA: AgentProviderMetadata = {
-  type: 'deepagents',
-  name: 'DeepAgents',
-  version: '1.0.0',
-  description:
-    'DeepAgents.js framework integration using LangGraph. Supports multiple LLM providers.',
-  configSchema: DEEPAGENTS_CONFIG_SCHEMA,
-  builtin: true,
-  supportsPlan: true,
-  supportsStreaming: true,
-  supportsSandbox: false,
-  tags: ['langgraph', 'deepagents', 'multi-provider'],
-};
- 
-
-/**
- * JSON Schema for ShipAny Code agent configuration
- */
-export const SHIPANY_CONFIG_SCHEMA = {
-  type: 'object',
-  properties: {
-    apiKey: {
-      type: 'string',
-      description: 'Anthropic API key or third-party API key',
+      description: 'API key (Anthropic or third-party)',
     },
     baseUrl: {
       type: 'string',
@@ -284,7 +93,7 @@ export const SHIPANY_CONFIG_SCHEMA = {
     },
     model: {
       type: 'string',
-      default: DEFAULT_AGENT_MODEL,
+      default: DEFAULT_CODEANY_MODEL,
       description: 'Model to use',
     },
     workDir: {
@@ -296,15 +105,15 @@ export const SHIPANY_CONFIG_SCHEMA = {
 };
 
 /**
- * Metadata for built-in ShipAny Code agent
+ * Metadata for built-in CodeAny agent
  */
-export const SHIPANY_METADATA: AgentProviderMetadata = {
-  type: 'shipany',
-  name: 'ShipAny Code',
+export const CODEANY_METADATA: AgentProviderMetadata = {
+  type: 'codeany',
+  name: 'CodeAny Agent',
   version: '1.0.0',
   description:
-    'Open-source agent runtime based on @shipany/open-agent-sdk. Drop-in replacement for Claude Code that runs in-process — no external CLI binary required.',
-  configSchema: SHIPANY_CONFIG_SCHEMA,
+    'Open-source agent runtime based on @codeany/open-agent-sdk. Runs entirely in-process — no external CLI binary required.',
+  configSchema: CODEANY_CONFIG_SCHEMA,
   builtin: true,
   supportsPlan: true,
   supportsStreaming: true,
@@ -315,75 +124,6 @@ export const SHIPANY_METADATA: AgentProviderMetadata = {
     'claude-3-5-sonnet-20241022',
     'claude-3-5-haiku-20241022',
   ],
-  defaultModel: 'claude-sonnet-4-20250514',
-  tags: ['shipany', 'open-agent', 'in-process', 'planning', 'streaming'],
-};
-
-/**
- * JSON Schema for Pi agent configuration
- */
-export const PI_CONFIG_SCHEMA = {
-  type: 'object',
-  properties: {
-    apiKey: {
-      type: 'string',
-      description: 'API key for the LLM provider',
-    },
-    baseUrl: {
-      type: 'string',
-      description: 'Custom API base URL',
-    },
-    model: {
-      type: 'string',
-      default: DEFAULT_AGENT_MODEL,
-      description: 'Model to use',
-    },
-    workDir: {
-      type: 'string',
-      default: DEFAULT_WORK_DIR,
-      description: 'Working directory for file operations',
-    },
-  },
-};
-
-/**
- * Metadata for built-in Pi agent
- */
-export const PI_METADATA: AgentProviderMetadata = {
-  type: 'pi',
-  name: 'Pi Agent',
-  version: '1.0.0',
-  description:
-    'Pi SDK embedded agent runtime. No external binary required. Supports Anthropic, OpenAI, Google and more.',
-  configSchema: PI_CONFIG_SCHEMA,
-  builtin: true,
-  supportsPlan: true,
-  supportsStreaming: true,
-  supportsSandbox: false,
-  supportedModels: [
-    'claude-sonnet-4-20250514',
-    'claude-opus-4-20250514',
-    'claude-3-5-sonnet-20241022',
-    'gpt-4o',
-    'gpt-4-turbo',
-    'gemini-2.0-flash',
-  ],
-  defaultModel: 'claude-sonnet-4-20250514',
-  tags: ['pi', 'sdk', 'embedded', 'multi-provider'],
-};
-
-/**
- * Metadata for built-in Kimi agent
- */
-export const KIMI_METADATA: AgentProviderMetadata = {
-  type: 'kimi',
-  name: 'Kimi Agent',
-  version: '1.0.0',
-  description:
-    'Kimi Agent SDK integration. Uses Kimi models through the kimi command-line tool.',
-  configSchema: KIMI_CONFIG_SCHEMA,
-  builtin: true,
-  supportsPlan: true,
-  supportsStreaming: true,
-  supportsSandbox: true,
+  defaultModel: DEFAULT_CODEANY_MODEL,
+  tags: ['codeany', 'open-agent', 'in-process', 'planning', 'streaming'],
 };

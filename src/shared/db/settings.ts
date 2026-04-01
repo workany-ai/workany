@@ -78,7 +78,7 @@ export const defaultSandboxProviders: SandboxProviderSetting[] = [
 // Agent Runtime Settings
 // ============================================================================
 
-export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'kimi' | 'pi' | 'shipany' | 'custom';
+export type AgentRuntimeType = 'codeany' | 'custom';
 
 export interface AgentRuntimeSetting {
   id: string;
@@ -96,45 +96,9 @@ export interface AgentRuntimeSetting {
 
 export const defaultAgentRuntimes: AgentRuntimeSetting[] = [
   {
-    id: 'claude',
-    type: 'claude',
-    name: 'Claude Code',
-    enabled: true,
-    config: {
-      model: 'claude-sonnet-4-20250514',
-    },
-  },
-  {
-    id: 'codex',
-    type: 'codex',
-    name: 'OpenAI Codex CLI',
-    enabled: false,
-    config: {
-      model: 'codex',
-    },
-  },
-  {
-    id: 'kimi',
-    type: 'kimi',
-    name: 'Kimi Code (Moonshot)',
-    enabled: true,
-    config: {
-      model: 'moonshot-v1-128k',
-    },
-  },
-  {
-    id: 'pi',
-    type: 'pi',
-    name: 'Pi Agent',
-    enabled: true,
-    config: {
-      model: 'claude-sonnet-4-20250514',
-    },
-  },
-  {
-    id: 'shipany',
-    type: 'shipany',
-    name: 'ShipAny Code',
+    id: 'codeany',
+    type: 'codeany',
+    name: 'CodeAny Agent',
     enabled: true,
     config: {
       model: 'claude-sonnet-4-20250514',
@@ -439,7 +403,7 @@ export const defaultSettings: Settings = {
   sandboxProviders: defaultSandboxProviders,
   defaultSandboxProvider: 'codex', // Default to Codex sandbox, fallback to native
   agentRuntimes: defaultAgentRuntimes,
-  defaultAgentRuntime: 'pi', // Default to Pi Agent
+  defaultAgentRuntime: 'codeany', // Default to CodeAny Agent
   maxConversationTurns: 20, // Default: 20 conversation turns
   maxHistoryTokens: 2000, // Default: 2000 tokens for history
   theme: 'system',

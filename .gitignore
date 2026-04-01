@@ -21,6 +21,7 @@ src-cli/dist/
 src-tauri/target/
 src-tauri/WixTools/
 src-tauri/Cargo.lock
+src-tauri/gen/
 
 # Database (local development)
 *.db
@@ -55,3 +56,11 @@ coverage/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Binary artifacts (legacy CLI bundles)
+src-api/dist/cli-bundle/
+src-api/dist/claude*
+src-api/dist/codex*
+src-api/dist/workany-api-*
+src-api/dist/bundle.cjs
+

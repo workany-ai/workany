@@ -1,9 +1,8 @@
 /**
- * ShipAny Code Agent SDK Adapter
+ * CodeAny Agent SDK Adapter
  *
- * Implementation of the IAgent interface using @shipany/open-agent-sdk.
- * This is a drop-in replacement for the Claude Code agent runtime that
- * runs entirely in-process — no external CLI binary required.
+ * Implementation of the IAgent interface using @codeany/open-agent-sdk.
+ * Runs entirely in-process — no external CLI binary required.
  */
 
 import { existsSync } from 'fs';
@@ -12,8 +11,8 @@ import { homedir, platform } from 'os';
 import { join } from 'path';
 import {
   query,
-} from '@shipany/open-agent-sdk';
-import type { Options } from '@shipany/open-agent-sdk';
+} from '@codeany/open-agent-sdk';
+import type { AgentOptions as SdkAgentOptions } from '@codeany/open-agent-sdk';
 
 import {
   BaseAgent,
@@ -25,7 +24,7 @@ import {
   PLANNING_INSTRUCTION,
   type SandboxOptions,
 } from '@/core/agent/base';
-import { SHIPANY_METADATA, defineAgentPlugin } from '@/core/agent/plugin';
+import { CODEANY_METADATA, defineAgentPlugin } from '@/core/agent/plugin';
 import type { AgentPlugin } from '@/core/agent/plugin';
 import type {
   AgentConfig,
@@ -47,7 +46,7 @@ import {
 import { loadMcpServers, type McpServerConfig } from '@/shared/mcp/loader';
 import { createLogger, LOG_FILE_PATH } from '@/shared/utils/logger';
 
-const logger = createLogger('ShipAnyAgent');
+const logger = createLogger('CodeAnyAgent');
 
 // Sandbox API URL
 const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
@@ -148,9 +147,9 @@ async function saveImagesToDisk(
       const buffer = Buffer.from(base64Data, 'base64');
       await writeFile(filePath, buffer);
       savedPaths.push(filePath);
-      logger.info(`[ShipAny] Saved image to: ${filePath}`);
+      logger.info(`[CodeAny] Saved image to: ${filePath}`);
     } catch (error) {
-      logger.error(`[ShipAny] Failed to save image: ${error}`);
+      logger.error(`[CodeAny] Failed to save image: ${error}`);
     }
   }
 
@@ -158,7 +157,7 @@ async function saveImagesToDisk(
 }
 
 // ============================================================================
-// Default tools and Sandbox MCP server
+// Default tools
 // ============================================================================
 
 const ALLOWED_TOOLS = [
@@ -176,19 +175,16 @@ const ALLOWED_TOOLS = [
   'TodoWrite',
 ];
 
-// Note: @shipany/open-agent-sdk runs tools in-process (Bash, Read, Write, etc.)
-// Sandbox MCP server is not supported — use the built-in Bash tool for script execution.
-
 // ============================================================================
-// ShipAny Agent class
+// CodeAny Agent class
 // ============================================================================
 
-export class ShipAnyAgent extends BaseAgent {
-  readonly provider: AgentProvider = 'shipany';
+export class CodeAnyAgent extends BaseAgent {
+  readonly provider: AgentProvider = 'codeany';
 
   constructor(config: AgentConfig) {
     super(config);
-    logger.info('[ShipAnyAgent] Created with config:', {
+    logger.info('[CodeAnyAgent] Created with config:', {
       provider: config.provider,
       hasApiKey: !!config.apiKey,
       baseUrl: config.baseUrl,
@@ -197,66 +193,41 @@ export class ShipAnyAgent extends BaseAgent {
     });
   }
 
-  private buildSettingSources(skillsConfig?: SkillsConfig): ('user' | 'project')[] {
-    if (skillsConfig && !skillsConfig.enabled) {
-      return ['project'];
-    }
-    return ['user', 'project'];
-  }
-
   private isUsingCustomApi(): boolean {
     return !!(this.config.baseUrl && this.config.apiKey);
   }
 
-  private buildEnvConfig(): Record<string, string> {
-    const env: Record<string, string | undefined> = { ...process.env };
+  private buildSdkOptions(
+    sessionCwd: string,
+    options?: AgentOptions,
+    extraOpts?: Partial<SdkAgentOptions>
+  ): SdkAgentOptions {
+    const sdkOpts: SdkAgentOptions = {
+      cwd: sessionCwd,
+      model: this.config.model,
+      permissionMode: 'bypassPermissions',
+      maxTurns: 200,
+      thinking: { type: 'adaptive' },
+      ...extraOpts,
+    };
 
+    // Set API credentials
     if (this.config.apiKey) {
-      env.ANTHROPIC_AUTH_TOKEN = this.config.apiKey;
-      delete env.ANTHROPIC_API_KEY;
-
-      if (this.config.baseUrl) {
-        env.ANTHROPIC_BASE_URL = this.config.baseUrl;
-        logger.info('[ShipAnyAgent] Using custom API:', { baseUrl: this.config.baseUrl });
-      } else {
-        delete env.ANTHROPIC_BASE_URL;
-      }
+      sdkOpts.apiKey = this.config.apiKey;
+    }
+    if (this.config.baseUrl) {
+      sdkOpts.baseURL = this.config.baseUrl;
     }
 
-    if (this.config.model) {
-      env.ANTHROPIC_MODEL = this.config.model;
-      env.ANTHROPIC_DEFAULT_SONNET_MODEL = this.config.model;
-      env.ANTHROPIC_DEFAULT_HAIKU_MODEL = this.config.model;
-      env.ANTHROPIC_DEFAULT_OPUS_MODEL = this.config.model;
-      logger.info('[ShipAnyAgent] Model configured:', this.config.model);
-    } else if (this.config.apiKey) {
-      delete env.ANTHROPIC_MODEL;
-      delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-      delete env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
-      delete env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+    // Set allowed tools
+    sdkOpts.allowedTools = options?.allowedTools || ALLOWED_TOOLS;
+
+    // Set abort controller
+    if (options?.abortController) {
+      sdkOpts.abortController = options.abortController;
     }
 
-    if (this.isUsingCustomApi()) {
-      env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
-      env.CLAUDE_CODE_SKIP_CONFIG = '1';
-      env.API_TIMEOUT_MS = '600000';
-      env.CLAUDE_CODE_SKIP_MODEL_VALIDATION = '1';
-    }
-
-    logger.info('[ShipAnyAgent] Final env config:', {
-      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY === undefined ? '(deleted)' : env.ANTHROPIC_API_KEY ? `${env.ANTHROPIC_API_KEY.slice(0, 10)}...` : 'not set',
-      ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN ? `${env.ANTHROPIC_AUTH_TOKEN.slice(0, 10)}...` : 'not set',
-      ANTHROPIC_BASE_URL: env.ANTHROPIC_BASE_URL === undefined ? '(deleted)' : env.ANTHROPIC_BASE_URL || 'not set',
-      ANTHROPIC_MODEL: env.ANTHROPIC_MODEL || 'not set',
-    });
-
-    const filteredEnv: Record<string, string> = {};
-    for (const [key, value] of Object.entries(env)) {
-      if (value !== undefined) {
-        filteredEnv[key] = value;
-      }
-    }
-    return filteredEnv;
+    return sdkOpts;
   }
 
   private estimateTokenCount(text: string): number {
@@ -331,10 +302,6 @@ export class ShipAnyAgent extends BaseAgent {
       return '__API_KEY_ERROR__';
     }
 
-    sanitized = sanitized.replace(/Claude Code process exited with code \d+/gi, '__AGENT_PROCESS_ERROR__');
-    sanitized = sanitized.replace(/\s*[·•\-–—]\s*Please run \/login\.?/gi, '');
-    sanitized = sanitized.replace(/Please run \/login\.?/gi, '');
-
     return sanitized;
   }
 
@@ -350,6 +317,7 @@ export class ShipAnyAgent extends BaseAgent {
       subtype?: string;
       total_cost_usd?: number;
       duration_ms?: number;
+      result?: { tool_use_id?: string; tool_name?: string; output?: string };
     };
 
     if (msg.type === 'assistant' && msg.message?.content) {
@@ -371,20 +339,13 @@ export class ShipAnyAgent extends BaseAgent {
       }
     }
 
-    if (msg.type === 'user' && msg.message?.content) {
-      for (const block of msg.message.content as Record<string, unknown>[]) {
-        if ('type' in block && block.type === 'tool_result') {
-          const toolUseId = (block as any).tool_use_id ?? (block as any).toolUseId;
-          const rawIsError = (block as any).is_error ?? (block as any).isError;
-          const isError = typeof rawIsError === 'boolean' ? rawIsError : false;
-          yield {
-            type: 'tool_result',
-            toolUseId: (toolUseId ?? '') as string,
-            output: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
-            isError,
-          };
-        }
-      }
+    if (msg.type === 'tool_result' && msg.result) {
+      yield {
+        type: 'tool_result',
+        toolUseId: msg.result.tool_use_id ?? '',
+        output: msg.result.output ?? '',
+        isError: false,
+      };
     }
 
     if (msg.type === 'result') {
@@ -410,7 +371,7 @@ export class ShipAnyAgent extends BaseAgent {
       options?.cwd || this.config.workDir, prompt, options?.taskId
     );
     await ensureDir(sessionCwd);
-    logger.info(`[ShipAny ${session.id}] Working Directory: ${sessionCwd}`);
+    logger.info(`[CodeAny ${session.id}] Working Directory: ${sessionCwd}`);
 
     const sentTextHashes = new Set<string>();
     const sentToolIds = new Set<string>();
@@ -450,58 +411,42 @@ User's request (answer this AFTER reading the images):
     // Load MCP servers
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
 
-    const settingSources = this.buildSettingSources(options?.skillsConfig);
-
-    const queryOptions: Options = {
-      cwd: sessionCwd,
-      // open-agent-sdk uses built-in tools by default (no preset needed)
-      allowedTools: options?.allowedTools || ALLOWED_TOOLS,
-      settingSources,
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
+    const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options?.abortController || session.abortController,
-      env: this.buildEnvConfig(),
-      model: this.config.model,
-      // No pathToClaudeCodeExecutable needed — open-agent-sdk runs in-process
-      maxTurns: 200,
-      thinking: { type: 'adaptive' },
-      stderr: (data: string) => {
-        logger.error(`[ShipAny ${session.id}] STDERR: ${data}`);
-      },
-    };
+    });
 
-    // Initialize MCP servers
-    // Note: sandbox MCP tools not supported in open-agent-sdk — use built-in Bash tool
+    // Add MCP servers if any
     if (Object.keys(userMcpServers).length > 0) {
-      queryOptions.mcpServers = userMcpServers;
-      logger.info(`[ShipAny ${session.id}] MCP servers: ${Object.keys(userMcpServers).join(', ')}`);
+      sdkOpts.mcpServers = userMcpServers;
+      logger.info(`[CodeAny ${session.id}] MCP servers: ${Object.keys(userMcpServers).join(', ')}`);
     }
 
-    logger.info(`[ShipAny ${session.id}] ========== AGENT START ==========`);
-    logger.info(`[ShipAny ${session.id}] Model: ${this.config.model || '(default)'}`);
-    logger.info(`[ShipAny ${session.id}] Custom API: ${this.isUsingCustomApi()}`);
-    logger.info(`[ShipAny ${session.id}] Prompt length: ${enhancedPrompt.length} chars`);
+    logger.info(`[CodeAny ${session.id}] ========== AGENT START ==========`);
+    logger.info(`[CodeAny ${session.id}] Model: ${this.config.model || '(default)'}`);
+    logger.info(`[CodeAny ${session.id}] Custom API: ${this.isUsingCustomApi()}`);
+    logger.info(`[CodeAny ${session.id}] Prompt length: ${enhancedPrompt.length} chars`);
 
     try {
-      for await (const message of query({ prompt: enhancedPrompt, options: queryOptions })) {
+      for await (const message of query({ prompt: enhancedPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
         yield* this.processMessage(message, session.id, sentTextHashes, sentToolIds);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`[ShipAny ${session.id}] Error:`, { message: errorMessage });
+      logger.error(`[CodeAny ${session.id}] Error:`, { message: errorMessage });
 
       const noApiKeyConfigured = !this.config.apiKey && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN;
-      const processExitError = errorMessage.includes('exited with code');
       const usingCustomApi = this.isUsingCustomApi();
 
       const isApiKeyError =
         errorMessage.includes('Invalid API key') || errorMessage.includes('invalid_api_key') ||
         errorMessage.includes('API key') || errorMessage.includes('authentication') ||
         errorMessage.includes('Unauthorized') || errorMessage.includes('401') ||
-        errorMessage.includes('403') || (noApiKeyConfigured && processExitError);
+        errorMessage.includes('403') || noApiKeyConfigured;
 
-      const isApiCompatibilityError = usingCustomApi && processExitError;
+      const isApiCompatibilityError = usingCustomApi && (
+        errorMessage.includes('model') || errorMessage.includes('not found')
+      );
 
       if (isApiKeyError) {
         yield { type: 'error', message: '__API_KEY_ERROR__' };
@@ -527,7 +472,7 @@ User's request (answer this AFTER reading the images):
       options?.cwd || this.config.workDir, prompt, options?.taskId
     );
     await ensureDir(sessionCwd);
-    logger.info(`[ShipAny ${session.id}] Planning started, cwd: ${sessionCwd}`);
+    logger.info(`[CodeAny ${session.id}] Planning started, cwd: ${sessionCwd}`);
 
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
@@ -535,20 +480,13 @@ User's request (answer this AFTER reading the images):
 
     let fullResponse = '';
 
-    const queryOptions: Options = {
-      cwd: sessionCwd,
-      settingSources: ['user', 'project'],
+    const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       allowedTools: [],
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
       abortController: options?.abortController || session.abortController,
-      env: this.buildEnvConfig(),
-      model: this.config.model,
-      thinking: { type: 'adaptive' },
-    };
+    });
 
     try {
-      for await (const message of query({ prompt: planningPrompt, options: queryOptions })) {
+      for await (const message of query({ prompt: planningPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
 
         if ((message as any).type === 'assistant' && (message as any).message?.content) {
@@ -578,7 +516,7 @@ User's request (answer this AFTER reading the images):
         }
       }
     } catch (error) {
-      logger.error(`[ShipAny ${session.id}] Planning error:`, error);
+      logger.error(`[CodeAny ${session.id}] Planning error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
       yield { type: 'done' };
@@ -603,7 +541,7 @@ User's request (answer this AFTER reading the images):
       options.cwd || this.config.workDir, options.originalPrompt, options.taskId
     );
     await ensureDir(sessionCwd);
-    logger.info(`[ShipAny ${session.id}] Executing plan: ${plan.id}, cwd: ${sessionCwd}`);
+    logger.info(`[CodeAny ${session.id}] Executing plan: ${plan.id}, cwd: ${sessionCwd}`);
 
     const sandboxOpts: SandboxOptions | undefined = options.sandbox?.enabled
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
@@ -617,36 +555,22 @@ User's request (answer this AFTER reading the images):
     const sentToolIds = new Set<string>();
 
     const userMcpServers = await loadMcpServers(options.mcpConfig as McpConfig | undefined);
-    const execSettingSources = this.buildSettingSources(options.skillsConfig);
 
-    const queryOptions: Options = {
-      cwd: sessionCwd,
-      // open-agent-sdk uses built-in tools by default (no preset needed)
-      allowedTools: options.allowedTools || ALLOWED_TOOLS,
-      settingSources: execSettingSources,
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
+    const sdkOpts = this.buildSdkOptions(sessionCwd, options, {
       abortController: options.abortController || session.abortController,
-      env: this.buildEnvConfig(),
-      model: this.config.model,
-      maxTurns: 200,
-      thinking: { type: 'adaptive' },
-      stderr: (data: string) => {
-        logger.error(`[ShipAny ${session.id}] STDERR: ${data}`);
-      },
-    };
+    });
 
     if (Object.keys(userMcpServers).length > 0) {
-      queryOptions.mcpServers = userMcpServers;
+      sdkOpts.mcpServers = userMcpServers;
     }
 
     try {
-      for await (const message of query({ prompt: executionPrompt, options: queryOptions })) {
+      for await (const message of query({ prompt: executionPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
         yield* this.processMessage(message, session.id, sentTextHashes, sentToolIds);
       }
     } catch (error) {
-      logger.error(`[ShipAny ${session.id}] Execution error:`, error);
+      logger.error(`[CodeAny ${session.id}] Execution error:`, error);
       yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
     } finally {
       this.deletePlan(options.planId);
@@ -660,11 +584,11 @@ User's request (answer this AFTER reading the images):
 // Factory & Plugin
 // ============================================================================
 
-export function createShipAnyAgent(config: AgentConfig): ShipAnyAgent {
-  return new ShipAnyAgent(config);
+export function createCodeAnyAgent(config: AgentConfig): CodeAnyAgent {
+  return new CodeAnyAgent(config);
 }
 
-export const shipanyPlugin: AgentPlugin = defineAgentPlugin({
-  metadata: SHIPANY_METADATA,
-  factory: (config) => createShipAnyAgent(config),
+export const codeanyPlugin: AgentPlugin = defineAgentPlugin({
+  metadata: CODEANY_METADATA,
+  factory: (config) => createCodeAnyAgent(config),
 });

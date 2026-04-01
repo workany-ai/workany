@@ -18,15 +18,10 @@
     "format": "prettier --write ."
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.69",
-    "@anthropic-ai/sandbox-runtime": "^0.0.28",
     "@anthropic-ai/sdk": "^0.78.0",
+    "@codeany/open-agent-sdk": "link:../../open-agent-sdk-typescript",
     "@hono/node-server": "^1.14.1",
-    "@mariozechner/pi-agent-core": "0.63.2",
-    "@mariozechner/pi-ai": "0.63.2",
-    "@mariozechner/pi-coding-agent": "0.63.2",
     "@modelcontextprotocol/sdk": "^1.25.2",
-    "@shipany/open-agent-sdk": "^0.1.2",
     "color-diff-napi": "file:stubs/color-diff-napi",
     "hono": "^4.7.10",
     "nanoid": "^5.1.6",
