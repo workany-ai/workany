@@ -8,6 +8,8 @@ import { API_BASE_URL } from '@/config';
 
 import { getAppDataDir, getMcpConfigPath } from '../lib/paths';
 
+export type ApiType = 'anthropic-messages' | 'openai-completions';
+
 export interface AIProvider {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ export interface AIProvider {
   enabled: boolean;
   models: string[];
   defaultModel?: string;
+  apiType?: ApiType;
   // Extended fields for UI
   icon?: string;
   apiKeyUrl?: string;
@@ -241,6 +244,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://openrouter.ai/api',
     enabled: true,
     models: ['anthropic/claude-sonnet-4.5', 'anthropic/claude-opus-4.5'],
+    apiType: 'openai-completions',
     icon: 'O',
     apiKeyUrl: 'https://openrouter.ai/keys',
     canDelete: true,
@@ -252,6 +256,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://api.minimax.io/anthropic',
     enabled: true,
     models: ['MiniMax-M2.1'],
+    apiType: 'anthropic-messages',
     icon: 'M',
     apiKeyUrl:
       'https://platform.minimax.io/subscribe/coding-plan?code=9hgHKlPO3G&source=link',
@@ -264,6 +269,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://api.z.ai/api/anthropic',
     enabled: true,
     models: ['glm-4.7'],
+    apiType: 'anthropic-messages',
     icon: 'Z',
     apiKeyUrl: 'https://z.ai/subscribe?ic=7YS469UOXD',
     canDelete: true,
@@ -275,6 +281,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
     enabled: true,
     models: ['ark-code-latest'],
+    apiType: 'openai-completions',
     icon: 'V',
     apiKeyUrl: 'https://volcengine.com/L/Sq5rSgyFu_E',
     canDelete: true,
@@ -286,6 +293,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://api.302.ai/cc',
     enabled: true,
     models: ['claude-sonnet-4-5-20250929'],
+    apiType: 'anthropic-messages',
     icon: '3',
     apiKeyUrl: 'https://302.ai/?utm_source=workany_desktop',
     canDelete: true,
@@ -297,6 +305,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'http://localhost:11434',
     enabled: true,
     models: ['glm-4.7-flash'],
+    apiType: 'openai-completions',
     icon: 'O',
     apiKeyUrl: 'https://docs.ollama.com/integrations/claude-code',
     canDelete: true,
@@ -308,6 +317,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://api.siliconflow.com/',
     enabled: true,
     models: ['MiniMaxAI/MiniMax-M2.1', 'zai-org/GLM-4.7'],
+    apiType: 'openai-completions',
     icon: 'S',
     apiKeyUrl: 'https://cloud.siliconflow.com/me/account/ak',
     canDelete: true,
@@ -319,6 +329,7 @@ export const defaultProviders: AIProvider[] = [
     baseUrl: 'https://api.moonshot.cn/v1',
     enabled: true,
     models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    apiType: 'openai-completions',
     icon: 'K',
     apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
     canDelete: true,
@@ -388,7 +399,7 @@ export const defaultSettings: Settings = {
     avatar: '',
   },
   providers: defaultProviders,
-  defaultProvider: 'default', // Use environment variables by default
+  defaultProvider: '', // Empty until user configures a provider
   defaultModel: '',
   mcpConfigPath: '', // Will be resolved to app data dir at init
   mcpEnabled: true, // Enable MCP by default
@@ -807,6 +818,21 @@ export function getDefaultAgentRuntime(): AgentRuntimeSetting | undefined {
 export function getDefaultAIProvider(): AIProvider | undefined {
   const settings = getSettings();
   return settings.providers.find((p) => p.id === settings.defaultProvider);
+}
+
+/**
+ * Check if a model provider with API key is configured.
+ * Returns true if a non-default provider with an API key is selected.
+ */
+export function isModelConfigured(): boolean {
+  const settings = getSettings();
+  if (!settings.defaultProvider || settings.defaultProvider === 'default') {
+    return false;
+  }
+  const provider = settings.providers.find(
+    (p) => p.id === settings.defaultProvider
+  );
+  return !!(provider && provider.apiKey);
 }
 
 /**

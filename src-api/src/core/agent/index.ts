@@ -120,35 +120,10 @@ export function createDefaultAgent(overrides?: Partial<AgentConfig>): IAgent {
 }
 
 /**
- * Environment variable for selecting provider
+ * Get the default agent provider
  */
-export function getProviderFromEnv(): AgentProvider {
-  const provider = process.env.AGENT_PROVIDER as AgentProvider | undefined;
-  const registry = getAgentRegistry();
-
-  if (registry.getRegistered().length === 0) {
-    registerBuiltinAgentProviders();
-  }
-
-  if (provider && registry.has(provider)) {
-    return provider;
-  }
+export function getDefaultProvider(): AgentProvider {
   return 'codeany';
-}
-
-/**
- * Create agent from environment configuration
- */
-export function createAgentFromEnv(overrides?: Partial<AgentConfig>): IAgent {
-  const provider = getProviderFromEnv();
-  return createAgent({
-    provider,
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    baseUrl: process.env.ANTHROPIC_BASE_URL,
-    model: process.env.ANTHROPIC_MODEL || process.env.AGENT_MODEL,
-    workDir: process.env.AGENT_WORK_DIR || DEFAULT_WORK_DIR,
-    ...overrides,
-  });
 }
 
 // ============================================================================

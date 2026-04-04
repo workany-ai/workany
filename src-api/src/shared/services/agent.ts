@@ -7,7 +7,6 @@
 
 import {
   createAgent,
-  createAgentFromEnv,
   type AgentConfig,
   type AgentMessage,
   type AgentSession,
@@ -76,7 +75,7 @@ export async function getAgent(config?: Partial<AgentConfig>): Promise<IAgent> {
     globalAgent = createAgent({
       provider: currentProvider as any,
       ...(config || {}),
-      workDir: config?.workDir || process.env.AGENT_WORK_DIR || '~/.workany'
+      workDir: config?.workDir || '~/.workany'
     });
   }
   return globalAgent;
@@ -162,10 +161,10 @@ export function deletePlan(planId: string): boolean {
 export async function* runPlanningPhase(
   prompt: string,
   session: AgentSession,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string; apiType?: 'anthropic-messages' | 'openai-completions' },
   language?: string
 ): AsyncGenerator<AgentMessage> {
-  const agent = await getAgent(modelConfig);
+  const agent = await getAgent(modelConfig as Partial<AgentConfig>);
 
   for await (const message of agent.plan(prompt, {
     sessionId: session.id,
@@ -189,7 +188,7 @@ export async function* runExecutionPhase(
   originalPrompt: string,
   workDir?: string,
   taskId?: string,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string; apiType?: 'anthropic-messages' | 'openai-completions' },
   sandboxConfig?: SandboxConfig,
   skillsConfig?: SkillsConfig,
   mcpConfig?: McpConfig,
@@ -243,7 +242,7 @@ export async function* runAgent(
   conversation?: ConversationMessage[],
   workDir?: string,
   taskId?: string,
-  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string },
+  modelConfig?: { apiKey?: string; baseUrl?: string; model?: string; apiType?: 'anthropic-messages' | 'openai-completions' },
   sandboxConfig?: SandboxConfig,
   images?: ImageAttachment[],
   skillsConfig?: SkillsConfig,

@@ -25,7 +25,6 @@ const openFolderInSystem = async (folderPath: string) => {
 
 export function WorkplaceSettings({
   settings,
-  onSettingsChange,
   defaultPaths,
 }: WorkplaceSettingsProps) {
   const { t } = useLanguage();

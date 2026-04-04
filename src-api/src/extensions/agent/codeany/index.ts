@@ -211,6 +211,11 @@ export class CodeAnyAgent extends BaseAgent {
       ...extraOpts,
     };
 
+    // Set API type
+    if (this.config.apiType) {
+      (sdkOpts as any).apiType = this.config.apiType;
+    }
+
     // Set API credentials
     if (this.config.apiKey) {
       sdkOpts.apiKey = this.config.apiKey;
@@ -435,7 +440,7 @@ User's request (answer this AFTER reading the images):
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error(`[CodeAny ${session.id}] Error:`, { message: errorMessage });
 
-      const noApiKeyConfigured = !this.config.apiKey && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN;
+      const noApiKeyConfigured = !this.config.apiKey;
       const usingCustomApi = this.isUsingCustomApi();
 
       const isApiKeyError =

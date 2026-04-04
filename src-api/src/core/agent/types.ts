@@ -100,6 +100,8 @@ export interface AgentConfig {
   baseUrl?: string;
   /** Model to use (provider-specific) */
   model?: string;
+  /** API type: 'anthropic-messages' or 'openai-completions' */
+  apiType?: 'anthropic-messages' | 'openai-completions';
   /** Working directory for file operations */
   workDir?: string;
   /** Custom configuration for the provider */

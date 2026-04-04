@@ -25,9 +25,10 @@ export type {
  * Model configuration for custom API endpoints
  */
 export interface ModelConfig {
-  apiKey?: string; // API key (ANTHROPIC_API_KEY)
-  baseUrl?: string; // Custom API base URL (ANTHROPIC_BASE_URL)
+  apiKey?: string; // API key
+  baseUrl?: string; // Custom API base URL
   model?: string; // Model name to use
+  apiType?: 'anthropic-messages' | 'openai-completions'; // API format type
 }
 
 /**

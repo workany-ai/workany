@@ -10,7 +10,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import type { AgentMessage, ConversationMessage } from '@/core/agent/types';
-import { getConfig } from '@/config/loader';
+
 import { createLogger } from '@/shared/utils/logger';
 
 const logger = createLogger('ChatService');
@@ -26,38 +26,10 @@ function isAnthropicModel(model: string): boolean {
 }
 
 function resolveConfig(modelConfig?: { apiKey?: string; baseUrl?: string; model?: string }) {
-  // 1. Use explicit modelConfig if provided
-  // 2. Fall back to environment variables
-  // 3. Fall back to app config (config.json / provider manager)
-  let apiKey =
-    modelConfig?.apiKey ||
-    process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_API_KEY ||
-    '';
-  let baseURL =
-    modelConfig?.baseUrl || process.env.ANTHROPIC_BASE_URL || undefined;
-  let model = modelConfig?.model || process.env.ANTHROPIC_MODEL || '';
-
-  // If still no API key, try the app config loader
-  if (!apiKey) {
-    try {
-      const appConfig = getConfig();
-      const agentConfig = appConfig.providers?.agent?.config as
-        | { apiKey?: string; baseUrl?: string; model?: string }
-        | undefined;
-      if (agentConfig) {
-        apiKey = agentConfig.apiKey || '';
-        baseURL = baseURL || agentConfig.baseUrl || undefined;
-        model = model || agentConfig.model || '';
-      }
-    } catch {
-      // Config loader not initialized yet, ignore
-    }
-  }
-
-  if (!model) {
-    model = DEFAULT_MODEL;
-  }
+  // Use explicit modelConfig from user settings only — no environment variable fallback
+  const apiKey = modelConfig?.apiKey || '';
+  const baseURL = modelConfig?.baseUrl || undefined;
+  const model = modelConfig?.model || DEFAULT_MODEL;
 
   return { apiKey, baseURL, model };
 }

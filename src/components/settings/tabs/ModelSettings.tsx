@@ -153,6 +153,7 @@ export function ModelSettings({
     baseUrl: '',
     apiKey: '',
     models: '',
+    apiType: 'openai-completions' as 'anthropic-messages' | 'openai-completions',
   });
   const [showApiKey, setShowApiKey] = useState(false);
   const [newModelName, setNewModelName] = useState('');
@@ -355,6 +356,7 @@ export function ModelSettings({
       enabled: true,
       models: models.length > 0 ? models : ['default'],
       defaultModel,
+      apiType: newProvider.apiType,
     };
 
     onSettingsChange({
@@ -362,7 +364,7 @@ export function ModelSettings({
       providers: [...settings.providers, provider],
     });
 
-    setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '' });
+    setNewProvider({ name: '', baseUrl: '', apiKey: '', models: '', apiType: 'openai-completions' });
     setShowAddProvider(false);
     setEditingProvider(id);
   };
@@ -485,7 +487,13 @@ export function ModelSettings({
                   {t.settings.defaultModelDescription}
                 </p>
                 <select
-                  value={`${settings.defaultProvider}:${settings.defaultModel}`}
+                  value={
+                    settings.defaultProvider && settings.defaultProvider !== 'default'
+                      ? `${settings.defaultProvider}:${settings.defaultModel}`
+                      : availableModels.length > 0
+                        ? `${availableModels[0].provider.id}:${availableModels[0].model}`
+                        : ''
+                  }
                   onChange={(e) => {
                     const [provider, model] = e.target.value.split(':');
                     onSettingsChange({
@@ -496,7 +504,9 @@ export function ModelSettings({
                   }}
                   className="border-input bg-background text-foreground focus:ring-ring h-10 w-full max-w-md rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                 >
-                  <option value="default:">{t.settings.defaultEnv}</option>
+                  {availableModels.length === 0 && (
+                    <option value="">{t.settings.noModelsAvailable || 'No models available'}</option>
+                  )}
                   {availableModels.map(({ provider, model }) => (
                     <option
                       key={`${provider.id}:${model}`}
@@ -506,11 +516,6 @@ export function ModelSettings({
                     </option>
                   ))}
                 </select>
-                {settings.defaultProvider === 'default' && (
-                  <p className="text-muted-foreground text-xs">
-                    {t.settings.envHint}
-                  </p>
-                )}
               </div>
 
               {/* Conversation History Settings */}
@@ -607,6 +612,27 @@ export function ModelSettings({
                     placeholder="Claude"
                     className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                   />
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <label className="text-foreground block text-sm font-medium">
+                      API Type
+                    </label>
+                    <select
+                      value={newProvider.apiType}
+                      onChange={(e) =>
+                        setNewProvider({
+                          ...newProvider,
+                          apiType: e.target.value as 'anthropic-messages' | 'openai-completions',
+                        })
+                      }
+                      className="border-input bg-background text-foreground focus:ring-ring h-10 w-full appearance-none rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                    >
+                      <option value="openai-completions">OpenAI Completions</option>
+                      <option value="anthropic-messages">Anthropic Messages</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -760,6 +786,25 @@ export function ModelSettings({
                         placeholder={t.settings.providerName}
                         className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
                       />
+                    </div>
+
+                    {/* API Type */}
+                    <div className="flex flex-col gap-2">
+                      <label className="text-foreground block text-sm font-medium">
+                        API Type
+                      </label>
+                      <select
+                        value={selectedProvider.apiType || 'openai-completions'}
+                        onChange={(e) =>
+                          handleProviderUpdate(selectedProvider.id, {
+                            apiType: e.target.value as 'anthropic-messages' | 'openai-completions',
+                          })
+                        }
+                        className="border-input bg-background text-foreground focus:ring-ring h-10 w-full appearance-none rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                      >
+                        <option value="openai-completions">OpenAI Completions</option>
+                        <option value="anthropic-messages">Anthropic Messages</option>
+                      </select>
                     </div>
 
                     {/* API Base URL */}

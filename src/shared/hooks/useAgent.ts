@@ -161,36 +161,15 @@ async function fetchWithRetry(
   throw lastError || new Error('Fetch failed after retries');
 }
 
-// Helper to get model configuration from settings
+// Helper to get model configuration from user settings
 function getModelConfig():
-  | { apiKey?: string; baseUrl?: string; model?: string }
+  | { apiKey?: string; baseUrl?: string; model?: string; apiType?: string }
   | undefined {
   try {
     const settings = getSettings();
 
-    console.log('[useAgent] getModelConfig called:', {
-      defaultProvider: settings.defaultProvider,
-      defaultModel: settings.defaultModel,
-      providersCount: settings.providers.length,
-    });
-
-    // Check if settings appear to be default (not loaded from storage)
-    // This helps diagnose issues where user settings are not being loaded
-    if (
-      settings.defaultProvider === 'default' &&
-      settings.providers.length === 2 &&
-      settings.providers.every((p) => !p.apiKey)
-    ) {
-      console.warn(
-        '[useAgent] WARNING: Settings appear to be defaults. ' +
-          'If you configured a custom API provider, it may not have been loaded correctly. ' +
-          'Check browser console for [Settings] logs to diagnose the issue.'
-      );
-    }
-
-    // If using "default" provider, return undefined to use environment variables
-    if (settings.defaultProvider === 'default') {
-      console.log('[useAgent] Using default provider (environment variables)');
+    // No provider configured — user needs to set one up
+    if (!settings.defaultProvider || settings.defaultProvider === 'default') {
       return undefined;
     }
 
@@ -198,22 +177,9 @@ function getModelConfig():
       (p) => p.id === settings.defaultProvider
     );
 
-    console.log(
-      '[useAgent] Found provider:',
-      provider
-        ? {
-            id: provider.id,
-            name: provider.name,
-            hasApiKey: !!provider.apiKey,
-            hasBaseUrl: !!provider.baseUrl,
-          }
-        : 'NOT FOUND'
-    );
-
     if (!provider) return undefined;
 
-    // Only return config if we have custom settings
-    const config: { apiKey?: string; baseUrl?: string; model?: string } = {};
+    const config: { apiKey?: string; baseUrl?: string; model?: string; apiType?: string } = {};
 
     if (provider.apiKey) {
       config.apiKey = provider.apiKey;
@@ -224,18 +190,14 @@ function getModelConfig():
     if (settings.defaultModel) {
       config.model = settings.defaultModel;
     }
-
-    // Return undefined if no custom config
-    if (!config.apiKey && !config.baseUrl && !config.model) {
-      console.log('[useAgent] No custom config found, returning undefined');
-      return undefined;
+    if (provider.apiType) {
+      config.apiType = provider.apiType;
     }
 
-    console.log('[useAgent] Returning modelConfig:', {
-      hasApiKey: !!config.apiKey,
-      baseUrl: config.baseUrl,
-      model: config.model,
-    });
+    // Return undefined if no API key configured
+    if (!config.apiKey) {
+      return undefined;
+    }
 
     return config;
   } catch (error) {
@@ -1859,12 +1821,13 @@ export function useAgent(): UseAgentReturn {
         // If Claude Code is not available and no model is configured, the backend will return an error.
 
         // Fast chat detection: short text, no attachments, no file/code intent
-        // Only use fast chat when modelConfig is available (custom provider with API key).
-        // Default provider has no API key on the backend chat service — it relies on
-        // Claude Code CLI which has its own config, so we must fall through to the agent endpoint.
+        // Only use fast chat for anthropic-messages providers (the chat service uses Anthropic SDK directly).
+        // OpenAI-format providers must go through the agent endpoint.
         const hasFileAttachments = fileAttachments.length > 0;
+        const isAnthropicApi = !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
         const shouldUseFastChat =
           modelConfig &&
+          isAnthropicApi &&
           !hasFileAttachments &&
           (mode === 'chat' ||
             (mode !== 'task' && !hasImages && isFastChatQuery(prompt)));
@@ -2541,10 +2504,12 @@ export function useAgent(): UseAgentReturn {
         }
 
         // Fast chat detection for follow-up messages
-        // Only use fast chat when modelConfig is available (see runAgent comment for details)
+        // Only use fast chat for anthropic-messages providers
         const hasFileAttachments = attachments?.some((a) => a.type === 'file') || false;
+        const isAnthropicApi = !modelConfig?.apiType || modelConfig.apiType === 'anthropic-messages';
         const shouldUseFastChat =
           modelConfig &&
+          isAnthropicApi &&
           !hasFileAttachments &&
           (mode === 'chat' ||
             (mode !== 'task' && !hasImages && isFastChatQuery(reply)));

@@ -1,6 +1,6 @@
 {
   "name": "workany-api",
-  "version": "0.1.19",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/patch-deps.mjs",
