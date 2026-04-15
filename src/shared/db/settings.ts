@@ -235,6 +235,26 @@ export interface Settings {
 // AI Provider Configuration
 // ============================================================================
 
+function cloneAIProvider(provider: AIProvider): AIProvider {
+  return {
+    ...provider,
+    models: [...provider.models],
+  };
+}
+
+const legacyVolcengineProvider: AIProvider = {
+  id: 'volcengine',
+  name: 'Volcengine',
+  apiKey: '',
+  baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
+  enabled: true,
+  models: ['ark-code-latest'],
+  apiType: 'openai-completions',
+  icon: 'V',
+  apiKeyUrl: 'https://volcengine.com/L/Sq5rSgyFu_E',
+  canDelete: true,
+};
+
 // Default providers with full configuration
 export const defaultProviders: AIProvider[] = [
   {
@@ -278,12 +298,82 @@ export const defaultProviders: AIProvider[] = [
     id: 'volcengine',
     name: 'Volcengine',
     apiKey: '',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     enabled: true,
-    models: ['ark-code-latest'],
+    models: [
+      'doubao-seed-2-0-pro-260215',
+      'doubao-seed-2-0-lite-260215',
+      'doubao-seed-2-0-mini-260215',
+      'doubao-seed-2-0-code-preview-260215',
+      'kimi-k2-5-260127',
+      'glm-4-7-251222',
+      'deepseek-v3-2-251201',
+    ],
+    defaultModel: 'doubao-seed-2-0-pro-260215',
     apiType: 'openai-completions',
     icon: 'V',
-    apiKeyUrl: 'https://volcengine.com/L/Sq5rSgyFu_E',
+    apiKeyUrl: 'https://www.volcengine.com/product/ark',
+    canDelete: true,
+  },
+  {
+    id: 'volcengine-coding-plan',
+    name: 'Volcengine Coding Plan',
+    apiKey: '',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    enabled: true,
+    models: [
+      'doubao-seed-2.0-code',
+      'doubao-seed-2.0-pro',
+      'doubao-seed-2.0-lite',
+      'doubao-seed-code',
+      'minimax-m2.5',
+      'glm-4.7',
+      'deepseek-v3.2',
+      'kimi-k2.5',
+    ],
+    defaultModel: 'doubao-seed-2.0-code',
+    apiType: 'openai-completions',
+    icon: 'V',
+    apiKeyUrl: 'https://www.volcengine.com/activity/codingplan',
+    canDelete: true,
+  },
+  {
+    id: 'byteplus',
+    name: 'BytePlus',
+    apiKey: '',
+    baseUrl: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+    enabled: true,
+    models: [
+      'seed-2-0-pro-260328',
+      'seed-2-0-lite-260228',
+      'seed-2-0-mini-260215',
+      'kimi-k2-5-260127',
+      'glm-4-7-251222',
+    ],
+    defaultModel: 'seed-2-0-pro-260328',
+    apiType: 'openai-completions',
+    icon: 'B',
+    apiKeyUrl: 'https://www.byteplus.com/en/product/modelark',
+    canDelete: true,
+  },
+  {
+    id: 'byteplus-coding-plan',
+    name: 'BytePlus Coding Plan',
+    apiKey: '',
+    baseUrl: 'https://ark.ap-southeast.bytepluses.com/api/coding/v3',
+    enabled: true,
+    models: [
+      'dola-seed-2.0-pro',
+      'dola-seed-2.0-lite',
+      'bytedance-seed-code',
+      'glm-4.7',
+      'kimi-k2.5',
+      'gpt-oss-120b',
+    ],
+    defaultModel: 'dola-seed-2.0-pro',
+    apiType: 'openai-completions',
+    icon: 'B',
+    apiKeyUrl: 'https://www.byteplus.com/en/activity/codingplan',
     canDelete: true,
   },
   {
@@ -355,14 +445,24 @@ export const providerDefaultModels: Record<string, string[]> = {
 // Model suggestions for custom providers (matched by name pattern)
 export const customProviderModels: Record<string, string[]> = {
   火山: [
-    'doubao-1-5-pro-256k-250115',
-    'doubao-1-5-lite-32k-250115',
-    'deepseek-v3-250324',
+    'doubao-seed-2-0-pro-260215',
+    'doubao-seed-2-0-lite-260215',
+    'deepseek-v3-2-251201',
   ],
   volcengine: [
-    'doubao-1-5-pro-256k-250115',
-    'doubao-1-5-lite-32k-250115',
-    'deepseek-v3-250324',
+    'doubao-seed-2-0-pro-260215',
+    'doubao-seed-2-0-lite-260215',
+    'doubao-seed-2-0-code-preview-260215',
+    'kimi-k2-5-260127',
+    'glm-4-7-251222',
+    'deepseek-v3-2-251201',
+  ],
+  byteplus: [
+    'seed-2-0-pro-260328',
+    'seed-2-0-lite-260228',
+    'seed-2-0-mini-260215',
+    'kimi-k2-5-260127',
+    'glm-4-7-251222',
   ],
   deepseek: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
   kimi: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
@@ -398,7 +498,7 @@ export const defaultSettings: Settings = {
     nickname: 'Guest User',
     avatar: '',
   },
-  providers: defaultProviders,
+  providers: defaultProviders.map(cloneAIProvider),
   defaultProvider: '', // Empty until user configures a provider
   defaultModel: '',
   mcpConfigPath: '', // Will be resolved to app data dir at init
@@ -442,6 +542,95 @@ let settingsCache: Settings | null = null;
 let db: Awaited<
   ReturnType<typeof import('@tauri-apps/plugin-sql').default.load>
 > | null = null;
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function shouldMigrateLegacyVolcengineProvider(provider: AIProvider): boolean {
+  return (
+    provider.id === legacyVolcengineProvider.id &&
+    provider.name === legacyVolcengineProvider.name &&
+    provider.baseUrl === legacyVolcengineProvider.baseUrl &&
+    provider.apiType === legacyVolcengineProvider.apiType &&
+    provider.icon === legacyVolcengineProvider.icon &&
+    provider.apiKeyUrl === legacyVolcengineProvider.apiKeyUrl &&
+    arraysEqual(provider.models, legacyVolcengineProvider.models)
+  );
+}
+
+function migrateLegacyVolcengineProvider(provider: AIProvider): AIProvider {
+  const latestProvider = defaultProviders.find(
+    (item) => item.id === provider.id
+  );
+  if (!latestProvider) {
+    return provider;
+  }
+
+  const defaultModel =
+    provider.defaultModel &&
+    provider.defaultModel !== legacyVolcengineProvider.models[0] &&
+    latestProvider.models.includes(provider.defaultModel)
+      ? provider.defaultModel
+      : latestProvider.defaultModel || latestProvider.models[0] || '';
+
+  return {
+    ...cloneAIProvider(latestProvider),
+    apiKey: provider.apiKey,
+    enabled: provider.enabled,
+    defaultModel,
+  };
+}
+
+function normalizeProviders(providers: AIProvider[]): AIProvider[] {
+  const normalizedProviders = providers.map((provider) =>
+    shouldMigrateLegacyVolcengineProvider(provider)
+      ? migrateLegacyVolcengineProvider(provider)
+      : provider
+  );
+
+  const existingIds = new Set(
+    normalizedProviders.map((provider) => provider.id)
+  );
+  for (const defaultProvider of defaultProviders) {
+    if (!existingIds.has(defaultProvider.id)) {
+      normalizedProviders.push(cloneAIProvider(defaultProvider));
+    }
+  }
+
+  return normalizedProviders;
+}
+
+function normalizeDefaultModelSelection(settings: Settings): Settings {
+  if (!settings.defaultProvider || settings.defaultProvider === 'default') {
+    return settings;
+  }
+
+  const selectedProvider = settings.providers.find(
+    (provider) => provider.id === settings.defaultProvider
+  );
+
+  if (!selectedProvider) {
+    settings.defaultProvider = '';
+    settings.defaultModel = '';
+    return settings;
+  }
+
+  if (!selectedProvider.models.includes(settings.defaultModel)) {
+    settings.defaultModel =
+      selectedProvider.defaultModel || selectedProvider.models[0] || '';
+  }
+
+  return settings;
+}
+
+function normalizeSettings(settings: Settings): Settings {
+  settings.providers = normalizeProviders(settings.providers);
+  return normalizeDefaultModelSelection(settings);
+}
 
 // Initialize database connection (only in Tauri)
 async function getDatabase() {
@@ -500,12 +689,7 @@ export async function getSettingsAsync(): Promise<Settings> {
             // Skip invalid JSON values
           }
         }
-        // Migration: Add missing default providers
-        for (const defaultProvider of defaultProviders) {
-          if (!settings.providers.find((p) => p.id === defaultProvider.id)) {
-            settings.providers.push(defaultProvider);
-          }
-        }
+        normalizeSettings(settings);
         // Debug: Log loaded settings
         console.log('[Settings] Loaded from database:', {
           defaultProvider: settings.defaultProvider,
@@ -530,16 +714,7 @@ export async function getSettingsAsync(): Promise<Settings> {
     const stored = localStorage.getItem('workany_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
-      // Migration: Add missing default providers
-      for (const defaultProvider of defaultProviders) {
-        if (
-          !loadedSettings.providers.find(
-            (p: AIProvider) => p.id === defaultProvider.id
-          )
-        ) {
-          loadedSettings.providers.push(defaultProvider);
-        }
-      }
+      normalizeSettings(loadedSettings);
       // Debug: Log loaded settings
       console.log('[Settings] Loaded from localStorage:', {
         defaultProvider: loadedSettings.defaultProvider,
@@ -576,16 +751,7 @@ export function getSettings(): Settings {
     const stored = localStorage.getItem('workany_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
-      // Migration: Add missing default providers
-      for (const defaultProvider of defaultProviders) {
-        if (
-          !loadedSettings.providers.find(
-            (p: AIProvider) => p.id === defaultProvider.id
-          )
-        ) {
-          loadedSettings.providers.push(defaultProvider);
-        }
-      }
+      normalizeSettings(loadedSettings);
       settingsCache = loadedSettings;
       console.log('[Settings] getSettings loaded from localStorage:', {
         defaultProvider: loadedSettings.defaultProvider,
