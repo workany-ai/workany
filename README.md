@@ -51,7 +51,7 @@ WorkAny is a desktop AI agent application that executes tasks through natural la
 - **Artifact Preview** - Live preview for HTML/React/code files
 - **MCP Support** - Model Context Protocol server integration (stdio/SSE/HTTP)
 - **Skills Support** - Custom agent skills for extended capabilities
-- **Multi-provider** - OpenRouter, Anthropic, OpenAI, and any compatible API endpoint
+- **Multi-provider** - Built-in presets for OpenRouter, MiniMax, Z.ai, Volcengine, Volcengine Coding Plan, BytePlus, BytePlus Coding Plan, Kimi, and any compatible API endpoint
 
 ## Project Structure
 
