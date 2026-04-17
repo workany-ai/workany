@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@codeany/open-agent-sdk": "^0.2.1",
     "@hono/node-server": "^1.14.1",
+    "@larksuiteoapi/node-sdk": "^1.60.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "color-diff-napi": "file:stubs/color-diff-napi",
     "hono": "^4.7.10",

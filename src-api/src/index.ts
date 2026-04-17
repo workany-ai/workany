@@ -5,6 +5,7 @@ import { logger } from 'hono/logger';
 
 import {
   agentRoutes,
+  channelRoutes,
   filesRoutes,
   healthRoutes,
   mcpRoutes,
@@ -34,6 +35,7 @@ app.route('/preview', previewRoutes);
 app.route('/providers', providersRoutes);
 app.route('/files', filesRoutes);
 app.route('/mcp', mcpRoutes);
+app.route('/channels', channelRoutes);
 
 // Root endpoint
 app.get('/', (c) => {
