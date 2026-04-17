@@ -157,10 +157,29 @@ class ConfigLoader {
 
       this.mergeConfig(fileConfig, 'file');
       this.configPath = absolutePath;
+      this.loadEnvFromConfig(fileConfig as unknown as Record<string, unknown>);
 
       console.log(`[ConfigLoader] Loaded config from: ${absolutePath}`);
     } catch (error) {
       console.error(`[ConfigLoader] Error loading config file:`, error);
+    }
+  }
+
+  /**
+   * Load custom env vars from config.json's "env" field.
+   * Values like "${VAR}" are resolved from process.env.
+   */
+  private loadEnvFromConfig(fileConfig: Record<string, unknown>): void {
+    const envMap = fileConfig.env as Record<string, string> | undefined;
+    if (!envMap || typeof envMap !== 'object') return;
+
+    for (const [key, value] of Object.entries(envMap)) {
+      if (typeof value !== 'string') continue;
+      const resolved = value.replace(/\$\{(\w+)\}/g, (_, name) => process.env[name] || '');
+      if (resolved && !process.env[key]) {
+        process.env[key] = resolved;
+        console.log(`[ConfigLoader] Injected env: ${key}`);
+      }
     }
   }
 
