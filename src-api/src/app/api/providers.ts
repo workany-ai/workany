@@ -299,6 +299,7 @@ interface DetectBody {
   baseUrl: string;
   apiKey: string;
   model?: string;
+  apiType?: 'anthropic-messages' | 'openai-completions';
 }
 
 interface DetectSuccessResponse {
@@ -317,21 +318,23 @@ interface DetectErrorResponse {
 // type DetectResponse = DetectSuccessResponse | DetectErrorResponse;
 
 /**
- * Build API URL from base URL
- * Handles various base URL formats and ensures proper /v1/messages path
+ * Build API URL from base URL based on API type.
+ * Handles various base URL formats and ensures proper endpoint path.
  */
-function buildApiUrl(baseUrl: string): string {
+function buildApiUrl(baseUrl: string, apiType?: string): string {
   const normalized = baseUrl.replace(/\/$/, '');
+  const isOpenAI = apiType === 'openai-completions';
+  const suffix = isOpenAI ? '/chat/completions' : '/messages';
 
-  if (normalized.includes('/messages')) {
+  if (normalized.includes('/chat/completions') || normalized.includes('/messages')) {
     return normalized;
   }
 
   if (normalized.endsWith('/v1')) {
-    return `${normalized}/messages`;
+    return `${normalized}${suffix}`;
   }
 
-  return `${normalized}/v1/messages`;
+  return `${normalized}/v1${suffix}`;
 }
 
 /**
@@ -345,14 +348,32 @@ providersRoutes.post('/detect', async (c) => {
     return c.json({ error: 'baseUrl and apiKey are required' }, 400);
   }
 
-  const apiUrl = buildApiUrl(body.baseUrl);
+  const apiType = body.apiType || 'anthropic-messages';
+  const apiUrl = buildApiUrl(body.baseUrl, apiType);
   const testModel = body.model || DEFAULT_TEST_MODEL;
 
   console.log('[ProvidersAPI] Detecting API connection:', {
     baseUrl: body.baseUrl,
     apiUrl,
+    apiType,
     model: testModel,
   });
+
+  const isOpenAI = apiType === 'openai-completions';
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (isOpenAI) {
+    headers['Authorization'] = `Bearer ${body.apiKey}`;
+  } else {
+    headers['x-api-key'] = body.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  }
+
+  const requestBody = isOpenAI
+    ? { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1, stream: false }
+    : { model: testModel, messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }], max_tokens: 1 };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -360,16 +381,8 @@ providersRoutes.post('/detect', async (c) => {
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${body.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: testModel,
-        messages: [{ role: 'user', content: DETECT_TEST_MESSAGE }],
-        max_tokens: 1,
-        stream: false,
-      }),
+      headers,
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
 

@@ -16,3 +16,5 @@ export {
   type SkillMetadata,
   type SkillsConfig,
 } from './loader';
+
+export { registerFilesystemSkills } from "./register";
