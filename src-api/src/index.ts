@@ -11,6 +11,7 @@ import {
   previewRoutes,
   providersRoutes,
   sandboxRoutes,
+  channelRoutes,
 } from '@/app/api';
 import { corsMiddleware } from '@/app/middleware/index.js';
 import { loadConfig } from '@/config/loader.js';
@@ -34,6 +35,7 @@ app.route('/preview', previewRoutes);
 app.route('/providers', providersRoutes);
 app.route('/files', filesRoutes);
 app.route('/mcp', mcpRoutes);
+app.route('/channels', channelRoutes);
 
 // Root endpoint
 app.get('/', (c) => {
