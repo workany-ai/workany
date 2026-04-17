@@ -222,15 +222,22 @@ export function findSkill(skills: LoadedSkill[], name: string): LoadedSkill | un
  * Get the path to bundled built-in skills in the project resources
  */
 function getBuiltinSkillsSourceDir(): string {
-  // Resolve relative to this file: src/shared/skills/loader.ts -> resources/skills/
-  const thisDir = dirname(fileURLToPath(import.meta.url));
+  // In pkg binary, import.meta.url may be undefined
+  let thisDir: string;
+  try {
+    thisDir = dirname(fileURLToPath(import.meta.url));
+  } catch {
+    thisDir = __dirname || process.cwd();
+  }
   // In dev: src-api/src/shared/skills/ -> src-api/resources/skills/
   // In prod: dist/shared/skills/ -> resources/skills/
   const devPath = join(thisDir, '..', '..', '..', 'resources', 'skills');
   if (existsSync(devPath)) return devPath;
   const prodPath = join(thisDir, '..', '..', 'resources', 'skills');
   if (existsSync(prodPath)) return prodPath;
-  return devPath; // fallback
+  const pkgPath = join(process.cwd(), 'resources', 'skills');
+  if (existsSync(pkgPath)) return pkgPath;
+  return devPath;
 }
 
 /**
