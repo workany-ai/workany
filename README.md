@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/workany-ai-workany-badge.png)](https://mseep.ai/app/workany-ai-workany)
+
 # WorkAny
 
 WorkAny is a desktop AI agent application that executes tasks through natural language. It provides real-time code generation, tool execution, and workspace management.
