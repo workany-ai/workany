@@ -1,0 +1,18 @@
+export default {
+  description: 'Create and manage AI agents with custom personalities and skills',
+  create: 'Create Agent',
+  edit: 'Edit Agent',
+  empty: 'No agents yet',
+  emptyDescription: 'Create your first agent to get started with multi-agent collaboration',
+  name: 'Name',
+  namePlaceholder: 'e.g. Research Assistant',
+  avatarUrl: 'Avatar URL',
+  soulMd: 'Soul (System Prompt)',
+  soulMdDescription: 'Define the agent\'s personality, expertise, and behavior in Markdown format',
+  soulMdPlaceholder: '# Research Assistant\n\nYou are a research assistant specialized in...\n\n## Skills\n- Deep web research\n- Data analysis\n- Report writing',
+  modelConfig: 'Model Configuration',
+  modelProvider: 'Provider',
+  modelProviderPlaceholder: 'e.g. openrouter',
+  modelName: 'Model',
+  modelNamePlaceholder: 'e.g. anthropic/claude-sonnet-4',
+};

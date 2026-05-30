@@ -1,0 +1,18 @@
+export default {
+  description: '创建和管理具有自定义人格和技能的 AI Agent',
+  create: '创建 Agent',
+  edit: '编辑 Agent',
+  empty: '暂无 Agent',
+  emptyDescription: '创建你的第一个 Agent，开始多 Agent 协作',
+  name: '名称',
+  namePlaceholder: '例如：研究助手',
+  avatarUrl: '头像 URL',
+  soulMd: 'Soul（系统提示词）',
+  soulMdDescription: '以 Markdown 格式定义 Agent 的性格、专长和行为',
+  soulMdPlaceholder: '# 研究助手\n\n你是一个专注于...的研究助手\n\n## 技能\n- 深度网络研究\n- 数据分析\n- 报告撰写',
+  modelConfig: '模型配置',
+  modelProvider: '服务商',
+  modelProviderPlaceholder: '例如：openrouter',
+  modelName: '模型',
+  modelNamePlaceholder: '例如：anthropic/claude-sonnet-4',
+};

@@ -1,18 +1,32 @@
 import type {
+  Agent,
+  CreateAgentInput,
   CreateFileInput,
+  CreateIssueInput,
   CreateMessageInput,
+  CreateProjectInput,
   CreateSessionInput,
   CreateTaskInput,
+  CreateTeamInput,
+  Issue,
   LibraryFile,
   Message,
+  Project,
   Session,
   Task,
+  Team,
+  TeamMember,
+  TeamMemberRole,
+  UpdateAgentInput,
+  UpdateIssueInput,
+  UpdateProjectInput,
   UpdateTaskInput,
+  UpdateTeamInput,
 } from './types';
 
 const SQLITE_DB_NAME = 'sqlite:workany.db';
 const IDB_NAME = 'workany';
-const IDB_VERSION = 2; // Bump version for sessions support
+const IDB_VERSION = 3; // Bump version for agents/teams/projects/issues
 
 // Check if running in Tauri environment synchronously
 function isTauriSync(): boolean {
@@ -85,6 +99,41 @@ async function getIndexedDB(): Promise<IDBDatabase> {
           autoIncrement: true,
         });
         filesStore.createIndex('task_id', 'task_id', { unique: false });
+      }
+
+      // Create agents store (v3)
+      if (!db.objectStoreNames.contains('agents')) {
+        const agentsStore = db.createObjectStore('agents', { keyPath: 'id' });
+        agentsStore.createIndex('created_at', 'created_at', { unique: false });
+      }
+
+      // Create teams store (v3)
+      if (!db.objectStoreNames.contains('teams')) {
+        const teamsStore = db.createObjectStore('teams', { keyPath: 'id' });
+        teamsStore.createIndex('created_at', 'created_at', { unique: false });
+      }
+
+      // Create team_members store (v3)
+      if (!db.objectStoreNames.contains('team_members')) {
+        const tmStore = db.createObjectStore('team_members', {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        tmStore.createIndex('team_id', 'team_id', { unique: false });
+        tmStore.createIndex('agent_id', 'agent_id', { unique: false });
+      }
+
+      // Create projects store (v3)
+      if (!db.objectStoreNames.contains('projects')) {
+        const projectsStore = db.createObjectStore('projects', { keyPath: 'id' });
+        projectsStore.createIndex('created_at', 'created_at', { unique: false });
+      }
+
+      // Create issues store (v3)
+      if (!db.objectStoreNames.contains('issues')) {
+        const issuesStore = db.createObjectStore('issues', { keyPath: 'id' });
+        issuesStore.createIndex('project_id', 'project_id', { unique: false });
+        issuesStore.createIndex('assigned_agent_id', 'assigned_agent_id', { unique: false });
       }
 
       console.log('[IDB] Database upgraded successfully');
@@ -802,4 +851,443 @@ export async function getFilesGroupedByTask(): Promise<
   }
 
   return result;
+}
+
+// ============ Agent Operations ============
+export async function createAgent(input: CreateAgentInput): Promise<Agent> {
+  const now = new Date().toISOString();
+  const agent: Agent = {
+    id: input.id,
+    name: input.name,
+    avatar: input.avatar || null,
+    soul_md: input.soul_md || '',
+    model_provider: input.model_provider || null,
+    model_name: input.model_name || null,
+    model_config: input.model_config || null,
+    mcp_config: input.mcp_config || null,
+    tools: input.tools || null,
+    is_default: input.is_default || false,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const database = await getSQLiteDatabase();
+  if (database) {
+    await database.execute(
+      `INSERT INTO agents (id, name, avatar, soul_md, model_provider, model_name, model_config, mcp_config, tools, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [input.id, input.name, agent.avatar, agent.soul_md, agent.model_provider, agent.model_name, agent.model_config, agent.mcp_config, agent.tools, agent.is_default ? 1 : 0]
+    );
+    return agent;
+  } else {
+    const db = await getIndexedDB();
+    const tx = db.transaction('agents', 'readwrite');
+    await idbRequest(tx.objectStore('agents').put(agent));
+    return agent;
+  }
+}
+
+export async function getAgent(id: string): Promise<Agent | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.select<Agent[]>('SELECT * FROM agents WHERE id = $1', [id]);
+    const a = result[0] || null;
+    if (a) a.is_default = Boolean(a.is_default);
+    return a;
+  } else {
+    const db = await getIndexedDB();
+    const result = await idbRequest(db.transaction('agents', 'readonly').objectStore('agents').get(id));
+    return result || null;
+  }
+}
+
+export async function getAllAgents(): Promise<Agent[]> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const agents = await database.select<Agent[]>('SELECT * FROM agents ORDER BY created_at DESC');
+    return agents.map((a) => ({ ...a, is_default: Boolean(a.is_default) }));
+  } else {
+    const db = await getIndexedDB();
+    const agents = await idbRequest(db.transaction('agents', 'readonly').objectStore('agents').getAll());
+    return agents.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}
+
+export async function updateAgent(id: string, input: UpdateAgentInput): Promise<Agent | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const updates: string[] = [];
+    const values: (string | number | null)[] = [];
+    let idx = 1;
+    if (input.name !== undefined) { updates.push(`name = $${idx++}`); values.push(input.name); }
+    if (input.avatar !== undefined) { updates.push(`avatar = $${idx++}`); values.push(input.avatar); }
+    if (input.soul_md !== undefined) { updates.push(`soul_md = $${idx++}`); values.push(input.soul_md); }
+    if (input.model_provider !== undefined) { updates.push(`model_provider = $${idx++}`); values.push(input.model_provider); }
+    if (input.model_name !== undefined) { updates.push(`model_name = $${idx++}`); values.push(input.model_name); }
+    if (input.model_config !== undefined) { updates.push(`model_config = $${idx++}`); values.push(input.model_config); }
+    if (input.mcp_config !== undefined) { updates.push(`mcp_config = $${idx++}`); values.push(input.mcp_config); }
+    if (input.tools !== undefined) { updates.push(`tools = $${idx++}`); values.push(input.tools); }
+    if (input.is_default !== undefined) { updates.push(`is_default = $${idx++}`); values.push(input.is_default ? 1 : 0); }
+    if (updates.length > 0) {
+      updates.push(`updated_at = datetime('now')`);
+      values.push(id);
+      await database.execute(`UPDATE agents SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    }
+    return getAgent(id);
+  } else {
+    const db = await getIndexedDB();
+    const agent = await getAgent(id);
+    if (!agent) return null;
+    const updated = { ...agent, ...input, updated_at: new Date().toISOString() };
+    const tx = db.transaction('agents', 'readwrite');
+    await idbRequest(tx.objectStore('agents').put(updated));
+    return updated;
+  }
+}
+
+export async function deleteAgent(id: string): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('DELETE FROM agents WHERE id = $1', [id]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('agents', 'readwrite').objectStore('agents').delete(id));
+    return true;
+  }
+}
+
+// ============ Team Operations ============
+export async function createTeam(input: CreateTeamInput): Promise<Team> {
+  const now = new Date().toISOString();
+  const team: Team = {
+    id: input.id,
+    name: input.name,
+    description: input.description || '',
+    avatar: input.avatar || null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const database = await getSQLiteDatabase();
+  if (database) {
+    await database.execute(
+      'INSERT INTO teams (id, name, description, avatar) VALUES ($1, $2, $3, $4)',
+      [input.id, input.name, team.description, team.avatar]
+    );
+    return team;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('teams', 'readwrite').objectStore('teams').put(team));
+    return team;
+  }
+}
+
+export async function getTeam(id: string): Promise<Team | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.select<Team[]>('SELECT * FROM teams WHERE id = $1', [id]);
+    return result[0] || null;
+  } else {
+    const db = await getIndexedDB();
+    const result = await idbRequest(db.transaction('teams', 'readonly').objectStore('teams').get(id));
+    return result || null;
+  }
+}
+
+export async function getAllTeams(): Promise<Team[]> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    return database.select<Team[]>('SELECT * FROM teams ORDER BY created_at DESC');
+  } else {
+    const db = await getIndexedDB();
+    const teams = await idbRequest(db.transaction('teams', 'readonly').objectStore('teams').getAll());
+    return teams.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}
+
+export async function updateTeam(id: string, input: UpdateTeamInput): Promise<Team | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const updates: string[] = [];
+    const values: (string | null)[] = [];
+    let idx = 1;
+    if (input.name !== undefined) { updates.push(`name = $${idx++}`); values.push(input.name); }
+    if (input.description !== undefined) { updates.push(`description = $${idx++}`); values.push(input.description); }
+    if (input.avatar !== undefined) { updates.push(`avatar = $${idx++}`); values.push(input.avatar); }
+    if (updates.length > 0) {
+      updates.push(`updated_at = datetime('now')`);
+      values.push(id);
+      await database.execute(`UPDATE teams SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    }
+    return getTeam(id);
+  } else {
+    const db = await getIndexedDB();
+    const team = await getTeam(id);
+    if (!team) return null;
+    const updated = { ...team, ...input, updated_at: new Date().toISOString() };
+    await idbRequest(db.transaction('teams', 'readwrite').objectStore('teams').put(updated));
+    return updated;
+  }
+}
+
+export async function deleteTeam(id: string): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('DELETE FROM teams WHERE id = $1', [id]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('teams', 'readwrite').objectStore('teams').delete(id));
+    return true;
+  }
+}
+
+// ============ Team Member Operations ============
+export async function addTeamMember(teamId: string, agentId: string, role: TeamMemberRole = 'member'): Promise<TeamMember> {
+  const now = new Date().toISOString();
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute(
+      'INSERT INTO team_members (team_id, agent_id, role) VALUES ($1, $2, $3)',
+      [teamId, agentId, role]
+    );
+    return { id: result.lastInsertId as number, team_id: teamId, agent_id: agentId, role, created_at: now };
+  } else {
+    const db = await getIndexedDB();
+    const member: Omit<TeamMember, 'id'> & { id?: number } = { team_id: teamId, agent_id: agentId, role, created_at: now };
+    const tx = db.transaction('team_members', 'readwrite');
+    const id = await idbRequest(tx.objectStore('team_members').add(member));
+    return { ...member, id: id as number } as TeamMember;
+  }
+}
+
+export async function getTeamMembers(teamId: string): Promise<TeamMember[]> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    return database.select<TeamMember[]>('SELECT * FROM team_members WHERE team_id = $1', [teamId]);
+  } else {
+    const db = await getIndexedDB();
+    const tx = db.transaction('team_members', 'readonly');
+    const index = tx.objectStore('team_members').index('team_id');
+    return idbRequest(index.getAll(teamId));
+  }
+}
+
+export async function removeTeamMember(teamId: string, agentId: string): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('DELETE FROM team_members WHERE team_id = $1 AND agent_id = $2', [teamId, agentId]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    const members = await getTeamMembers(teamId);
+    const member = members.find((m) => m.agent_id === agentId);
+    if (member) {
+      await idbRequest(db.transaction('team_members', 'readwrite').objectStore('team_members').delete(member.id));
+      return true;
+    }
+    return false;
+  }
+}
+
+export async function updateTeamMemberRole(teamId: string, agentId: string, role: TeamMemberRole): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('UPDATE team_members SET role = $1 WHERE team_id = $2 AND agent_id = $3', [role, teamId, agentId]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    const members = await getTeamMembers(teamId);
+    const member = members.find((m) => m.agent_id === agentId);
+    if (member) {
+      member.role = role;
+      await idbRequest(db.transaction('team_members', 'readwrite').objectStore('team_members').put(member));
+      return true;
+    }
+    return false;
+  }
+}
+
+// ============ Project Operations ============
+export async function createProject(input: CreateProjectInput): Promise<Project> {
+  const now = new Date().toISOString();
+  const project: Project = {
+    id: input.id,
+    name: input.name,
+    description: input.description || '',
+    team_id: input.team_id || null,
+    status: 'active',
+    created_at: now,
+    updated_at: now,
+  };
+
+  const database = await getSQLiteDatabase();
+  if (database) {
+    await database.execute(
+      'INSERT INTO projects (id, name, description, team_id) VALUES ($1, $2, $3, $4)',
+      [input.id, input.name, project.description, project.team_id]
+    );
+    return project;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('projects', 'readwrite').objectStore('projects').put(project));
+    return project;
+  }
+}
+
+export async function getProject(id: string): Promise<Project | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.select<Project[]>('SELECT * FROM projects WHERE id = $1', [id]);
+    return result[0] || null;
+  } else {
+    const db = await getIndexedDB();
+    const result = await idbRequest(db.transaction('projects', 'readonly').objectStore('projects').get(id));
+    return result || null;
+  }
+}
+
+export async function getAllProjects(): Promise<Project[]> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    return database.select<Project[]>('SELECT * FROM projects ORDER BY created_at DESC');
+  } else {
+    const db = await getIndexedDB();
+    const projects = await idbRequest(db.transaction('projects', 'readonly').objectStore('projects').getAll());
+    return projects.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}
+
+export async function updateProject(id: string, input: UpdateProjectInput): Promise<Project | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const updates: string[] = [];
+    const values: (string | null)[] = [];
+    let idx = 1;
+    if (input.name !== undefined) { updates.push(`name = $${idx++}`); values.push(input.name); }
+    if (input.description !== undefined) { updates.push(`description = $${idx++}`); values.push(input.description); }
+    if (input.team_id !== undefined) { updates.push(`team_id = $${idx++}`); values.push(input.team_id); }
+    if (input.status !== undefined) { updates.push(`status = $${idx++}`); values.push(input.status); }
+    if (updates.length > 0) {
+      updates.push(`updated_at = datetime('now')`);
+      values.push(id);
+      await database.execute(`UPDATE projects SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    }
+    return getProject(id);
+  } else {
+    const db = await getIndexedDB();
+    const project = await getProject(id);
+    if (!project) return null;
+    const updated = { ...project, ...input, updated_at: new Date().toISOString() };
+    await idbRequest(db.transaction('projects', 'readwrite').objectStore('projects').put(updated));
+    return updated;
+  }
+}
+
+export async function deleteProject(id: string): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('DELETE FROM projects WHERE id = $1', [id]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('projects', 'readwrite').objectStore('projects').delete(id));
+    return true;
+  }
+}
+
+// ============ Issue Operations ============
+export async function createIssue(input: CreateIssueInput): Promise<Issue> {
+  const now = new Date().toISOString();
+  const issue: Issue = {
+    id: input.id,
+    project_id: input.project_id,
+    title: input.title,
+    description: input.description || '',
+    status: 'open',
+    priority: input.priority || 'medium',
+    assigned_agent_id: input.assigned_agent_id || null,
+    task_id: null,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const database = await getSQLiteDatabase();
+  if (database) {
+    await database.execute(
+      'INSERT INTO issues (id, project_id, title, description, priority, assigned_agent_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      [input.id, input.project_id, input.title, issue.description, issue.priority, issue.assigned_agent_id]
+    );
+    return issue;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('issues', 'readwrite').objectStore('issues').put(issue));
+    return issue;
+  }
+}
+
+export async function getIssue(id: string): Promise<Issue | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.select<Issue[]>('SELECT * FROM issues WHERE id = $1', [id]);
+    return result[0] || null;
+  } else {
+    const db = await getIndexedDB();
+    const result = await idbRequest(db.transaction('issues', 'readonly').objectStore('issues').get(id));
+    return result || null;
+  }
+}
+
+export async function getIssuesByProjectId(projectId: string): Promise<Issue[]> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    return database.select<Issue[]>('SELECT * FROM issues WHERE project_id = $1 ORDER BY created_at DESC', [projectId]);
+  } else {
+    const db = await getIndexedDB();
+    const tx = db.transaction('issues', 'readonly');
+    const index = tx.objectStore('issues').index('project_id');
+    const issues = await idbRequest(index.getAll(projectId));
+    return issues.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+}
+
+export async function updateIssue(id: string, input: UpdateIssueInput): Promise<Issue | null> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const updates: string[] = [];
+    const values: (string | null)[] = [];
+    let idx = 1;
+    if (input.title !== undefined) { updates.push(`title = $${idx++}`); values.push(input.title); }
+    if (input.description !== undefined) { updates.push(`description = $${idx++}`); values.push(input.description); }
+    if (input.status !== undefined) { updates.push(`status = $${idx++}`); values.push(input.status); }
+    if (input.priority !== undefined) { updates.push(`priority = $${idx++}`); values.push(input.priority); }
+    if (input.assigned_agent_id !== undefined) { updates.push(`assigned_agent_id = $${idx++}`); values.push(input.assigned_agent_id); }
+    if (input.task_id !== undefined) { updates.push(`task_id = $${idx++}`); values.push(input.task_id); }
+    if (updates.length > 0) {
+      updates.push(`updated_at = datetime('now')`);
+      values.push(id);
+      await database.execute(`UPDATE issues SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    }
+    return getIssue(id);
+  } else {
+    const db = await getIndexedDB();
+    const issue = await getIssue(id);
+    if (!issue) return null;
+    const updated = { ...issue, ...input, updated_at: new Date().toISOString() };
+    await idbRequest(db.transaction('issues', 'readwrite').objectStore('issues').put(updated));
+    return updated;
+  }
+}
+
+export async function deleteIssue(id: string): Promise<boolean> {
+  const database = await getSQLiteDatabase();
+  if (database) {
+    const result = await database.execute('DELETE FROM issues WHERE id = $1', [id]);
+    return result.rowsAffected > 0;
+  } else {
+    const db = await getIndexedDB();
+    await idbRequest(db.transaction('issues', 'readwrite').objectStore('issues').delete(id));
+    return true;
+  }
 }

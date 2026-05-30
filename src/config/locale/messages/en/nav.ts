@@ -4,4 +4,13 @@ export default {
   noTasksYet: 'No tasks yet',
   settings: 'Settings',
   logOut: 'Log out',
+  chat: 'Chat',
+  agents: 'Agents',
+  teams: 'Teams',
+  projects: 'Projects',
+  library: 'Library',
+  noAgentsYet: 'No agents yet',
+  noTeamsYet: 'No teams yet',
+  noProjectsYet: 'No projects yet',
+  libraryHint: 'View files from your tasks',
 };

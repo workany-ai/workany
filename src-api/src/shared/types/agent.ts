@@ -73,6 +73,19 @@ export interface McpConfigRequest {
 /**
  * API Request type for agent endpoints
  */
+/**
+ * Agent-specific configuration (per-agent overrides)
+ */
+export interface AgentConfigOverride {
+  agentId?: string;        // ID of the agent to use
+  soulMd?: string;         // System prompt from agent's soul.md
+  modelProvider?: string;  // Override provider
+  modelName?: string;      // Override model
+  modelConfig?: ModelConfig; // Override API config
+  mcpServers?: string[];   // Additional MCP servers
+  tools?: string[];        // Allowed tools override
+}
+
 export interface AgentRequest {
   prompt: string;
   sessionId?: string;
@@ -100,4 +113,6 @@ export interface AgentRequest {
   sandboxConfig?: SandboxConfig;
   // Image attachments for vision capabilities
   images?: ImageAttachment[];
+  // Agent-specific configuration (soul.md, per-agent model overrides)
+  agentConfig?: AgentConfigOverride;
 }

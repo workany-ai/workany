@@ -161,6 +161,8 @@ export interface AgentOptions {
   skillsConfig?: SkillsConfig;
   /** MCP configuration */
   mcpConfig?: McpConfig;
+  /** Agent soul.md system prompt (prepended to all prompts) */
+  soulMd?: string;
 }
 
 export interface PlanOptions extends AgentOptions {

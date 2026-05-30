@@ -6,13 +6,19 @@ import {
   type ReactNode,
 } from 'react';
 
+export type ActiveSection = 'chat' | 'agents' | 'teams' | 'projects' | 'library';
+
 interface SidebarContextType {
   leftOpen: boolean;
   rightOpen: boolean;
+  secondaryOpen: boolean;
+  activeSection: ActiveSection;
   toggleLeft: () => void;
   toggleRight: () => void;
   setLeftOpen: (open: boolean) => void;
   setRightOpen: (open: boolean) => void;
+  setSecondaryOpen: (open: boolean) => void;
+  setActiveSection: (section: ActiveSection) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -20,6 +26,8 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [secondaryOpen, setSecondaryOpen] = useState(true);
+  const [activeSection, setActiveSection] = useState<ActiveSection>('chat');
 
   const toggleLeft = useCallback(() => setLeftOpen((prev) => !prev), []);
   const toggleRight = useCallback(() => setRightOpen((prev) => !prev), []);
@@ -29,10 +37,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       value={{
         leftOpen,
         rightOpen,
+        secondaryOpen,
+        activeSection,
         toggleLeft,
         toggleRight,
         setLeftOpen,
         setRightOpen,
+        setSecondaryOpen,
+        setActiveSection,
       }}
     >
       {children}

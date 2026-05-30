@@ -9,8 +9,6 @@ import {
 } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  deleteTask,
-  getAllTasks,
   getFilesByTaskId,
   updateTask,
   type LibraryFile,
@@ -48,7 +46,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
+import { useSidebar } from '@/components/layout';
 import { SettingsModal } from '@/components/settings';
 import { ChatInput, type ChatMode } from '@/components/shared/ChatInput';
 import { LazyImage } from '@/components/shared/LazyImage';
@@ -87,11 +85,7 @@ export function useToolSelection() {
 }
 
 export function TaskDetailPage() {
-  return (
-    <SidebarProvider>
-      <TaskDetailContent />
-    </SidebarProvider>
-  );
+  return <TaskDetailContent />;
 }
 
 function TaskDetailContent() {
@@ -122,14 +116,12 @@ function TaskDetailContent() {
     respondToQuestion,
     sessionFolder,
     filesVersion,
-    backgroundTasks,
     generatedTitle,
   } = useAgent();
-  const { toggleLeft, setLeftOpen } = useSidebar();
+  const { toggleLeft, setLeftOpen, secondaryOpen, setSecondaryOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
   const [task, setTask] = useState<Task | null>(null);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -146,12 +138,7 @@ function TaskDetailContent() {
   // Track last scroll position to detect scroll direction
   const lastScrollTopRef = useRef(0);
 
-  // Auto-collapse left sidebar only when preview panel opens
-  useEffect(() => {
-    if (isPreviewVisible) {
-      setLeftOpen(false);
-    }
-  }, [isPreviewVisible, setLeftOpen]);
+  // Preview is now a dialog overlay, no need to collapse secondary panel
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Artifact state
@@ -287,8 +274,6 @@ function TaskDetailContent() {
       const updatedTask = await updateTask(taskId, { prompt: trimmed });
       if (updatedTask) {
         setTask(updatedTask);
-        const tasks = await getAllTasks();
-        setAllTasks(tasks);
       }
     } catch (error) {
       console.error('Failed to rename task:', error);
@@ -625,83 +610,12 @@ function TaskDetailContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Load all tasks for sidebar
-  useEffect(() => {
-    async function loadAllTasks() {
-      try {
-        const dbTasks = await getAllTasks();
-        setAllTasks((prev) => {
-          // Preserve current task if it exists in prev but not in database yet
-          // This handles the race condition where optimistic update added the task
-          // but database hasn't persisted it yet
-          const currentTaskInPrev = prev.find((t) => t.id === taskId);
-          const taskExistsInDb = dbTasks.some((t) => t.id === taskId);
-
-          if (currentTaskInPrev && !taskExistsInDb) {
-            // Keep the optimistic task at the beginning
-            return [currentTaskInPrev, ...dbTasks];
-          }
-          return dbTasks;
-        });
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
-      }
-    }
-    loadAllTasks();
-  }, [task, taskId]);
-
   // Update UI immediately when a generated title arrives
   useEffect(() => {
     if (generatedTitle && taskId) {
-      // Update current task state
       setTask((prev) => prev && prev.id === taskId ? { ...prev, prompt: generatedTitle } : prev);
-      // Update sidebar task list
-      setAllTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, prompt: generatedTitle } : t));
     }
   }, [generatedTitle, taskId]);
-
-  // Handle task deletion from sidebar
-  const handleDeleteTask = async (id: string) => {
-    try {
-      await deleteTask(id);
-      setAllTasks((prev) => prev.filter((t) => t.id !== id));
-      // If deleting current task, navigate to home
-      if (id === taskId) {
-        navigate('/');
-      }
-    } catch (error) {
-      console.error('Failed to delete task:', error);
-    }
-  };
-
-  // Handle favorite toggle from sidebar
-  const handleToggleFavorite = async (id: string, favorite: boolean) => {
-    try {
-      await updateTask(id, { favorite });
-      setAllTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, favorite } : t))
-      );
-    } catch (error) {
-      console.error('Failed to update task:', error);
-    }
-  };
-
-  // Handle rename from sidebar
-  const handleRenameTask = async (id: string, newTitle: string) => {
-    try {
-      const updatedTask = await updateTask(id, { prompt: newTitle });
-      if (updatedTask) {
-        setAllTasks((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, prompt: newTitle } : t))
-        );
-        if (id === taskId) {
-          setTask(updatedTask);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to rename task:', error);
-    }
-  };
 
   // Reset UI state when taskId changes (but don't touch agent/task state - let loadTask handle that)
   useEffect(() => {
@@ -749,32 +663,12 @@ function TaskDetailContent() {
 
       if (existingTask) {
         setTask(existingTask);
-        // Ensure this task is in the sidebar immediately
-        setAllTasks((prev) => {
-          const exists = prev.some((t) => t.id === existingTask.id);
-          return exists ? prev : [existingTask, ...prev];
-        });
         await loadMessages(taskId);
         setHasStarted(true);
         setIsLoading(false);
       } else if (initialPrompt && !hasStarted) {
         setHasStarted(true);
         setIsLoading(false);
-
-        // Immediately add the new task to sidebar (optimistic update)
-        const newTaskPreview: Task = {
-          id: taskId,
-          session_id: initialSessionId || '',
-          task_index: initialTaskIndex,
-          prompt: initialPrompt,
-          status: 'running',
-          favorite: false,
-          cost: 0,
-          duration: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setAllTasks((prev) => [newTaskPreview, ...prev]);
 
         // Pass session info if available
         const sessionInfo = initialSessionId
@@ -848,49 +742,28 @@ function TaskDetailContent() {
 
   return (
     <ToolSelectionContext.Provider value={toolSelectionValue}>
-      <div className="bg-sidebar flex h-screen overflow-hidden">
-        {/* Left Sidebar */}
-        <LeftSidebar
-          tasks={allTasks}
-          currentTaskId={taskId}
-          onDeleteTask={handleDeleteTask}
-          onToggleFavorite={handleToggleFavorite}
-          onRenameTask={handleRenameTask}
-          runningTaskIds={[
-            ...backgroundTasks.filter((t) => t.isRunning).map((t) => t.taskId),
-            // Include current task if it's running
-            ...(isRunning && taskId ? [taskId] : []),
-          ]}
-        />
-
-        {/* Main Content Area with Responsive Layout */}
-        <div
+      <div
           ref={containerRef}
-          className="bg-background my-2 mr-2 flex min-w-0 flex-1 overflow-hidden rounded-2xl shadow-sm"
+          className="flex min-w-0 flex-1 overflow-hidden"
         >
           {/* Left Panel - Agent Chat (flex-1 to fill available space) */}
           <div
             className={cn(
-              'bg-background flex min-w-0 flex-col overflow-hidden transition-all duration-200',
-              !isPreviewVisible && !isRightSidebarVisible && 'rounded-2xl',
-              !isPreviewVisible && isRightSidebarVisible && 'rounded-l-2xl',
-              isPreviewVisible && 'rounded-l-2xl'
+              'bg-background flex min-w-0 flex-1 flex-col overflow-hidden transition-all duration-200',
+              !isRightSidebarVisible && 'rounded-2xl',
+              isRightSidebarVisible && 'rounded-l-2xl'
             )}
-            style={{
-              flex: isPreviewVisible ? '0 0 auto' : '1 1 0%',
-              width: isPreviewVisible ? 'clamp(320px, 40%, 500px)' : undefined,
-              minWidth: '320px',
-              maxWidth: isPreviewVisible ? '500px' : undefined,
-            }}
           >
             {/* Header - Full width */}
             <header className="border-border/50 bg-background z-10 flex shrink-0 items-center gap-2 border-none px-4 py-3">
-              <button
-                onClick={toggleLeft}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200 md:hidden"
-              >
-                <PanelLeft className="size-5" />
-              </button>
+              {!secondaryOpen && (
+                <button
+                  onClick={() => setSecondaryOpen(true)}
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-1.5 transition-colors duration-200"
+                >
+                  <PanelLeft className="size-4" />
+                </button>
+              )}
 
               <div className="group/title flex min-w-0 flex-1 items-center gap-1">
                 <h1 className="text-foreground inline-block max-w-full truncate px-2 py-1 text-sm font-normal">
@@ -930,15 +803,14 @@ function TaskDetailContent() {
               ref={messagesContainerRef}
               className={cn(
                 'scrollbar-soft relative flex-1 overflow-x-hidden overflow-y-auto',
-                !isPreviewVisible &&
-                  !isRightSidebarVisible &&
+                !isRightSidebarVisible &&
                   'flex justify-center'
               )}
             >
               <div
                 className={cn(
                   'w-full px-6 pt-4 pb-24',
-                  !isPreviewVisible && !isRightSidebarVisible && 'max-w-[800px]'
+                  !isRightSidebarVisible && 'max-w-[800px]'
                 )}
               >
                 {isLoading ? (
@@ -986,8 +858,7 @@ function TaskDetailContent() {
             <div
               className={cn(
                 'border-border/50 bg-background relative shrink-0 border-none',
-                !isPreviewVisible &&
-                  !isRightSidebarVisible &&
+                !isRightSidebarVisible &&
                   'flex justify-center'
               )}
             >
@@ -1004,7 +875,7 @@ function TaskDetailContent() {
               <div
                 className={cn(
                   'w-full px-4 py-3',
-                  !isPreviewVisible && !isRightSidebarVisible && 'max-w-[800px]'
+                  !isRightSidebarVisible && 'max-w-[800px]'
                 )}
               >
                 <ChatInput
@@ -1019,28 +890,7 @@ function TaskDetailContent() {
             </div>
           </div>
 
-          {/* Divider between chat and preview */}
-          {isPreviewVisible && <div className="bg-border/50 w-px shrink-0" />}
-
-          {/* Middle Panel - Artifact Preview (only shown when artifact selected) */}
-          {isPreviewVisible && (
-            <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
-              <ArtifactPreview
-                artifact={selectedArtifact}
-                onClose={handleClosePreview}
-                allArtifacts={artifacts}
-                livePreviewUrl={livePreviewUrl}
-                livePreviewStatus={livePreviewStatus}
-                livePreviewError={livePreviewError}
-                onStartLivePreview={
-                  workingDir ? handleStartLivePreview : undefined
-                }
-                onStopLivePreview={handleStopLivePreview}
-              />
-            </div>
-          )}
-
-          {/* Divider between preview/chat and sidebar */}
+          {/* Divider between chat and sidebar */}
           <div
             className={cn(
               'bg-border/50 shrink-0 transition-all duration-300',
@@ -1066,8 +916,31 @@ function TaskDetailContent() {
               filesVersion={filesVersion}
             />
           </div>
-        </div>
       </div>
+      {/* Artifact Preview Dialog */}
+      {isPreviewVisible && selectedArtifact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={handleClosePreview}
+          />
+          <div className="bg-background relative flex h-[85vh] w-[70vw] max-w-5xl flex-col overflow-hidden rounded-2xl shadow-2xl">
+            <ArtifactPreview
+              artifact={selectedArtifact}
+              onClose={handleClosePreview}
+              allArtifacts={artifacts}
+              livePreviewUrl={livePreviewUrl}
+              livePreviewStatus={livePreviewStatus}
+              livePreviewError={livePreviewError}
+              onStartLivePreview={
+                workingDir ? handleStartLivePreview : undefined
+              }
+              onStopLivePreview={handleStopLivePreview}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Rename dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">

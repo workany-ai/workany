@@ -179,6 +179,100 @@ pub fn run() {
             "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "create_agents_table",
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS agents (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    avatar TEXT,
+                    soul_md TEXT NOT NULL DEFAULT '',
+                    model_provider TEXT,
+                    model_name TEXT,
+                    model_config TEXT,
+                    mcp_config TEXT,
+                    tools TEXT,
+                    is_default INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 9,
+            description: "create_teams_and_team_members_tables",
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS teams (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    avatar TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS team_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'member',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+                    UNIQUE(team_id, agent_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_members_team_id ON team_members(team_id);
+                CREATE INDEX IF NOT EXISTS idx_team_members_agent_id ON team_members(agent_id);
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "create_projects_and_issues_tables",
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS projects (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    team_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS issues (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    project_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'open',
+                    priority TEXT NOT NULL DEFAULT 'medium',
+                    assigned_agent_id TEXT,
+                    task_id TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY (assigned_agent_id) REFERENCES agents(id) ON DELETE SET NULL,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id);
+                CREATE INDEX IF NOT EXISTS idx_issues_assigned_agent ON issues(assigned_agent_id);
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "add_agent_id_to_tasks",
+            sql: r#"
+                ALTER TABLE tasks ADD COLUMN agent_id TEXT;
+            "#,
+            kind: MigrationKind::Up,
+        },
     ];
 
     #[cfg(not(debug_assertions))]

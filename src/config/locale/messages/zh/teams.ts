@@ -1,0 +1,17 @@
+export default {
+  description: '将 Agent 组织成团队进行协作',
+  create: '创建 Team',
+  edit: '编辑 Team',
+  empty: '暂无 Team',
+  emptyDescription: '创建一个 Team 来组织你的 Agent 进行协作',
+  name: 'Team 名称',
+  namePlaceholder: '例如：工程团队',
+  teamDescription: '描述',
+  descriptionPlaceholder: '这个 Team 负责什么？',
+  members: '成员',
+  addMember: '添加 Agent 到团队：',
+  noAgentsAvailable: '请先创建 Agent，然后再添加到团队',
+  roleLead: '负责人',
+  roleMember: '成员',
+  roleReviewer: '审查员',
+};

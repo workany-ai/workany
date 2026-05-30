@@ -1225,272 +1225,55 @@ export function RightSidebar({
 
   return (
     <div className="scrollbar-blend bg-background flex h-full flex-col overflow-x-hidden overflow-y-auto">
-      {/* 1. Workspace Section */}
-      <CollapsibleSection
-        title={t.task.workspace || 'Workspace'}
-        defaultExpanded={true}
-      >
-        {/* Output folder subsection */}
-        <div className="mt-1 mb-3">
-          <div className="mb-1 flex items-center gap-1">
-            <button
-              onClick={() => setOutputExpanded(!outputExpanded)}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-            >
-              {outputExpanded ? (
-                <ChevronDown className="size-3" />
-              ) : (
-                <ChevronRight className="size-3" />
-              )}
-              <span className="text-xs font-medium">
-                {t.task.outputFolder || 'Output'}
-              </span>
-            </button>
-            {workingDir && (
-              <button
-                onClick={() => handleOpenFolder(workingDir)}
-                className="text-muted-foreground hover:text-foreground ml-auto p-0.5 transition-colors"
-                title={t.task.openInFinder}
-              >
-                <ExternalLink className="size-3" />
-              </button>
-            )}
-          </div>
-          {outputExpanded && (
-            <>
-              {!workingDir ? (
-                <p className="text-muted-foreground py-1 text-sm">
-                  {t.task.waitingForTask}
-                </p>
-              ) : loadingFiles ? (
-                <div className="text-muted-foreground flex items-center gap-2 py-1">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span className="text-sm">{t.common.loading}</span>
-                </div>
-              ) : workingFiles.length === 0 ? (
-                <EmptyState icon={Folder} description={t.task.outputsDesc} />
-              ) : (
-                <div className="max-h-[200px] space-y-0.5 overflow-y-auto">
-                  {workingFiles.map((file) => (
-                    <FileTreeItem
-                      key={file.path}
-                      file={file}
-                      onSelectFile={onSelectWorkingFile}
-                      onSelectArtifact={onSelectArtifact}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Edited folders subsection */}
-        {externalFolders.length > 0 && (
-          <div>
-            <div className="mb-1 flex items-center gap-1">
-              <button
-                onClick={() => setEditedExpanded(!editedExpanded)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-              >
-                {editedExpanded ? (
-                  <ChevronDown className="size-3" />
-                ) : (
-                  <ChevronRight className="size-3" />
-                )}
-                <span className="text-xs font-medium">
-                  {t.task.editedFolders || 'Edited'}
-                </span>
-              </button>
-            </div>
-            {editedExpanded && (
-              <div className="space-y-0.5">
-                {externalFolders.map((folder) => (
-                  <button
-                    key={folder}
-                    onClick={() => handleOpenFolder(folder)}
-                    className="hover:bg-accent/50 flex w-full items-center gap-1.5 rounded-md py-1 text-left transition-colors"
-                  >
-                    <span className="size-4 shrink-0" />
-                    <FolderOpen className="text-muted-foreground/60 size-3.5 shrink-0" />
-                    <span className="text-foreground/80 truncate text-sm">
-                      {getFolderName(folder)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Files Header */}
+      <div className="border-border flex shrink-0 items-center justify-between border-b px-4 py-3">
+        <span className="text-foreground text-sm font-medium">Files</span>
+        {workingDir && (
+          <button
+            onClick={() => handleOpenFolder(workingDir)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            title={t.task.openInFinder}
+          >
+            <ExternalLink className="size-3.5" />
+          </button>
         )}
-      </CollapsibleSection>
+      </div>
 
-      {/* 2. Artifacts Section */}
-      <CollapsibleSection title={t.task.artifacts} defaultExpanded={true}>
+      {/* Artifacts List */}
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {artifacts.length === 0 ? (
-          <EmptyState icon={Package} description={t.task.noArtifacts} />
+          <p className="text-muted-foreground px-2 py-8 text-center text-sm">
+            {t.task.noArtifacts}
+          </p>
         ) : (
-          <>
-            <div
-              className={cn(
-                'space-y-1',
-                showAllArtifacts && 'max-h-[300px] overflow-y-auto'
-              )}
-            >
-              {visibleArtifacts.map((artifact) => {
-                const IconComponent = getFileIcon(artifact.type);
-                const isSelected = selectedArtifact?.id === artifact.id;
-
-                return (
-                  <button
-                    key={artifact.id}
-                    onClick={() => onSelectArtifact(artifact)}
+          <div className="space-y-0.5">
+            {artifacts.map((artifact) => {
+              const IconComponent = getFileIcon(artifact.type);
+              const isSelected = selectedArtifact?.id === artifact.id;
+              return (
+                <button
+                  key={artifact.id}
+                  onClick={() => onSelectArtifact(artifact)}
+                  className={cn(
+                    'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors',
+                    isSelected ? 'bg-accent' : 'hover:bg-accent/50'
+                  )}
+                >
+                  <IconComponent
                     className={cn(
-                      'flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors',
-                      isSelected ? 'bg-accent/60' : 'hover:bg-accent/30'
+                      'size-3.5 shrink-0',
+                      isSelected ? 'text-foreground/70' : 'text-muted-foreground/60'
                     )}
-                  >
-                    <IconComponent
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        isSelected
-                          ? 'text-foreground/70'
-                          : 'text-muted-foreground/60'
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        'truncate text-sm',
-                        isSelected ? 'text-foreground' : 'text-foreground/80'
-                      )}
-                    >
-                      {artifact.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {hasMoreArtifacts && (
-              <button
-                onClick={() => setShowAllArtifacts(!showAllArtifacts)}
-                className="text-muted-foreground hover:text-foreground w-full py-2 text-center text-xs transition-colors"
-              >
-                {showAllArtifacts
-                  ? 'Show less'
-                  : `Show ${artifacts.length - 10} more`}
-              </button>
-            )}
-          </>
-        )}
-      </CollapsibleSection>
-
-      {/* 3. Tools Section - MCP tools */}
-      <CollapsibleSection title={t.task.tools} defaultExpanded={false}>
-        {mcpTools.length === 0 ? (
-          <EmptyState icon={Wrench} description={t.task.noTools} />
-        ) : (
-          <>
-            <div
-              className={cn(
-                'space-y-1',
-                showAllTools && 'max-h-[300px] overflow-y-auto'
-              )}
-            >
-              {visibleTools.map((tool) => {
-                const IconComponent = getToolIcon(tool.name);
-                return (
-                  <button
-                    key={tool.id}
-                    onClick={() => setSelectedTool(tool)}
-                    className={cn(
-                      'group flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-left transition-colors',
-                      'hover:bg-accent/50',
-                      tool.isError && 'text-red-400'
-                    )}
-                  >
-                    <IconComponent
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        tool.isError
-                          ? 'text-red-400'
-                          : 'text-muted-foreground/60'
-                      )}
-                    />
-                    <span className="text-foreground/80 truncate text-sm">
-                      {tool.displayName}
-                    </span>
-                    {tool.isError && (
-                      <span className="shrink-0 rounded bg-red-500/10 px-1 py-0.5 text-[10px] text-red-500">
-                        Error
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {hasMoreTools && (
-              <button
-                onClick={() => setShowAllTools(!showAllTools)}
-                className="text-muted-foreground hover:text-foreground w-full py-2 text-center text-xs transition-colors"
-              >
-                {showAllTools
-                  ? 'Show less'
-                  : `Show ${mcpTools.length - DEFAULT_VISIBLE_COUNT} more`}
-              </button>
-            )}
-          </>
-        )}
-      </CollapsibleSection>
-
-      {/* 4. Skills Section */}
-      <CollapsibleSection title={t.task.skills} defaultExpanded={false}>
-        {loadingSkills ? (
-          <div className="text-muted-foreground flex items-center gap-2 py-2">
-            <Loader2 className="size-4 animate-spin" />
-            <span className="text-sm">{t.common.loading}</span>
-          </div>
-        ) : usedSkillNames.size === 0 ? (
-          <EmptyState icon={Sparkles} description={t.task.noSkills} />
-        ) : skillsDirs.length === 0 ? (
-          // Show skill names only if skill files couldn't be loaded
-          <div className="max-h-[300px] space-y-1 overflow-y-auto">
-            {Array.from(usedSkillNames).map((skillName) => (
-              <div
-                key={skillName}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5"
-              >
-                <Sparkles className="text-muted-foreground/60 size-3.5 shrink-0" />
-                <span className="text-foreground/80 truncate text-sm">
-                  {skillName}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          // Show skill files/content
-          <div className="max-h-[300px] space-y-0.5 overflow-y-auto">
-            {skillsDirs.map((dir) => (
-              <div key={dir.name}>
-                {dir.files.map((file) => (
-                  <FileTreeItem
-                    key={file.path}
-                    file={{ ...file, isExpanded: false }}
-                    onSelectFile={onSelectWorkingFile}
-                    onSelectArtifact={onSelectArtifact}
                   />
-                ))}
-              </div>
-            ))}
+                  <span className={cn('truncate text-sm', isSelected ? 'text-foreground' : 'text-foreground/80')}>
+                    {artifact.name}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
-      </CollapsibleSection>
-
-      {/* Tool Preview Modal */}
-      {selectedTool && (
-        <ToolPreviewModal
-          tool={selectedTool}
-          onClose={() => setSelectedTool(null)}
-        />
-      )}
+      </div>
     </div>
   );
 }

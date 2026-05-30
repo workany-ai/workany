@@ -409,9 +409,12 @@ User's request (answer this AFTER reading the images):
     const conversationContext = this.formatConversationHistory(options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
 
+    // Prepend soul.md if provided (agent personality/system prompt)
+    const soulPrefix = options?.soulMd ? `${options.soulMd}\n\n---\n\n` : '';
+
     const enhancedPrompt = imageInstruction
-      ? imageInstruction + languageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
-      : getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
+      ? soulPrefix + imageInstruction + languageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
+      : soulPrefix + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
 
     // Load MCP servers
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
@@ -479,9 +482,10 @@ User's request (answer this AFTER reading the images):
     await ensureDir(sessionCwd);
     logger.info(`[CodeAny ${session.id}] Planning started, cwd: ${sessionCwd}`);
 
+    const soulPrefix = options?.soulMd ? `${options.soulMd}\n\n---\n\n` : '';
     const workspaceInstruction = `\n## CRITICAL: Output Directory\n**ALL files must be saved to: ${sessionCwd}**\n`;
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
-    const planningPrompt = workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
+    const planningPrompt = soulPrefix + workspaceInstruction + PLANNING_INSTRUCTION + languageInstruction + prompt;
 
     let fullResponse = '';
 
@@ -552,7 +556,8 @@ User's request (answer this AFTER reading the images):
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    const executionPrompt =
+    const soulPrefix = options.soulMd ? `${options.soulMd}\n\n---\n\n` : '';
+    const executionPrompt = soulPrefix +
       formatPlanForExecution(plan, sessionCwd, sandboxOpts, options.language, options.originalPrompt) +
       '\n\nOriginal request: ' + options.originalPrompt;
 

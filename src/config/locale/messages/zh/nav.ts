@@ -4,4 +4,13 @@ export default {
   noTasksYet: '暂无任务',
   settings: '设置',
   logOut: '退出登录',
+  chat: '对话',
+  agents: 'Agents',
+  teams: 'Teams',
+  projects: 'Projects',
+  library: '文件库',
+  noAgentsYet: '暂无 Agent',
+  noTeamsYet: '暂无 Team',
+  noProjectsYet: '暂无 Project',
+  libraryHint: '查看任务中生成的文件',
 };

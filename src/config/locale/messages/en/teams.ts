@@ -1,0 +1,17 @@
+export default {
+  description: 'Organize agents into teams for collaborative work',
+  create: 'Create Team',
+  edit: 'Edit Team',
+  empty: 'No teams yet',
+  emptyDescription: 'Create a team to organize your agents for collaboration',
+  name: 'Team Name',
+  namePlaceholder: 'e.g. Engineering Team',
+  teamDescription: 'Description',
+  descriptionPlaceholder: 'What does this team do?',
+  members: 'members',
+  addMember: 'Add agent to team:',
+  noAgentsAvailable: 'Create agents first to add them to this team',
+  roleLead: 'Lead',
+  roleMember: 'Member',
+  roleReviewer: 'Reviewer',
+};

@@ -20,6 +20,7 @@ export interface Task {
   cost: number | null;
   duration: number | null;
   favorite?: boolean; // Whether task is favorited
+  agent_id?: string | null; // Reference to agent that ran this task
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +60,7 @@ export interface CreateTaskInput {
   session_id: string;
   task_index: number;
   prompt: string;
+  agent_id?: string;
 }
 
 export interface CreateMessageInput {
@@ -80,6 +82,7 @@ export interface UpdateTaskInput {
   duration?: number;
   prompt?: string;
   favorite?: boolean;
+  agent_id?: string;
 }
 
 // Library file types
@@ -111,4 +114,140 @@ export interface CreateFileInput {
   path: string;
   preview?: string;
   thumbnail?: string;
+}
+
+// ============ Agent Types ============
+export interface Agent {
+  id: string;
+  name: string;
+  avatar: string | null;
+  soul_md: string;
+  model_provider: string | null;
+  model_name: string | null;
+  model_config: string | null; // JSON string
+  mcp_config: string | null; // JSON string
+  tools: string | null; // JSON string
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAgentInput {
+  id: string;
+  name: string;
+  avatar?: string;
+  soul_md?: string;
+  model_provider?: string;
+  model_name?: string;
+  model_config?: string;
+  mcp_config?: string;
+  tools?: string;
+  is_default?: boolean;
+}
+
+export interface UpdateAgentInput {
+  name?: string;
+  avatar?: string | null;
+  soul_md?: string;
+  model_provider?: string | null;
+  model_name?: string | null;
+  model_config?: string | null;
+  mcp_config?: string | null;
+  tools?: string | null;
+  is_default?: boolean;
+}
+
+// ============ Team Types ============
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTeamInput {
+  id: string;
+  name: string;
+  description?: string;
+  avatar?: string;
+}
+
+export interface UpdateTeamInput {
+  name?: string;
+  description?: string;
+  avatar?: string | null;
+}
+
+export type TeamMemberRole = 'lead' | 'member' | 'reviewer';
+
+export interface TeamMember {
+  id: number;
+  team_id: string;
+  agent_id: string;
+  role: TeamMemberRole;
+  created_at: string;
+}
+
+// ============ Project Types ============
+export type ProjectStatus = 'active' | 'archived';
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  team_id: string | null;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateProjectInput {
+  id: string;
+  name: string;
+  description?: string;
+  team_id?: string;
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string;
+  team_id?: string | null;
+  status?: ProjectStatus;
+}
+
+// ============ Issue Types ============
+export type IssueStatus = 'open' | 'in_progress' | 'done' | 'closed';
+export type IssuePriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface Issue {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  assigned_agent_id: string | null;
+  task_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateIssueInput {
+  id: string;
+  project_id: string;
+  title: string;
+  description?: string;
+  priority?: IssuePriority;
+  assigned_agent_id?: string;
+}
+
+export interface UpdateIssueInput {
+  title?: string;
+  description?: string;
+  status?: IssueStatus;
+  priority?: IssuePriority;
+  assigned_agent_id?: string | null;
+  task_id?: string | null;
 }
