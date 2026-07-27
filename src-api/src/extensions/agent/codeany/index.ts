@@ -385,33 +385,39 @@ export class CodeAnyAgent extends BaseAgent {
       ? { enabled: true, image: options.sandbox.image, apiEndpoint: options.sandbox.apiEndpoint || SANDBOX_API_URL }
       : undefined;
 
-    // Handle image attachments
-    let imageInstruction = '';
+    // Build image content blocks for multimodal input
+    const imageContentBlocks: Array<{ type: 'image'; source: { type: 'base64'; media_type: string; data: string } }> = [];
     if (options?.images && options.images.length > 0) {
-      const imagePaths = await saveImagesToDisk(options.images, sessionCwd);
-      if (imagePaths.length > 0) {
-        imageInstruction = `
-## MANDATORY IMAGE ANALYSIS - DO THIS FIRST
-
-The user has attached ${imagePaths.length} image file(s):
-${imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}
-
-**YOUR FIRST ACTION MUST BE:** Use the Read tool to view each image file listed above.
-
-**CRITICAL:** DO NOT respond until you have READ and SEEN the actual image content.
-
----
-User's request (answer this AFTER reading the images):
-`;
+      for (const image of options.images) {
+        try {
+          let base64Data = image.data;
+          if (base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1];
+          }
+          const mediaType = image.mimeType || 'image/png';
+          imageContentBlocks.push({
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: base64Data },
+          });
+          logger.info(`[CodeAny] Added image as multimodal content: ${mediaType}, ${Math.round(base64Data.length / 1024)}KB base64`);
+        } catch (error) {
+          logger.error(`[CodeAny] Failed to process image for multimodal:`, error);
+        }
       }
     }
 
     const conversationContext = this.formatConversationHistory(options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
+    const textPrompt = getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
 
-    const enhancedPrompt = imageInstruction
-      ? imageInstruction + languageInstruction + prompt + '\n\n' + getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext
-      : getWorkspaceInstruction(sessionCwd, sandboxOpts) + conversationContext + languageInstruction + prompt;
+    // Multimodal content array if images present, plain string otherwise
+    let finalPrompt: string | any[];
+    if (imageContentBlocks.length > 0) {
+      finalPrompt = [...imageContentBlocks, { type: 'text', text: textPrompt }];
+      logger.info(`[CodeAny] Using multimodal prompt with ${imageContentBlocks.length} image(s)`);
+    } else {
+      finalPrompt = textPrompt;
+    }
 
     // Load MCP servers
     const userMcpServers = await loadMcpServers(options?.mcpConfig as McpConfig | undefined);
@@ -429,10 +435,10 @@ User's request (answer this AFTER reading the images):
     logger.info(`[CodeAny ${session.id}] ========== AGENT START ==========`);
     logger.info(`[CodeAny ${session.id}] Model: ${this.config.model || '(default)'}`);
     logger.info(`[CodeAny ${session.id}] Custom API: ${this.isUsingCustomApi()}`);
-    logger.info(`[CodeAny ${session.id}] Prompt length: ${enhancedPrompt.length} chars`);
+    logger.info(`[CodeAny ${session.id}] Prompt length: ${typeof finalPrompt === 'string' ? finalPrompt.length : 'multimodal'} chars`);
 
     try {
-      for await (const message of query({ prompt: enhancedPrompt, options: sdkOpts })) {
+      for await (const message of query({ prompt: finalPrompt, options: sdkOpts })) {
         if (session.abortController.signal.aborted) break;
         yield* this.processMessage(message, session.id, sentTextHashes, sentToolIds);
       }
