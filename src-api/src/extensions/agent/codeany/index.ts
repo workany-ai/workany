@@ -235,63 +235,41 @@ export class CodeAnyAgent extends BaseAgent {
     return sdkOpts;
   }
 
-  private estimateTokenCount(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  private formatConversationHistory(conversation?: ConversationMessage[]): string {
+  private async buildConversationContext(
+    sessionId: string,
+    conversation?: ConversationMessage[]
+  ): Promise<string> {
     if (!conversation || conversation.length === 0) return '';
 
-    const maxHistoryTokens = this.config.providerConfig?.maxHistoryTokens as number || 2000;
-    const minMessagesToKeep = 3;
+    try {
+      const { assembleContext } = await import('@/shared/context/assembler');
+      const maxContextTokens = (this.config.providerConfig?.maxHistoryTokens as number) || 12000;
+      const result = await assembleContext(sessionId, conversation, { maxContextTokens });
+      if (result.compacted) {
+        logger.info(`[CodeAny ${sessionId}] Context compacted: ${result.estimatedTokens} tokens, ${result.recentMessageCount} recent messages kept`);
+      }
+      return result.context;
+    } catch (err) {
+      logger.warn(`[CodeAny ${sessionId}] Context assembly failed, falling back:`, err);
+      return this.formatConversationHistoryFallback(conversation);
+    }
+  }
 
-    const allFormattedMessages = conversation.map((msg) => {
+  private formatConversationHistoryFallback(conversation: ConversationMessage[]): string {
+    const maxTokens = (this.config.providerConfig?.maxHistoryTokens as number) || 12000;
+    const parts: string[] = [];
+    let budget = maxTokens;
+    for (let i = conversation.length - 1; i >= 0 && budget > 0; i--) {
+      const msg = conversation[i];
       const role = msg.role === 'user' ? 'User' : 'Assistant';
-      let messageContent = `${role}: ${msg.content}`;
-      if (msg.imagePaths && msg.imagePaths.length > 0) {
-        const imageRefs = msg.imagePaths.map((p, i) => `  - Image ${i + 1}: ${p}`).join('\n');
-        messageContent += `\n[Attached images:\n${imageRefs}\nUse Read tool to view these images if needed]`;
-      }
-      return messageContent;
-    });
-
-    const messageTokens = allFormattedMessages.map(msg => ({
-      content: msg,
-      tokens: this.estimateTokenCount(msg)
-    }));
-
-    let totalTokens = 0;
-    const selectedMessages: string[] = [];
-    const startIndex = Math.max(0, messageTokens.length - minMessagesToKeep);
-
-    for (let i = messageTokens.length - 1; i >= startIndex; i--) {
-      const message = messageTokens[i];
-      if (totalTokens + message.tokens <= maxHistoryTokens) {
-        selectedMessages.unshift(message.content);
-        totalTokens += message.tokens;
-      } else {
-        break;
-      }
+      const line = `${role}: ${msg.content}`;
+      const tokens = Math.ceil(line.length / 4);
+      if (budget - tokens < 0 && parts.length >= 2) break;
+      parts.unshift(line);
+      budget -= tokens;
     }
-
-    for (let i = startIndex - 1; i >= 0; i--) {
-      const message = messageTokens[i];
-      if (totalTokens + message.tokens <= maxHistoryTokens) {
-        selectedMessages.unshift(message.content);
-        totalTokens += message.tokens;
-      } else {
-        break;
-      }
-    }
-
-    if (selectedMessages.length === 0) return '';
-
-    const formattedMessages = selectedMessages.join('\n\n');
-    const truncationNotice = conversation.length > selectedMessages.length
-      ? `\n\n[Note: Showing ${selectedMessages.length} of ${conversation.length} messages.]`
-      : '';
-
-    return `## Previous Conversation Context\n\n${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
+    if (parts.length === 0) return '';
+    return `## Previous Conversation Context\n\n${parts.join('\n\n')}\n\n---\n## Current Request\n`;
   }
 
   private sanitizeText(text: string): string {
@@ -406,7 +384,8 @@ User's request (answer this AFTER reading the images):
       }
     }
 
-    const conversationContext = this.formatConversationHistory(options?.conversation);
+    const contextSessionId = options?.taskId || session.id;
+    const conversationContext = await this.buildConversationContext(contextSessionId, options?.conversation);
     const languageInstruction = buildLanguageInstruction(options?.language, prompt);
 
     const enhancedPrompt = imageInstruction
