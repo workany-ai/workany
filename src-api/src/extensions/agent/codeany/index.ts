@@ -193,6 +193,17 @@ export class CodeAnyAgent extends BaseAgent {
     });
   }
 
+  private looksLikeError(output: string): boolean {
+    if (!output || output.length < 10) return false;
+    const lower = output.toLowerCase();
+    const errorPatterns = [
+      'error:', 'exception:', 'traceback', 'econnrefused',
+      'etimedout', 'enotfound', 'status_code', 'failed to',
+      'permission denied', '401', '403', '500', '502', '503',
+    ];
+    return errorPatterns.some(p => lower.includes(p)) && output.length < 500;
+  }
+
   private isUsingCustomApi(): boolean {
     return !!(this.config.baseUrl && this.config.apiKey);
   }
@@ -345,11 +356,13 @@ export class CodeAnyAgent extends BaseAgent {
     }
 
     if (msg.type === 'tool_result' && msg.result) {
+      const output = msg.result.output ?? '';
+      const isError = !!(msg.result as any).is_error || this.looksLikeError(output);
       yield {
         type: 'tool_result',
         toolUseId: msg.result.tool_use_id ?? '',
-        output: msg.result.output ?? '',
-        isError: false,
+        output,
+        isError,
       };
     }
 
