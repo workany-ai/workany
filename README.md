@@ -116,7 +116,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## ⭐️ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=workany-ai/workany&type=Timeline)](https://star-history.com/#workany-ai/workany&Timeline)
+[![Star History Chart](https://star-history.dera.page/svg?repos=workany-ai/workany&type=Timeline)](https://star-history.dera.page/#workany-ai/workany&Timeline)
 
 ## License
 
